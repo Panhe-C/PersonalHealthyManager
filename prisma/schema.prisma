@@ -1,0 +1,288 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  timezone     String   @default("Asia/Shanghai")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions          Session[]
+  bodyProfile       BodyProfile?
+  goals             Goal[]
+  activityRecords   ActivityRecord[]
+  sleepRecords      SleepRecord[]
+  recoveryRecords   RecoveryRecord[]
+  calendarSnapshots CalendarSnapshot[]
+  mealMenus         MealMenu[]
+  plans             Plan[]
+  calendarDrafts    CalendarEventDraft[]
+  agentMessages     AgentMessage[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model BodyProfile {
+  id                      String    @id @default(cuid())
+  userId                  String    @unique
+  heightCm                Float
+  weightKg                Float
+  bodyFatPercent          Float?
+  birthday                DateTime?
+  sex                     String
+  restingHeartRateBpm     Int?
+  trainingExperience      String
+  injuriesJson            String
+  dietaryPreferencesJson  String
+  trainingPreferencesJson String
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Goal {
+  id          String    @id @default(cuid())
+  userId      String
+  title       String
+  type        String
+  priority    Int
+  status      String    @default("active")
+  targetDate  DateTime?
+  metricsJson String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ActivityRecord {
+  id                    String   @id @default(cuid())
+  userId                String
+  source                String
+  sourceId              String?
+  sportType             String
+  startedAt             DateTime
+  endedAt               DateTime
+  durationMinutes       Int
+  distanceKm            Float?
+  averagePaceSecPerKm   Int?
+  averageSpeedKph       Float?
+  averageHeartRateBpm   Int?
+  calories              Int?
+  trainingLoad          Float?
+  intensity             String
+  metadataJson          String
+  createdAt             DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startedAt])
+}
+
+model SleepRecord {
+  id              String    @id @default(cuid())
+  userId          String
+  source          String
+  date            DateTime
+  sleepStart      DateTime?
+  sleepEnd        DateTime?
+  durationMinutes Int
+  qualityScore    Int?
+  metadataJson    String
+  createdAt       DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+}
+
+model RecoveryRecord {
+  id                    String   @id @default(cuid())
+  userId                String
+  source                String
+  date                  DateTime
+  recoveryPercent       Int?
+  hrvMs                 Float?
+  restingHeartRateBpm   Int?
+  stressLevel           Int?
+  trainingLoadShortTerm Float?
+  trainingLoadLongTerm  Float?
+  metadataJson          String
+  createdAt             DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+}
+
+model CalendarSnapshot {
+  id                  String   @id @default(cuid())
+  userId              String
+  source              String
+  rangeStart          DateTime
+  rangeEnd            DateTime
+  busyWindowsJson     String
+  freeWindowsJson     String
+  importantEventsJson String
+  capturedAt          DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, rangeStart, rangeEnd])
+}
+
+model MealMenu {
+  id        String   @id @default(cuid())
+  userId    String
+  source    String
+  date      DateTime
+  meal      String
+  itemsJson String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+}
+
+model Plan {
+  id                      String   @id @default(cuid())
+  userId                  String
+  weekStart               DateTime
+  weekEnd                 DateTime
+  status                  String   @default("draft")
+  summary                 String
+  trainingLoadGoal        Float?
+  nutritionTargetsJson    String
+  menuRecommendationsJson String
+  explanation             String
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trainingTasks  TrainingTask[]
+  adjustments    PlanAdjustment[]
+  calendarDrafts CalendarEventDraft[]
+
+  @@index([userId, weekStart, weekEnd])
+}
+
+model TrainingTask {
+  id              String    @id @default(cuid())
+  planId          String
+  userId          String
+  date            DateTime
+  title           String
+  trainingType    String
+  durationMinutes Int
+  intensity       String
+  targetJson      String
+  scheduledStart  DateTime?
+  scheduledEnd    DateTime?
+  goalId          String?
+  status          String    @default("planned")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  plan           Plan                    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  checklistItems TrainingChecklistItem[]
+  completion     TrainingCompletion?
+  calendarDraft  CalendarEventDraft?
+
+  @@index([userId, date])
+}
+
+model TrainingChecklistItem {
+  id        String   @id @default(cuid())
+  taskId    String
+  label     String
+  order     Int
+  required  Boolean  @default(true)
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task TrainingTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model TrainingCompletion {
+  id                  String   @id @default(cuid())
+  taskId              String   @unique
+  userId              String
+  status              String
+  perceivedEffort     String?
+  notes               String?
+  linkedActivityId    String?
+  plannedVsActualJson String
+  completedAt         DateTime @default(now())
+
+  task TrainingTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model PlanAdjustment {
+  id                String   @id @default(cuid())
+  planId            String
+  userId            String
+  trigger           String
+  previousStateJson String
+  newStateJson      String
+  reason            String
+  explanation       String
+  createdAt         DateTime @default(now())
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model CalendarEventDraft {
+  id              String   @id @default(cuid())
+  userId          String
+  planId          String?
+  trainingTaskId  String?  @unique
+  title           String
+  startsAt        DateTime
+  endsAt          DateTime
+  notes           String
+  status          String   @default("draft")
+  externalEventId String?
+  failureReason   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan         Plan?         @relation(fields: [planId], references: [id], onDelete: SetNull)
+  trainingTask TrainingTask? @relation(fields: [trainingTaskId], references: [id], onDelete: SetNull)
+
+  @@index([userId, startsAt])
+}
+
+model AgentMessage {
+  id           String   @id @default(cuid())
+  userId       String
+  role         String
+  content      String
+  metadataJson String
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
