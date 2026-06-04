@@ -16,3 +16,4 @@ prisma/dev.db-wal
 prisma/dev.db-shm
 *.log
 .superpowers/
+.worktrees/
