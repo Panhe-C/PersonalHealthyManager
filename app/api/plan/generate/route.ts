@@ -1,9 +1,19 @@
 import { NextResponse } from "next/server";
 import { withUser } from "@/src/auth/api";
+import { isWeekStartInTimezone, planGenerationSchema } from "@/src/domain/validation";
 import { generatePlanForUser } from "@/src/services/planService";
 
 export const POST = withUser(async (user, request: Request) => {
-  const body = await request.json();
-  const weekStart = new Date(body.weekStart);
+  const parsed = planGenerationSchema.safeParse(await request.json().catch(() => null));
+
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid week start" }, { status: 400 });
+  }
+
+  const weekStart = new Date(parsed.data.weekStart);
+  if (!isWeekStartInTimezone(weekStart, user.timezone)) {
+    return NextResponse.json({ error: "Week start must be Monday midnight in your timezone" }, { status: 400 });
+  }
+
   return NextResponse.json(await generatePlanForUser(user.id, weekStart));
 });

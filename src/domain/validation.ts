@@ -38,6 +38,30 @@ export const trainingCompletionSchema = z.object({
     .min(1)
 });
 
+export const planGenerationSchema = z.object({
+  weekStart: z.string().datetime({ offset: true })
+});
+
+export function isWeekStartInTimezone(date: Date, timezone: string): boolean {
+  if (Number.isNaN(date.getTime())) return false;
+
+  try {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: timezone,
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23"
+    }).formatToParts(date);
+    const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+    return value.weekday === "Mon" && value.hour === "00" && value.minute === "00" && value.second === "00";
+  } catch {
+    return false;
+  }
+}
+
 export type BodyProfileInput = z.infer<typeof bodyProfileSchema>;
 export type GoalInput = z.infer<typeof goalSchema>;
 export type TrainingCompletionInput = z.infer<typeof trainingCompletionSchema>;

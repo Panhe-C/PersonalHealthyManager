@@ -23,6 +23,10 @@ export async function confirmCalendarDrafts(userId: string, draftIds: string[]) 
       throw new Error("Draft is not actionable");
     }
 
+    if (drafts.some((draft) => draft.operation === "cancel" && !draft.externalEventId)) {
+      throw new Error("Cancellation draft is missing an external event");
+    }
+
     const actionableDrafts = drafts.filter((draft) => draft.status !== "confirmed");
     if (actionableDrafts.length === 0) {
       return drafts;

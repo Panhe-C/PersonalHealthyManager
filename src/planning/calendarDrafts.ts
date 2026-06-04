@@ -8,12 +8,21 @@ type ScheduledTask = {
 };
 
 export type CalendarDraftInput = {
-  trainingTaskId: string;
+  trainingTaskId?: string;
   title: string;
   startsAt: Date;
   endsAt: Date;
   notes: string;
+  operation: "upsert" | "cancel";
   externalEventId?: string;
+};
+
+export type ExistingCalendarEvent = {
+  externalEventId: string;
+  title: string;
+  startsAt: Date;
+  endsAt: Date;
+  notes: string;
 };
 
 export function createCalendarDraftsFromTasks(tasks: ScheduledTask[]) {
@@ -24,17 +33,30 @@ export function createCalendarDraftsFromTasks(tasks: ScheduledTask[]) {
       title: `Training: ${task.title}`,
       startsAt: new Date(task.scheduledStart as string),
       endsAt: new Date(task.scheduledEnd as string),
-      notes: `Type: ${task.trainingType}. Intensity: ${task.intensity}.`
+      notes: `Type: ${task.trainingType}. Intensity: ${task.intensity}.`,
+      operation: "upsert" as const
     }))
     .sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime());
 }
 
-export function carryForwardExternalEventIds(
+export function reconcileCalendarDrafts(
   drafts: CalendarDraftInput[],
-  externalEventIds: string[]
+  existingEvents: ExistingCalendarEvent[]
 ): CalendarDraftInput[] {
-  return drafts.map((draft, index) => {
-    const externalEventId = externalEventIds[index];
-    return externalEventId ? { ...draft, externalEventId } : draft;
+  const sortedDrafts = [...drafts].sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime());
+  const sortedEvents = [...existingEvents].sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime());
+  const replacements = sortedDrafts.map((draft, index) => {
+    const existingEvent = sortedEvents[index];
+    return existingEvent ? { ...draft, externalEventId: existingEvent.externalEventId } : draft;
   });
+  const cancellations: CalendarDraftInput[] = sortedEvents.slice(sortedDrafts.length).map((event) => ({
+    title: `Cancel: ${event.title}`,
+    startsAt: event.startsAt,
+    endsAt: event.endsAt,
+    notes: "Remove this training event because it is not part of the latest weekly plan.",
+    operation: "cancel",
+    externalEventId: event.externalEventId
+  }));
+
+  return [...replacements, ...cancellations];
 }

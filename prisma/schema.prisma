@@ -275,6 +275,7 @@ model CalendarEventDraft {
   startsAt        DateTime
   endsAt          DateTime
   notes           String
+  operation       String   @default("upsert")
   status          String   @default("draft")
   externalEventId String?
   failureReason   String?

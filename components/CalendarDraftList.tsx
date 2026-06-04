@@ -9,6 +9,7 @@ type Draft = {
   title: string;
   startsAt: string;
   endsAt: string;
+  operation: string;
   status: string;
 };
 
@@ -72,7 +73,13 @@ export function CalendarDraftList({ drafts }: { drafts: Draft[] }) {
                 disabled={draft.status !== "draft" || confirmingId !== null}
               >
                 <CalendarCheck aria-hidden="true" size={16} />{" "}
-                {draft.status === "draft" ? (confirmingId === draft.id ? "Confirming..." : "Confirm") : "Confirmed"}
+                {draft.status === "draft"
+                  ? confirmingId === draft.id
+                    ? "Confirming..."
+                    : draft.operation === "cancel"
+                      ? "Confirm cancellation"
+                      : "Confirm"
+                  : "Confirmed"}
               </ActionButton>
             </div>
           ))}

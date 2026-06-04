@@ -94,6 +94,7 @@ export default async function PlanPage() {
               title: draft.title,
               startsAt: draft.startsAt.toISOString(),
               endsAt: draft.endsAt.toISOString(),
+              operation: draft.operation,
               status: draft.status
             }))}
           />

@@ -5,7 +5,7 @@ import type {
   TimeWindow
 } from "@/src/domain/models";
 import { prisma } from "@/src/db/client";
-import { carryForwardExternalEventIds, createCalendarDraftsFromTasks } from "@/src/planning/calendarDrafts";
+import { createCalendarDraftsFromTasks, reconcileCalendarDrafts } from "@/src/planning/calendarDrafts";
 import { generateWeeklyPlan } from "@/src/planning/engine";
 import { getMockMealMenu } from "@/src/providers/meal-menu";
 
@@ -114,10 +114,17 @@ export async function generatePlanForUser(userId: string, weekStart: Date) {
             where: {
               userId,
               planId: { in: previousPlanIds },
-              externalEventId: { not: null }
+              externalEventId: { not: null },
+              NOT: { operation: "cancel", status: "confirmed" }
             },
             orderBy: { startsAt: "asc" },
-            select: { externalEventId: true }
+            select: {
+              externalEventId: true,
+              title: true,
+              startsAt: true,
+              endsAt: true,
+              notes: true
+            }
           })
         : [];
 
@@ -160,7 +167,7 @@ export async function generatePlanForUser(userId: string, weekStart: Date) {
       },
       include: { trainingTasks: true }
     });
-    const drafts = carryForwardExternalEventIds(
+    const drafts = reconcileCalendarDrafts(
       createCalendarDraftsFromTasks(
         plan.trainingTasks.map((task) => ({
           id: task.id,
@@ -171,7 +178,19 @@ export async function generatePlanForUser(userId: string, weekStart: Date) {
           intensity: task.intensity
         }))
       ),
-      previousExternalEvents.flatMap((draft) => (draft.externalEventId ? [draft.externalEventId] : []))
+      previousExternalEvents.flatMap((draft) =>
+        draft.externalEventId
+          ? [
+              {
+                externalEventId: draft.externalEventId,
+                title: draft.title,
+                startsAt: draft.startsAt,
+                endsAt: draft.endsAt,
+                notes: draft.notes
+              }
+            ]
+          : []
+      )
     );
 
     if (drafts.length > 0) {

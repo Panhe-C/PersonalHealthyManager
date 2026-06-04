@@ -40,7 +40,7 @@ The Web App includes a `Sync demo data` command that exercises those same endpoi
 
 Calendar write-back is confirmation-first. Confirming a draft currently records a mock Feishu external event ID. A real Feishu MCP write can replace that provider boundary without changing the plan or UI workflow.
 
-Generating the same week again supersedes the previous active plan and its calendar drafts, so only the latest proposal remains actionable. Existing external event IDs are carried into replacement drafts to avoid duplicate calendar events.
+Generating the same week again supersedes the previous active plan and its calendar drafts, so only the latest proposal remains actionable. Existing external event IDs are carried into replacement drafts to avoid duplicate calendar events, while events that no longer fit the plan become cancellation drafts.
 When checklist feedback changes a future scheduled task, its calendar draft is updated too. Previously confirmed events return to draft status with the same external event ID so the change requires confirmation.
 
 ## Development
