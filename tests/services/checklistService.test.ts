@@ -99,4 +99,25 @@ describe("checklist completion service helpers", () => {
       failureReason: null
     });
   });
+
+  it("does not extend a scheduled task beyond its original calendar window", () => {
+    const update = buildAdjustedTaskUpdate(
+      {
+        title: "Strength maintenance",
+        trainingType: "strength",
+        durationMinutes: 35,
+        intensity: "moderate",
+        scheduledStart: new Date("2026-06-04T18:00:00+08:00"),
+        scheduledEnd: new Date("2026-06-04T18:35:00+08:00")
+      },
+      {
+        title: "Rescheduled focus: Strength maintenance",
+        durationMinutes: 55
+      }
+    );
+
+    expect(update.task.durationMinutes).toBe(35);
+    expect(update.task.scheduledEnd).toEqual(new Date("2026-06-04T18:35:00+08:00"));
+    expect(update.draft?.endsAt).toEqual(new Date("2026-06-04T18:35:00+08:00"));
+  });
 });

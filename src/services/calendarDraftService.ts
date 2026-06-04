@@ -9,35 +9,51 @@ export async function listCalendarDrafts(userId: string) {
 
 export async function confirmCalendarDrafts(userId: string, draftIds: string[]) {
   const uniqueIds = [...new Set(draftIds)];
-  const drafts = await prisma.calendarEventDraft.findMany({
-    where: { id: { in: uniqueIds }, userId }
-  });
 
-  if (drafts.length !== uniqueIds.length) {
-    throw new Error("Draft not found");
-  }
+  return prisma.$transaction(async (tx) => {
+    const drafts = await tx.calendarEventDraft.findMany({
+      where: { id: { in: uniqueIds }, userId }
+    });
 
-  if (drafts.some((draft) => !["draft", "failed", "confirmed"].includes(draft.status))) {
-    throw new Error("Draft is not actionable");
-  }
+    if (drafts.length !== uniqueIds.length) {
+      throw new Error("Draft not found");
+    }
 
-  const confirmedById = new Map(drafts.filter((draft) => draft.status === "confirmed").map((draft) => [draft.id, draft]));
-  const updates = drafts
-    .filter((draft) => draft.status !== "confirmed")
-    .map((draft) =>
-      prisma.calendarEventDraft.update({
-        where: { id: draft.id },
+    if (drafts.some((draft) => !["draft", "failed", "confirmed"].includes(draft.status))) {
+      throw new Error("Draft is not actionable");
+    }
+
+    const actionableDrafts = drafts.filter((draft) => draft.status !== "confirmed");
+    if (actionableDrafts.length === 0) {
+      return drafts;
+    }
+
+    for (const draft of actionableDrafts) {
+      const result = await tx.calendarEventDraft.updateMany({
+        where: {
+          id: draft.id,
+          userId,
+          status: { in: ["draft", "failed"] }
+        },
         data: {
           status: "confirmed",
-          externalEventId: `mock-feishu-${draft.id}`,
+          externalEventId: draft.externalEventId ?? `mock-feishu-${draft.id}`,
           failureReason: null
         }
-      })
-    );
-  const updated = updates.length > 0 ? await prisma.$transaction(updates) : [];
-  const updatedById = new Map(updated.map((draft) => [draft.id, draft]));
+      });
 
-  return uniqueIds.map((id) => updatedById.get(id) ?? confirmedById.get(id)!);
+      if (result.count !== 1) {
+        throw new Error("Draft is no longer actionable");
+      }
+    }
+
+    const updated = await tx.calendarEventDraft.findMany({
+      where: { id: { in: uniqueIds }, userId }
+    });
+    const updatedById = new Map(updated.map((draft) => [draft.id, draft]));
+
+    return uniqueIds.map((id) => updatedById.get(id)!);
+  });
 }
 
 export async function confirmCalendarDraft(userId: string, draftId: string) {

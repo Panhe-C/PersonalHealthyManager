@@ -21,6 +21,7 @@ type AdjustableTask = {
   durationMinutes: number;
   intensity: string;
   scheduledStart: Date | null;
+  scheduledEnd?: Date | null;
 };
 
 type TaskAdjustmentChanges = {
@@ -97,7 +98,15 @@ function withPrefix(title: string, prefix: string): string {
 
 export function buildAdjustedTaskUpdate(task: AdjustableTask, changes: TaskAdjustmentChanges) {
   const title = changes.title ?? task.title;
-  const durationMinutes = changes.durationMinutes ?? task.durationMinutes;
+  const scheduledCapacityMinutes =
+    task.scheduledStart && task.scheduledEnd
+      ? Math.floor((task.scheduledEnd.getTime() - task.scheduledStart.getTime()) / (60 * 1000))
+      : undefined;
+  const requestedDurationMinutes = changes.durationMinutes ?? task.durationMinutes;
+  const durationMinutes =
+    changes.durationMinutes !== undefined && scheduledCapacityMinutes !== undefined
+      ? Math.min(requestedDurationMinutes, scheduledCapacityMinutes)
+      : requestedDurationMinutes;
   const intensity = changes.intensity ?? task.intensity;
   const scheduledEnd = task.scheduledStart
     ? new Date(task.scheduledStart.getTime() + durationMinutes * 60 * 1000)
@@ -106,6 +115,7 @@ export function buildAdjustedTaskUpdate(task: AdjustableTask, changes: TaskAdjus
   return {
     task: {
       ...changes,
+      ...(changes.durationMinutes !== undefined ? { durationMinutes } : {}),
       ...(scheduledEnd ? { scheduledEnd } : {})
     },
     draft: scheduledEnd

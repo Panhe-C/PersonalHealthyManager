@@ -5,7 +5,7 @@ import type {
   TimeWindow
 } from "@/src/domain/models";
 import { prisma } from "@/src/db/client";
-import { createCalendarDraftsFromTasks } from "@/src/planning/calendarDrafts";
+import { carryForwardExternalEventIds, createCalendarDraftsFromTasks } from "@/src/planning/calendarDrafts";
 import { generateWeeklyPlan } from "@/src/planning/engine";
 import { getMockMealMenu } from "@/src/providers/meal-menu";
 
@@ -108,10 +108,22 @@ export async function generatePlanForUser(userId: string, weekStart: Date) {
       select: { id: true }
     });
     const previousPlanIds = previousPlans.map((plan) => plan.id);
+    const previousExternalEvents =
+      previousPlanIds.length > 0
+        ? await tx.calendarEventDraft.findMany({
+            where: {
+              userId,
+              planId: { in: previousPlanIds },
+              externalEventId: { not: null }
+            },
+            orderBy: { startsAt: "asc" },
+            select: { externalEventId: true }
+          })
+        : [];
 
     if (previousPlanIds.length > 0) {
       await tx.calendarEventDraft.updateMany({
-        where: { userId, planId: { in: previousPlanIds }, status: "draft" },
+        where: { userId, planId: { in: previousPlanIds }, status: { not: "superseded" } },
         data: { status: "superseded" }
       });
       await tx.plan.updateMany({
@@ -148,15 +160,18 @@ export async function generatePlanForUser(userId: string, weekStart: Date) {
       },
       include: { trainingTasks: true }
     });
-    const drafts = createCalendarDraftsFromTasks(
-      plan.trainingTasks.map((task) => ({
-        id: task.id,
-        title: task.title,
-        scheduledStart: task.scheduledStart?.toISOString(),
-        scheduledEnd: task.scheduledEnd?.toISOString(),
-        trainingType: task.trainingType,
-        intensity: task.intensity
-      }))
+    const drafts = carryForwardExternalEventIds(
+      createCalendarDraftsFromTasks(
+        plan.trainingTasks.map((task) => ({
+          id: task.id,
+          title: task.title,
+          scheduledStart: task.scheduledStart?.toISOString(),
+          scheduledEnd: task.scheduledEnd?.toISOString(),
+          trainingType: task.trainingType,
+          intensity: task.intensity
+        }))
+      ),
+      previousExternalEvents.flatMap((draft) => (draft.externalEventId ? [draft.externalEventId] : []))
     );
 
     if (drafts.length > 0) {
