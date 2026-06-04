@@ -17,6 +17,10 @@ export async function confirmCalendarDrafts(userId: string, draftIds: string[]) 
     throw new Error("Draft not found");
   }
 
+  if (drafts.some((draft) => !["draft", "failed", "confirmed"].includes(draft.status))) {
+    throw new Error("Draft is not actionable");
+  }
+
   const confirmedById = new Map(drafts.filter((draft) => draft.status === "confirmed").map((draft) => [draft.id, draft]));
   const updates = drafts
     .filter((draft) => draft.status !== "confirmed")

@@ -30,4 +30,19 @@ describe("calendar draft service", () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(drafts).toEqual([confirmedDraft]);
   });
+
+  it("rejects superseded drafts so stale pages cannot confirm them", async () => {
+    vi.mocked(prisma.calendarEventDraft.findMany).mockResolvedValue([
+      {
+        id: "draft-1",
+        userId: "user-1",
+        status: "superseded"
+      }
+    ] as never);
+
+    await expect(confirmCalendarDrafts("user-1", ["draft-1"])).rejects.toThrow("Draft is not actionable");
+
+    expect(prisma.calendarEventDraft.update).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
 });
