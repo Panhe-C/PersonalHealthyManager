@@ -79,7 +79,7 @@ model ActivityRecord {
   id                    String   @id @default(cuid())
   userId                String
   source                String
-  sourceId              String?
+  sourceId              String
   sportType             String
   startedAt             DateTime
   endedAt               DateTime
@@ -99,6 +99,7 @@ model ActivityRecord {
 
   @@index([userId, startedAt])
   @@unique([userId, source, sourceId])
+  @@unique([id, userId])
 }
 
 model SleepRecord {
@@ -210,7 +211,7 @@ model TrainingTask {
   updatedAt       DateTime  @updatedAt
 
   plan           Plan                    @relation(fields: [planId, userId], references: [id, userId], onDelete: Cascade)
-  goal           Goal?                   @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  goal           Goal?                   @relation(fields: [goalId, userId], references: [id, userId], onDelete: NoAction)
   checklistItems TrainingChecklistItem[]
   completion     TrainingCompletion?
   calendarDraft  CalendarEventDraft?
@@ -244,7 +245,7 @@ model TrainingCompletion {
   completedAt         DateTime @default(now())
 
   task TrainingTask @relation(fields: [taskId, userId], references: [id, userId], onDelete: Cascade)
-  linkedActivity ActivityRecord? @relation(fields: [linkedActivityId], references: [id], onDelete: SetNull)
+  linkedActivity ActivityRecord? @relation(fields: [linkedActivityId, userId], references: [id, userId], onDelete: NoAction)
 
   @@unique([taskId, userId])
 }
