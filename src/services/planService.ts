@@ -4,6 +4,7 @@ import type {
   NormalizedSleepRecord,
   TimeWindow
 } from "@/src/domain/models";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/src/db/client";
 import { createCalendarDraftsFromTasks, reconcileCalendarDrafts } from "@/src/planning/calendarDrafts";
 import { generateWeeklyPlan } from "@/src/planning/engine";
@@ -11,6 +12,42 @@ import { getMockMealMenu } from "@/src/providers/meal-menu";
 
 function parseJson<T>(value: string): T {
   return JSON.parse(value) as T;
+}
+
+export async function supersedePreviousPlansAndReadExternalEvents(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  previousPlanIds: string[]
+) {
+  if (previousPlanIds.length === 0) {
+    return [];
+  }
+
+  await tx.calendarEventDraft.updateMany({
+    where: { userId, planId: { in: previousPlanIds }, status: { not: "superseded" } },
+    data: { status: "superseded" }
+  });
+  const previousExternalEvents = await tx.calendarEventDraft.findMany({
+    where: {
+      userId,
+      planId: { in: previousPlanIds },
+      externalEventId: { not: null }
+    },
+    orderBy: { startsAt: "asc" },
+    select: {
+      externalEventId: true,
+      title: true,
+      startsAt: true,
+      endsAt: true,
+      notes: true
+    }
+  });
+  await tx.plan.updateMany({
+    where: { id: { in: previousPlanIds }, userId },
+    data: { status: "superseded" }
+  });
+
+  return previousExternalEvents;
 }
 
 export async function generatePlanForUser(userId: string, weekStart: Date) {
@@ -108,36 +145,7 @@ export async function generatePlanForUser(userId: string, weekStart: Date) {
       select: { id: true }
     });
     const previousPlanIds = previousPlans.map((plan) => plan.id);
-    const previousExternalEvents =
-      previousPlanIds.length > 0
-        ? await tx.calendarEventDraft.findMany({
-            where: {
-              userId,
-              planId: { in: previousPlanIds },
-              externalEventId: { not: null },
-              NOT: { operation: "cancel", status: "confirmed" }
-            },
-            orderBy: { startsAt: "asc" },
-            select: {
-              externalEventId: true,
-              title: true,
-              startsAt: true,
-              endsAt: true,
-              notes: true
-            }
-          })
-        : [];
-
-    if (previousPlanIds.length > 0) {
-      await tx.calendarEventDraft.updateMany({
-        where: { userId, planId: { in: previousPlanIds }, status: { not: "superseded" } },
-        data: { status: "superseded" }
-      });
-      await tx.plan.updateMany({
-        where: { id: { in: previousPlanIds }, userId },
-        data: { status: "superseded" }
-      });
-    }
+    const previousExternalEvents = await supersedePreviousPlansAndReadExternalEvents(tx, userId, previousPlanIds);
 
     const plan = await tx.plan.create({
       data: {

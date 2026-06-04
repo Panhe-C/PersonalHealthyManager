@@ -74,6 +74,35 @@ describe("calendar draft service", () => {
     });
   });
 
+  it("clears the external event id when confirming a cancellation draft", async () => {
+    const draft = {
+      id: "draft-1",
+      userId: "user-1",
+      status: "draft",
+      operation: "cancel",
+      externalEventId: "feishu-event-1"
+    };
+    vi.mocked(prisma.calendarEventDraft.findMany)
+      .mockResolvedValueOnce([draft] as never)
+      .mockResolvedValueOnce([{ ...draft, status: "confirmed", externalEventId: null }] as never);
+    vi.mocked(prisma.calendarEventDraft.updateMany).mockResolvedValue({ count: 1 });
+
+    await confirmCalendarDrafts("user-1", ["draft-1"]);
+
+    expect(prisma.calendarEventDraft.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "draft-1",
+        userId: "user-1",
+        status: { in: ["draft", "failed"] }
+      },
+      data: {
+        status: "confirmed",
+        externalEventId: null,
+        failureReason: null
+      }
+    });
+  });
+
   it("rejects a draft that becomes superseded before the conditional write", async () => {
     vi.mocked(prisma.calendarEventDraft.findMany).mockResolvedValue([
       {

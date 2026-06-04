@@ -41,7 +41,7 @@ export async function confirmCalendarDrafts(userId: string, draftIds: string[]) 
         },
         data: {
           status: "confirmed",
-          externalEventId: draft.externalEventId ?? `mock-feishu-${draft.id}`,
+          externalEventId: draft.operation === "cancel" ? null : draft.externalEventId ?? `mock-feishu-${draft.id}`,
           failureReason: null
         }
       });

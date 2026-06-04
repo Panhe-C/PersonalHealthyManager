@@ -50,7 +50,7 @@ export function reconcileCalendarDrafts(
     return existingEvent ? { ...draft, externalEventId: existingEvent.externalEventId } : draft;
   });
   const cancellations: CalendarDraftInput[] = sortedEvents.slice(sortedDrafts.length).map((event) => ({
-    title: `Cancel: ${event.title}`,
+    title: event.title.startsWith("Cancel: ") ? event.title : `Cancel: ${event.title}`,
     startsAt: event.startsAt,
     endsAt: event.endsAt,
     notes: "Remove this training event because it is not part of the latest weekly plan.",
