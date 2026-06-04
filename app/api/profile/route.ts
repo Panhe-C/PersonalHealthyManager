@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/src/auth/session";
+import { withUser } from "@/src/auth/api";
 import { getBodyProfile, upsertBodyProfile } from "@/src/services/profileService";
 
-export async function GET() {
-  const user = await requireUser();
+export const GET = withUser(async (user) => {
   return NextResponse.json(await getBodyProfile(user.id));
-}
+});
 
-export async function POST(request: Request) {
-  const user = await requireUser();
+export const POST = withUser(async (user, request: Request) => {
   const profile = await upsertBodyProfile(user.id, await request.json());
   return NextResponse.json(profile);
-}
+});

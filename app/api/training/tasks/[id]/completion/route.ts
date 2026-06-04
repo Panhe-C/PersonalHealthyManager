@@ -1,17 +1,23 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/src/auth/session";
+import { withUser } from "@/src/auth/api";
+import { trainingCompletionSchema } from "@/src/domain/validation";
 import { completeTrainingTask } from "@/src/services/checklistService";
 
-export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
+export const POST = withUser(async (user, request: Request, context: { params: Promise<{ id: string }> }) => {
   const { id } = await context.params;
-  const body = await request.json();
+  const parsed = trainingCompletionSchema.safeParse(await request.json().catch(() => null));
+
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid training completion" }, { status: 400 });
+  }
+
   const task = await completeTrainingTask(user.id, id, {
-    actualLoad: body.actualLoad,
-    perceivedEffort: body.perceivedEffort,
-    notes: body.notes,
-    items: Array.isArray(body.items) ? body.items : []
+    actualLoad: parsed.data.actualLoad,
+    perceivedEffort: parsed.data.perceivedEffort,
+    notes: parsed.data.notes,
+    linkedActivityId: parsed.data.linkedActivityId,
+    items: parsed.data.items
   });
 
   return NextResponse.json(task);
-}
+});

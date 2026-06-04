@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/src/auth/session";
+import { withUser } from "@/src/auth/api";
 import { createGoal, listGoals } from "@/src/services/goalService";
 
-export async function GET() {
-  const user = await requireUser();
+export const GET = withUser(async (user) => {
   return NextResponse.json(await listGoals(user.id));
-}
+});
 
-export async function POST(request: Request) {
-  const user = await requireUser();
+export const POST = withUser(async (user, request: Request) => {
   const goal = await createGoal(user.id, await request.json());
   return NextResponse.json(goal, { status: 201 });
-}
+});

@@ -22,5 +22,22 @@ export const goalSchema = z.object({
   metrics: z.record(z.unknown()).default({})
 });
 
+export const trainingCompletionSchema = z.object({
+  actualLoad: z.number().finite().int().nonnegative().optional(),
+  perceivedEffort: z.enum(["easy", "moderate", "hard"]).optional(),
+  notes: z.string().max(2000).optional(),
+  linkedActivityId: z.string().min(1).optional(),
+  items: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        label: z.string(),
+        status: z.enum(["pending", "completed", "skipped"])
+      })
+    )
+    .min(1)
+});
+
 export type BodyProfileInput = z.infer<typeof bodyProfileSchema>;
 export type GoalInput = z.infer<typeof goalSchema>;
+export type TrainingCompletionInput = z.infer<typeof trainingCompletionSchema>;

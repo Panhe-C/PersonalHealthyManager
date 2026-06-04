@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/src/auth/session";
+import { withUser } from "@/src/auth/api";
 import { importCalendarPayload } from "@/src/services/syncService";
 
-export async function POST(request: Request) {
-  const user = await requireUser();
+export const POST = withUser(async (user, request: Request) => {
   return NextResponse.json(await importCalendarPayload(user.id, await request.json()));
-}
+});

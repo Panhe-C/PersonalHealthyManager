@@ -14,13 +14,21 @@ function parseJson<T>(value: string): T {
 }
 
 export async function generatePlanForUser(userId: string, weekStart: Date) {
+  const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
   const [profile, goals, activities, sleepRecords, recoveryRecords, calendar] = await Promise.all([
     prisma.bodyProfile.findUnique({ where: { userId } }),
     prisma.goal.findMany({ where: { userId, status: "active" }, orderBy: { priority: "desc" } }),
     prisma.activityRecord.findMany({ where: { userId }, orderBy: { startedAt: "desc" }, take: 30 }),
     prisma.sleepRecord.findMany({ where: { userId }, orderBy: { date: "desc" }, take: 14 }),
     prisma.recoveryRecord.findMany({ where: { userId }, orderBy: { date: "desc" }, take: 14 }),
-    prisma.calendarSnapshot.findFirst({ where: { userId }, orderBy: { capturedAt: "desc" } })
+    prisma.calendarSnapshot.findFirst({
+      where: {
+        userId,
+        rangeStart: { lte: weekStart },
+        rangeEnd: { gte: weekEnd }
+      },
+      orderBy: { capturedAt: "desc" }
+    })
   ]);
 
   if (!profile) {
@@ -45,7 +53,7 @@ export async function generatePlanForUser(userId: string, weekStart: Date) {
     calories: activity.calories ?? undefined,
     trainingLoad: activity.trainingLoad ?? undefined,
     intensity: activity.intensity as NormalizedActivityRecord["intensity"],
-    metadata: parseJson<Record<string, unknown>>(activity.metadataJson)
+    metadata: {}
   }));
   const normalizedSleep: NormalizedSleepRecord[] = sleepRecords.map((sleep) => ({
     source: "coros",
@@ -54,7 +62,7 @@ export async function generatePlanForUser(userId: string, weekStart: Date) {
     sleepEnd: sleep.sleepEnd ?? undefined,
     durationMinutes: sleep.durationMinutes,
     qualityScore: sleep.qualityScore ?? undefined,
-    metadata: parseJson<Record<string, unknown>>(sleep.metadataJson)
+    metadata: {}
   }));
   const normalizedRecovery: NormalizedRecoveryRecord[] = recoveryRecords.map((recovery) => ({
     source: "coros",
@@ -65,7 +73,7 @@ export async function generatePlanForUser(userId: string, weekStart: Date) {
     stressLevel: recovery.stressLevel ?? undefined,
     trainingLoadShortTerm: recovery.trainingLoadShortTerm ?? undefined,
     trainingLoadLongTerm: recovery.trainingLoadLongTerm ?? undefined,
-    metadata: parseJson<Record<string, unknown>>(recovery.metadataJson)
+    metadata: {}
   }));
   const generated = generateWeeklyPlan({
     weekStart,
@@ -73,7 +81,14 @@ export async function generatePlanForUser(userId: string, weekStart: Date) {
       trainingExperience: profile.trainingExperience,
       injuries: parseJson<string[]>(profile.injuriesJson)
     },
-    goals: goals.map((goal) => ({ title: goal.title, type: goal.type, priority: goal.priority })),
+    goals: goals.map((goal) => ({
+      id: goal.id,
+      title: goal.title,
+      type: goal.type,
+      priority: goal.priority,
+      targetDate: goal.targetDate ?? undefined,
+      metrics: parseJson<Record<string, unknown>>(goal.metricsJson)
+    })),
     activities: normalizedActivities,
     sleepRecords: normalizedSleep,
     recoveryRecords: normalizedRecovery,
@@ -87,9 +102,24 @@ export async function generatePlanForUser(userId: string, weekStart: Date) {
     },
     mealMenus: getMockMealMenu(weekStart)
   });
-  const primaryGoalId = goals[0]?.id;
-
   return prisma.$transaction(async (tx) => {
+    const previousPlans = await tx.plan.findMany({
+      where: { userId, weekStart, status: { not: "superseded" } },
+      select: { id: true }
+    });
+    const previousPlanIds = previousPlans.map((plan) => plan.id);
+
+    if (previousPlanIds.length > 0) {
+      await tx.calendarEventDraft.updateMany({
+        where: { userId, planId: { in: previousPlanIds }, status: "draft" },
+        data: { status: "superseded" }
+      });
+      await tx.plan.updateMany({
+        where: { id: { in: previousPlanIds }, userId },
+        data: { status: "superseded" }
+      });
+    }
+
     const plan = await tx.plan.create({
       data: {
         userId,
@@ -109,7 +139,7 @@ export async function generatePlanForUser(userId: string, weekStart: Date) {
             targetJson: JSON.stringify(task.target),
             scheduledStart: task.scheduledStart ? new Date(task.scheduledStart) : undefined,
             scheduledEnd: task.scheduledEnd ? new Date(task.scheduledEnd) : undefined,
-            goalId: primaryGoalId,
+            goalId: generated.goalId,
             checklistItems: {
               create: task.checklist.map((label, index) => ({ label, order: index + 1 }))
             }

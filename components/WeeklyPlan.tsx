@@ -1,6 +1,7 @@
 import { Checklist } from "@/components/Checklist";
 
 type WeeklyPlanProps = {
+  activities: Array<{ id: string; label: string }>;
   plan: {
     summary: string;
     explanation: string;
@@ -23,7 +24,7 @@ function taskStatusClass(status: string) {
   return "status status-info";
 }
 
-export function WeeklyPlan({ plan }: WeeklyPlanProps) {
+export function WeeklyPlan({ plan, activities }: WeeklyPlanProps) {
   if (!plan) {
     return <section className="surface empty-state">Generate a plan after saving a profile and syncing schedule data.</section>;
   }
@@ -50,7 +51,7 @@ export function WeeklyPlan({ plan }: WeeklyPlanProps) {
               </div>
               <span className={taskStatusClass(task.status)}>{task.status.replace("_", " ")}</span>
             </div>
-            <Checklist taskId={task.id} items={task.checklistItems} />
+            <Checklist taskId={task.id} items={task.checklistItems} activities={activities} readOnly={task.status !== "planned"} />
           </article>
         ))}
       </div>

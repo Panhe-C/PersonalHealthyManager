@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/src/auth/session";
+import { withUser } from "@/src/auth/api";
 import { prisma } from "@/src/db/client";
 import { createAgentResponse } from "@/src/services/agent";
 
-export async function POST(request: Request) {
-  const user = await requireUser();
+export const POST = withUser(async (user, request: Request) => {
   const body = await request.json();
   const content = String(body.message ?? "").trim();
 
@@ -27,4 +26,4 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json(response);
-}
+});

@@ -418,6 +418,19 @@ h3 {
   text-decoration: line-through;
 }
 
+.completion-details {
+  border-top: 1px solid #edf0ed;
+  padding-top: 10px;
+}
+
+.completion-details summary {
+  width: fit-content;
+  color: var(--accent-strong);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 750;
+}
+
 .nutrition-list {
   display: grid;
   gap: 8px;

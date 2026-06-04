@@ -9,7 +9,7 @@ Healthy Body Manager is a personal training, recovery, schedule, and nutrition p
 - COROS-style activity, sleep, and recovery import APIs.
 - Feishu Calendar-style schedule import APIs.
 - Conservative weekly training generation from goals, recovery, sleep, injuries, and calendar availability.
-- Daily training checklists that update training history and adjust the next planned session.
+- Daily training checklists that update training history and conservatively adjust the remaining weekly plan.
 - Mock daily menu recommendations and nutrition guidance.
 - Calendar event drafts that require explicit user confirmation.
 - Persisted Agent conversations for recovery, replanning, menu, and calendar workflows.
@@ -40,6 +40,8 @@ The Web App includes a `Sync demo data` command that exercises those same endpoi
 
 Calendar write-back is confirmation-first. Confirming a draft currently records a mock Feishu external event ID. A real Feishu MCP write can replace that provider boundary without changing the plan or UI workflow.
 
+Generating the same week again supersedes the previous active plan and its unconfirmed calendar drafts, so only the latest proposal remains actionable.
+
 ## Development
 
 ```bash
@@ -61,7 +63,7 @@ Then:
 1. Open `Profile`, save a body profile, and sync demo data.
 2. Open `Goals` and add a primary or short-term event goal.
 3. Open `Plan` and generate the current week.
-4. Complete or skip checklist items to see the remaining weekly plan adjust.
+4. Complete or skip checklist items, optionally link a COROS activity, then select `Update training` to adjust the remaining weekly plan.
 5. Confirm calendar drafts only after reviewing them.
 6. Use `Agent` for recovery, calendar, menu, and replanning prompts.
 

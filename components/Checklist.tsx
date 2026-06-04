@@ -2,7 +2,8 @@
 
 import clsx from "clsx";
 import { useState } from "react";
-import { CircleSlash2 } from "lucide-react";
+import { CircleSlash2, Save } from "lucide-react";
+import { ActionButton } from "@/components/ActionButton";
 
 type ChecklistItem = {
   id: string;
@@ -10,19 +11,46 @@ type ChecklistItem = {
   status: string;
 };
 
-export function Checklist({ taskId, items }: { taskId: string; items: ChecklistItem[] }) {
-  const [localItems, setLocalItems] = useState(items);
-  const [savingId, setSavingId] = useState<string | null>(null);
+type ActivityOption = {
+  id: string;
+  label: string;
+};
 
-  async function update(itemId: string, status: "pending" | "completed" | "skipped") {
-    const nextItems = localItems.map((item) => (item.id === itemId ? { ...item, status } : item));
-    setLocalItems(nextItems);
-    setSavingId(itemId);
+export function Checklist({
+  taskId,
+  items,
+  activities,
+  readOnly
+}: {
+  taskId: string;
+  items: ChecklistItem[];
+  activities: ActivityOption[];
+  readOnly: boolean;
+}) {
+  const [localItems, setLocalItems] = useState(items);
+  const [actualMinutes, setActualMinutes] = useState("");
+  const [perceivedEffort, setPerceivedEffort] = useState("");
+  const [notes, setNotes] = useState("");
+  const [linkedActivityId, setLinkedActivityId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  function update(itemId: string, status: "pending" | "completed" | "skipped") {
+    setLocalItems((current) => current.map((item) => (item.id === itemId ? { ...item, status } : item)));
+  }
+
+  async function saveCompletion() {
+    setSaving(true);
+    setError("");
     const response = await fetch(`/api/training/tasks/${taskId}/completion`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        items: nextItems.map((item) => ({
+        actualLoad: actualMinutes ? Number(actualMinutes) : undefined,
+        perceivedEffort: perceivedEffort || undefined,
+        notes: notes || undefined,
+        linkedActivityId: linkedActivityId || undefined,
+        items: localItems.map((item) => ({
           id: item.id,
           label: item.label,
           status: item.status
@@ -35,7 +63,8 @@ export function Checklist({ taskId, items }: { taskId: string; items: ChecklistI
       return;
     }
 
-    setSavingId(null);
+    setSaving(false);
+    setError("Training feedback could not be saved.");
   }
 
   return (
@@ -46,7 +75,7 @@ export function Checklist({ taskId, items }: { taskId: string; items: ChecklistI
             aria-label={`Complete ${item.label}`}
             type="checkbox"
             checked={item.status === "completed"}
-            disabled={savingId !== null}
+            disabled={readOnly || saving}
             onChange={(event) => update(item.id, event.target.checked ? "completed" : "pending")}
           />
           <span className={clsx("checklist-label", item.status === "completed" && "checklist-label-completed")}>{item.label}</span>
@@ -56,13 +85,62 @@ export function Checklist({ taskId, items }: { taskId: string; items: ChecklistI
             className="icon-button"
             title="Mark skipped"
             type="button"
-            disabled={savingId !== null}
+            disabled={readOnly || saving}
             onClick={() => update(item.id, item.status === "skipped" ? "pending" : "skipped")}
           >
             <CircleSlash2 aria-hidden="true" size={16} />
           </button>
         </div>
       ))}
+
+      {readOnly ? (
+        <div className="message">Training feedback has been recorded.</div>
+      ) : (
+        <details className="completion-details">
+          <summary>Completion details</summary>
+          <div className="grid form-grid" style={{ marginTop: 12 }}>
+            <label className="field">
+              Actual minutes
+              <input
+                min="0"
+                type="number"
+                value={actualMinutes}
+                onChange={(event) => setActualMinutes(event.target.value)}
+              />
+            </label>
+            <label className="field">
+              Perceived effort
+              <select value={perceivedEffort} onChange={(event) => setPerceivedEffort(event.target.value)}>
+                <option value="">Not specified</option>
+                <option value="easy">Easy</option>
+                <option value="moderate">Moderate</option>
+                <option value="hard">Hard</option>
+              </select>
+            </label>
+            <label className="field field-span">
+              Linked COROS activity
+              <select value={linkedActivityId} onChange={(event) => setLinkedActivityId(event.target.value)}>
+                <option value="">None</option>
+                {activities.map((activity) => (
+                  <option key={activity.id} value={activity.id}>
+                    {activity.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field field-span">
+              Notes
+              <textarea value={notes} onChange={(event) => setNotes(event.target.value)} />
+            </label>
+            <div className="field-span toolbar">
+              <ActionButton type="button" onClick={saveCompletion} disabled={saving}>
+                <Save aria-hidden="true" size={16} /> {saving ? "Saving..." : "Update training"}
+              </ActionButton>
+              {error ? <span className="message message-error">{error}</span> : null}
+            </div>
+          </div>
+        </details>
+      )}
     </div>
   );
 }

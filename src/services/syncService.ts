@@ -101,16 +101,33 @@ export async function importCorosPayload(
 
 export async function importCalendarPayload(userId: string, payload: unknown) {
   const snapshot = normalizeFeishuCalendarSnapshot(payload as never);
+  const data = {
+    userId,
+    source: snapshot.source,
+    rangeStart: snapshot.rangeStart,
+    rangeEnd: snapshot.rangeEnd,
+    busyWindowsJson: JSON.stringify(snapshot.busyWindows),
+    freeWindowsJson: JSON.stringify(snapshot.freeWindows),
+    importantEventsJson: JSON.stringify(snapshot.importantEvents)
+  };
 
-  return prisma.calendarSnapshot.create({
-    data: {
-      userId,
-      source: snapshot.source,
-      rangeStart: snapshot.rangeStart,
-      rangeEnd: snapshot.rangeEnd,
-      busyWindowsJson: JSON.stringify(snapshot.busyWindows),
-      freeWindowsJson: JSON.stringify(snapshot.freeWindows),
-      importantEventsJson: JSON.stringify(snapshot.importantEvents)
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.calendarSnapshot.findFirst({
+      where: {
+        userId,
+        source: snapshot.source,
+        rangeStart: snapshot.rangeStart,
+        rangeEnd: snapshot.rangeEnd
+      }
+    });
+
+    if (existing) {
+      return tx.calendarSnapshot.update({
+        where: { id: existing.id },
+        data
+      });
     }
+
+    return tx.calendarSnapshot.create({ data });
   });
 }

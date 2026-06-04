@@ -17,6 +17,17 @@ function dateOnly(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function addDays(date: Date, days: number) {
+  const value = new Date(date);
+  value.setDate(date.getDate() + days);
+  return value;
+}
+
+function mondayForCurrentWeek(date: Date) {
+  const day = date.getDay() === 0 ? 7 : date.getDay();
+  return addDays(date, -day + 1);
+}
+
 export function SyncDemoDataButton() {
   const [state, setState] = useState<"idle" | "loading" | "error">("idle");
 
@@ -25,10 +36,11 @@ export function SyncDemoDataButton() {
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(today.getDate() - 1);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-    const weekEnd = new Date(today);
-    weekEnd.setDate(today.getDate() + 7);
+    const monday = mondayForCurrentWeek(today);
+    const nextMonday = addDays(monday, 7);
+    const tuesday = addDays(monday, 1);
+    const thursday = addDays(monday, 3);
+    const saturday = addDays(monday, 5);
 
     const [corosResponse, calendarResponse] = await Promise.all([
       fetch("/api/sync/coros", {
@@ -54,10 +66,14 @@ export function SyncDemoDataButton() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          rangeStart: isoAt(today, 0),
-          rangeEnd: isoAt(weekEnd, 23, 59),
-          busy: [{ start: isoAt(tomorrow, 9), end: isoAt(tomorrow, 17), title: "Work" }],
-          free: [{ start: isoAt(tomorrow, 18), end: isoAt(tomorrow, 19), title: "Training window" }]
+          rangeStart: isoAt(monday, 0),
+          rangeEnd: isoAt(nextMonday, 0),
+          busy: [{ start: isoAt(thursday, 9), end: isoAt(thursday, 17), title: "Work" }],
+          free: [
+            { start: isoAt(tuesday, 18), end: isoAt(tuesday, 19), title: "Training window" },
+            { start: isoAt(thursday, 18), end: isoAt(thursday, 19), title: "Training window" },
+            { start: isoAt(saturday, 8), end: isoAt(saturday, 10), title: "Training window" }
+          ]
         })
       })
     ]);

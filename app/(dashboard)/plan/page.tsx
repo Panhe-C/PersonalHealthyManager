@@ -9,11 +9,24 @@ import { prisma } from "@/src/db/client";
 
 export default async function PlanPage() {
   const user = await requireUser();
-  const [profile, calendar, plan, drafts] = await Promise.all([
+  const today = new Date();
+  const day = today.getDay() === 0 ? 7 : today.getDay();
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - day + 1);
+  weekStart.setHours(0, 0, 0, 0);
+  const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
+  const [profile, calendar, plan, activities] = await Promise.all([
     prisma.bodyProfile.findUnique({ where: { userId: user.id } }),
-    prisma.calendarSnapshot.findFirst({ where: { userId: user.id }, orderBy: { capturedAt: "desc" } }),
+    prisma.calendarSnapshot.findFirst({
+      where: {
+        userId: user.id,
+        rangeStart: { lte: weekStart },
+        rangeEnd: { gte: weekEnd }
+      },
+      orderBy: { capturedAt: "desc" }
+    }),
     prisma.plan.findFirst({
-      where: { userId: user.id },
+      where: { userId: user.id, status: { not: "superseded" } },
       orderBy: { createdAt: "desc" },
       include: {
         trainingTasks: {
@@ -22,11 +35,18 @@ export default async function PlanPage() {
         }
       }
     }),
-    prisma.calendarEventDraft.findMany({
+    prisma.activityRecord.findMany({
       where: { userId: user.id },
-      orderBy: { startsAt: "asc" }
+      orderBy: { startedAt: "desc" },
+      take: 10
     })
   ]);
+  const drafts = plan
+    ? await prisma.calendarEventDraft.findMany({
+        where: { userId: user.id, planId: plan.id },
+        orderBy: { startsAt: "asc" }
+      })
+    : [];
   const nutrition = plan ? JSON.parse(plan.nutritionTargetsJson) : null;
   const completedCount = plan?.trainingTasks.filter((task) => task.status !== "planned").length ?? 0;
   const plannedMinutes = plan?.trainingTasks.reduce((total, task) => total + task.durationMinutes, 0) ?? 0;
@@ -59,7 +79,13 @@ export default async function PlanPage() {
       </section>
 
       <section className="grid two-column-grid">
-        <WeeklyPlan plan={plan} />
+        <WeeklyPlan
+          plan={plan}
+          activities={activities.map((activity) => ({
+            id: activity.id,
+            label: `${activity.sportType} · ${activity.startedAt.toLocaleDateString()} · ${activity.durationMinutes} min`
+          }))}
+        />
         <div className="grid">
           <NutritionPanel nutrition={nutrition} />
           <CalendarDraftList

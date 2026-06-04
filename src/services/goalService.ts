@@ -18,16 +18,25 @@ export function parseGoalInput(input: unknown) {
 export async function createGoal(userId: string, input: unknown) {
   const goal = parseGoalInput(input);
 
-  return prisma.goal.create({
-    data: {
-      userId,
-      title: goal.title,
-      type: goal.type,
-      priority: goal.priority,
-      status: goal.status,
-      targetDate: goal.targetDate ? new Date(goal.targetDate) : undefined,
-      metricsJson: JSON.stringify(goal.metrics)
+  return prisma.$transaction(async (tx) => {
+    if (goal.type === "primary" && goal.status === "active") {
+      await tx.goal.updateMany({
+        where: { userId, type: "primary", status: "active" },
+        data: { type: "secondary" }
+      });
     }
+
+    return tx.goal.create({
+      data: {
+        userId,
+        title: goal.title,
+        type: goal.type,
+        priority: goal.priority,
+        status: goal.status,
+        targetDate: goal.targetDate ? new Date(goal.targetDate) : undefined,
+        metricsJson: JSON.stringify(goal.metrics)
+      }
+    });
   });
 }
 
