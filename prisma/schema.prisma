@@ -70,6 +70,9 @@ model Goal {
   updatedAt   DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trainingTasks TrainingTask[]
+
+  @@unique([id, userId])
 }
 
 model ActivityRecord {
@@ -92,8 +95,10 @@ model ActivityRecord {
   createdAt             DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  linkedCompletions TrainingCompletion[]
 
   @@index([userId, startedAt])
+  @@unique([userId, source, sourceId])
 }
 
 model SleepRecord {
@@ -111,6 +116,7 @@ model SleepRecord {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, date])
+  @@unique([userId, source, date])
 }
 
 model RecoveryRecord {
@@ -130,6 +136,7 @@ model RecoveryRecord {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, date])
+  @@unique([userId, source, date])
 }
 
 model CalendarSnapshot {
@@ -182,6 +189,7 @@ model Plan {
   calendarDrafts CalendarEventDraft[]
 
   @@index([userId, weekStart, weekEnd])
+  @@unique([id, userId])
 }
 
 model TrainingTask {
@@ -201,12 +209,14 @@ model TrainingTask {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  plan           Plan                    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  plan           Plan                    @relation(fields: [planId, userId], references: [id, userId], onDelete: Cascade)
+  goal           Goal?                   @relation(fields: [goalId], references: [id], onDelete: SetNull)
   checklistItems TrainingChecklistItem[]
   completion     TrainingCompletion?
   calendarDraft  CalendarEventDraft?
 
   @@index([userId, date])
+  @@unique([id, userId])
 }
 
 model TrainingChecklistItem {
@@ -233,7 +243,10 @@ model TrainingCompletion {
   plannedVsActualJson String
   completedAt         DateTime @default(now())
 
-  task TrainingTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  task TrainingTask @relation(fields: [taskId, userId], references: [id, userId], onDelete: Cascade)
+  linkedActivity ActivityRecord? @relation(fields: [linkedActivityId], references: [id], onDelete: SetNull)
+
+  @@unique([taskId, userId])
 }
 
 model PlanAdjustment {
@@ -247,7 +260,7 @@ model PlanAdjustment {
   explanation       String
   createdAt         DateTime @default(now())
 
-  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId, userId], references: [id, userId], onDelete: Cascade)
 
   @@index([userId, createdAt])
 }
@@ -268,10 +281,11 @@ model CalendarEventDraft {
   updatedAt       DateTime @updatedAt
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  plan         Plan?         @relation(fields: [planId], references: [id], onDelete: SetNull)
-  trainingTask TrainingTask? @relation(fields: [trainingTaskId], references: [id], onDelete: SetNull)
+  plan         Plan?         @relation(fields: [planId, userId], references: [id, userId], onDelete: Cascade)
+  trainingTask TrainingTask? @relation(fields: [trainingTaskId, userId], references: [id, userId], onDelete: Cascade)
 
   @@index([userId, startsAt])
+  @@unique([trainingTaskId, userId])
 }
 
 model AgentMessage {
