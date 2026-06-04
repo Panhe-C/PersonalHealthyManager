@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/src/db/client";
 import { reconcileChecklistCompletion } from "@/src/planning/checklist";
 
@@ -11,6 +12,21 @@ type StoredChecklistItem = {
   id: string;
   label: string;
   status: string;
+};
+
+type AdjustableTask = {
+  id?: string;
+  title: string;
+  trainingType: string;
+  durationMinutes: number;
+  intensity: string;
+  scheduledStart: Date | null;
+};
+
+type TaskAdjustmentChanges = {
+  title?: string;
+  durationMinutes?: number;
+  intensity?: string;
 };
 
 function checklistStatus(status: string): CompletionItemInput["status"] {
@@ -77,6 +93,56 @@ export function buildChecklistCompletion(input: {
 
 function withPrefix(title: string, prefix: string): string {
   return title.startsWith(prefix) ? title : `${prefix}${title}`;
+}
+
+export function buildAdjustedTaskUpdate(task: AdjustableTask, changes: TaskAdjustmentChanges) {
+  const title = changes.title ?? task.title;
+  const durationMinutes = changes.durationMinutes ?? task.durationMinutes;
+  const intensity = changes.intensity ?? task.intensity;
+  const scheduledEnd = task.scheduledStart
+    ? new Date(task.scheduledStart.getTime() + durationMinutes * 60 * 1000)
+    : undefined;
+
+  return {
+    task: {
+      ...changes,
+      ...(scheduledEnd ? { scheduledEnd } : {})
+    },
+    draft: scheduledEnd
+      ? {
+          title: `Training: ${title}`,
+          endsAt: scheduledEnd,
+          notes: `Type: ${task.trainingType}. Intensity: ${intensity}.`,
+          status: "draft",
+          failureReason: null
+        }
+      : undefined
+  };
+}
+
+async function updateAdjustedFutureTask(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  task: AdjustableTask & { id: string },
+  changes: TaskAdjustmentChanges
+) {
+  const update = buildAdjustedTaskUpdate(task, changes);
+
+  await tx.trainingTask.update({
+    where: { id: task.id },
+    data: update.task
+  });
+
+  if (update.draft) {
+    await tx.calendarEventDraft.updateMany({
+      where: {
+        trainingTaskId: task.id,
+        userId,
+        status: { in: ["draft", "confirmed", "failed"] }
+      },
+      data: update.draft
+    });
+  }
 }
 
 function checklistStateMatches(storedItems: StoredChecklistItem[], items: CompletionItemInput[]): boolean {
@@ -180,13 +246,10 @@ export async function completeTrainingTask(
         const reduction = Math.min(Math.max(0, futureTask.durationMinutes - 20), remainingReduction);
         if (reduction <= 0) continue;
 
-        await tx.trainingTask.update({
-          where: { id: futureTask.id },
-          data: {
-            intensity: "easy",
-            durationMinutes: futureTask.durationMinutes - reduction,
-            title: withPrefix(futureTask.title, "Reduced load: ")
-          }
+        await updateAdjustedFutureTask(tx, userId, futureTask, {
+          intensity: "easy",
+          durationMinutes: futureTask.durationMinutes - reduction,
+          title: withPrefix(futureTask.title, "Reduced load: ")
         });
         remainingReduction -= reduction;
         if (remainingReduction <= 0) break;
@@ -195,24 +258,19 @@ export async function completeTrainingTask(
 
     const nextFutureTask = futureTasks[0];
     if (nextFutureTask && built.completion.status === "skipped") {
-      await tx.trainingTask.update({
-        where: { id: nextFutureTask.id },
-        data: {
-          durationMinutes: nextFutureTask.durationMinutes + Math.min(20, Math.round(task.durationMinutes / 2)),
-          title: withPrefix(nextFutureTask.title, "Rescheduled focus: ")
-        }
+      await updateAdjustedFutureTask(tx, userId, nextFutureTask, {
+        durationMinutes: nextFutureTask.durationMinutes + Math.min(20, Math.round(task.durationMinutes / 2)),
+        title: withPrefix(nextFutureTask.title, "Rescheduled focus: ")
       });
     }
 
     if (built.completion.status === "partial") {
       for (const [index, futureTask] of futureTasks.entries()) {
-        await tx.trainingTask.update({
-          where: { id: futureTask.id },
-          data: {
-            intensity: futureTask.intensity === "hard" ? "moderate" : futureTask.intensity,
-            title: index === 0 ? withPrefix(futureTask.title, "Adjusted after partial completion: ") : futureTask.title
-          }
-        });
+        const title = index === 0 ? withPrefix(futureTask.title, "Adjusted after partial completion: ") : futureTask.title;
+        const intensity = futureTask.intensity === "hard" ? "moderate" : futureTask.intensity;
+        if (title === futureTask.title && intensity === futureTask.intensity) continue;
+
+        await updateAdjustedFutureTask(tx, userId, futureTask, { title, intensity });
       }
     }
 

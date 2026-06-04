@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildChecklistCompletion, reconcileStoredChecklistItems } from "@/src/services/checklistService";
+import {
+  buildAdjustedTaskUpdate,
+  buildChecklistCompletion,
+  reconcileStoredChecklistItems
+} from "@/src/services/checklistService";
 
 describe("checklist completion service helpers", () => {
   it("builds a completion payload and adjustment from checklist state", () => {
@@ -68,5 +72,31 @@ describe("checklist completion service helpers", () => {
         [{ id: "other", label: "Other", status: "completed" }]
       )
     ).toThrow("Checklist item does not belong to training task");
+  });
+
+  it("keeps scheduled task timing and calendar draft content aligned after an adjustment", () => {
+    const update = buildAdjustedTaskUpdate(
+      {
+        title: "Long easy run",
+        trainingType: "run",
+        durationMinutes: 75,
+        intensity: "easy",
+        scheduledStart: new Date("2026-06-06T08:00:00+08:00")
+      },
+      {
+        title: "Reduced load: Long easy run",
+        durationMinutes: 45,
+        intensity: "easy"
+      }
+    );
+
+    expect(update.task.scheduledEnd).toEqual(new Date("2026-06-06T08:45:00+08:00"));
+    expect(update.draft).toMatchObject({
+      title: "Training: Reduced load: Long easy run",
+      endsAt: new Date("2026-06-06T08:45:00+08:00"),
+      notes: "Type: run. Intensity: easy.",
+      status: "draft",
+      failureReason: null
+    });
   });
 });
