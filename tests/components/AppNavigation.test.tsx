@@ -11,12 +11,12 @@ vi.mock("@/components/LogoutButton", () => ({
 }));
 
 describe("AppNavigation", () => {
-  beforeEach(() => usePathname.mockReturnValue("/profile"));
+  beforeEach(() => usePathname.mockReturnValue("/settings"));
 
   it("marks the current route and leaves other links inactive", () => {
     render(<AppNavigation />);
 
-    expect(screen.getByRole("link", { name: "Profile" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Plan" })).not.toHaveAttribute("aria-current");
   });
 });

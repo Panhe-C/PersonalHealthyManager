@@ -4,14 +4,15 @@ import React from "react";
 import clsx from "clsx";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Bot, CalendarDays, Target, UserRound } from "lucide-react";
+import { Activity, Bot, CalendarDays, SlidersHorizontal, Target, UserRound } from "lucide-react";
 import { LogoutButton } from "@/components/LogoutButton";
 
 const links = [
   { href: "/plan", label: "Plan", icon: CalendarDays },
   { href: "/profile", label: "Profile", icon: UserRound },
   { href: "/goals", label: "Goals", icon: Target },
-  { href: "/agent", label: "Agent", icon: Bot }
+  { href: "/agent", label: "Agent", icon: Bot },
+  { href: "/settings", label: "Settings", icon: SlidersHorizontal }
 ];
 
 export function AppNavigation() {
