@@ -26,6 +26,7 @@ model User {
   plans             Plan[]
   calendarDrafts    CalendarEventDraft[]
   agentMessages     AgentMessage[]
+  settings          UserSettings?
 }
 
 model Session {
@@ -301,4 +302,21 @@ model AgentMessage {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+model UserSettings {
+  id                     String   @id @default(cuid())
+  userId                 String   @unique
+  modelProvider          String   @default("openai")
+  modelName              String   @default("gpt-4o-mini")
+  modelBaseUrl           String?
+  encryptedApiKey        String?
+  apiKeyIv               String?
+  apiKeyTag              String?
+  apiKeyHint             String?
+  dataMcpConnectionsJson String
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
