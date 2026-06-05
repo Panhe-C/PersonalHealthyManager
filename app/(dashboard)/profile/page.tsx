@@ -1,3 +1,4 @@
+import { Activity, HeartPulse, Moon } from "lucide-react";
 import { MetricCard } from "@/components/MetricCard";
 import { ProfileForm } from "@/components/ProfileForm";
 import { SyncDemoDataButton } from "@/components/SyncDemoDataButton";
@@ -35,6 +36,7 @@ export default async function ProfilePage() {
     <main className="page grid" style={{ gap: 20 }}>
       <div className="page-header">
         <div>
+          <span className="eyebrow">Body journal</span>
           <h1>Body profile</h1>
           <p className="page-subtitle">Physical context, preferences, and recent health sync status.</p>
         </div>
@@ -43,19 +45,25 @@ export default async function ProfilePage() {
 
       <section className="grid metric-grid">
         <MetricCard
+          icon={Activity}
           label="Latest workout"
           value={latestActivity ? latestActivity.sportType : "No data"}
           hint={latestActivity ? latestActivity.startedAt.toLocaleString() : "Sync COROS data"}
+          tone="clay"
         />
         <MetricCard
+          icon={Moon}
           label="Sleep"
           value={latestSleep ? `${(latestSleep.durationMinutes / 60).toFixed(1)}h` : "No data"}
           hint={latestSleep ? latestSleep.date.toDateString() : "Sync sleep data"}
+          tone="blue"
         />
         <MetricCard
+          icon={HeartPulse}
           label="Recovery"
           value={latestRecovery?.recoveryPercent ? `${latestRecovery.recoveryPercent}%` : "No data"}
           hint={latestRecovery ? latestRecovery.date.toDateString() : "Sync recovery data"}
+          tone="sage"
         />
       </section>
 

@@ -17,6 +17,7 @@ export default async function GoalsPage() {
     <main className="page grid" style={{ gap: 20 }}>
       <div className="page-header">
         <div>
+          <span className="eyebrow">Goal priority</span>
           <h1>Goals</h1>
           <p className="page-subtitle">The highest-priority active goal guides the weekly plan.</p>
         </div>
@@ -33,9 +34,9 @@ export default async function GoalsPage() {
           {goals.length === 0 ? (
             <div className="empty-state">No active goals yet.</div>
           ) : (
-            <div className="list">
+            <div className="list goal-list">
               {goals.map((goal, index) => (
-                <div className="list-row" key={goal.id}>
+                <div className={index === 0 ? "list-row goal-row-primary" : "list-row"} key={goal.id}>
                   <div>
                     <strong>{goal.title}</strong>
                     <div className="task-meta">

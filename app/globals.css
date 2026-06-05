@@ -254,6 +254,38 @@ h3 {
   grid-column: 1 / -1;
 }
 
+.profile-form,
+.goal-form {
+  display: grid;
+  gap: 18px;
+}
+
+.goal-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.form-section {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 0;
+  padding: 18px 0 0;
+}
+
+.form-section:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.form-section legend {
+  padding: 0;
+  color: var(--ink-strong);
+  font-size: 15px;
+  font-weight: 800;
+}
+
 .panel {
   padding: 20px;
 }
@@ -419,6 +451,16 @@ h3 {
 .list-row {
   padding: 16px 0;
   border-top: 1px solid var(--line);
+}
+
+.goal-list {
+  gap: 8px;
+}
+
+.goal-row-primary {
+  border-left: 3px solid var(--sage);
+  padding-left: 12px;
+  background: var(--sage-soft);
 }
 
 .task-row:first-child,
@@ -713,10 +755,27 @@ h3 {
 
 .chat-row {
   display: flex;
+  align-items: flex-start;
+  gap: 9px;
 }
 
 .chat-row-user {
+  flex-direction: row-reverse;
   justify-content: flex-end;
+}
+
+.chat-avatar {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--muted);
+  background: var(--panel);
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .chat-bubble {
@@ -730,7 +789,7 @@ h3 {
 
 .chat-bubble-user {
   color: #fff;
-  background: var(--accent);
+  background: var(--sage);
 }
 
 .agent-suggestions {
@@ -763,6 +822,10 @@ h3 {
   gap: 10px;
   border-top: 1px solid var(--line);
   padding: 16px;
+}
+
+.agent-composer-field {
+  flex: 1;
 }
 
 .action-stack {

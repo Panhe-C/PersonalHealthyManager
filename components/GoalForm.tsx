@@ -36,7 +36,7 @@ export function GoalForm() {
   }
 
   return (
-    <form className="surface panel grid form-grid" onSubmit={submit}>
+    <form className="surface panel goal-form" onSubmit={submit}>
       <label className="field field-span">
         Goal title
         <input name="title" placeholder="Marathon, fat loss, sleep better" required />

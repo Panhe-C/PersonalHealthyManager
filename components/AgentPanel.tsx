@@ -54,6 +54,9 @@ export function AgentPanel({ initialMessages }: { initialMessages: ChatMessage[]
         ) : (
           messages.map((item) => (
             <div className={item.role === "user" ? "chat-row chat-row-user" : "chat-row"} key={item.id}>
+              <span className="chat-avatar" aria-hidden="true">
+                {item.role === "user" ? "You" : "AI"}
+              </span>
               <div className={item.role === "user" ? "chat-bubble chat-bubble-user" : "chat-bubble"}>{item.content}</div>
             </div>
           ))
@@ -69,7 +72,7 @@ export function AgentPanel({ initialMessages }: { initialMessages: ChatMessage[]
       </div>
 
       <form className="agent-composer" onSubmit={send}>
-        <label className="field" style={{ flex: 1 }}>
+        <label className="field agent-composer-field">
           <span className="sr-only">Message</span>
           <input
             value={message}
