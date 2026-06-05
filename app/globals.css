@@ -446,6 +446,138 @@ h3 {
   font-size: 13px;
 }
 
+.metric-grid-plan {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.plan-content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(300px, 0.8fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.support-stack,
+.training-journal,
+.training-details {
+  display: grid;
+  gap: 14px;
+}
+
+.journal-heading h2 {
+  margin-bottom: 7px;
+}
+
+.week-ledger-scroll {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.week-ledger {
+  min-width: 770px;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ledger-day {
+  min-height: 132px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--panel);
+}
+
+.ledger-day-today {
+  border-color: var(--sage);
+  background: var(--sage-soft);
+}
+
+.ledger-day-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.ledger-day-heading strong {
+  color: var(--ink-strong);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 18px;
+}
+
+.ledger-task-list {
+  display: grid;
+  gap: 7px;
+}
+
+.ledger-task {
+  display: grid;
+  gap: 4px;
+  border-left: 2px solid var(--blue);
+  padding-left: 7px;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.ledger-task span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+}
+
+.ledger-task-positive {
+  border-left-color: var(--sage);
+}
+
+.ledger-task-warn {
+  border-left-color: var(--clay);
+}
+
+.ledger-rest {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.training-detail {
+  overflow: hidden;
+}
+
+.training-detail-summary {
+  min-height: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.training-detail-summary::-webkit-details-marker {
+  display: none;
+}
+
+.training-detail-summary > span:first-child {
+  display: grid;
+  gap: 5px;
+}
+
+.training-detail[open] .training-detail-summary {
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-soft);
+}
+
+.training-detail .checklist {
+  margin: 0;
+  padding: 14px 16px 16px;
+}
+
 .checklist {
   display: grid;
   gap: 7px;
@@ -453,11 +585,11 @@ h3 {
 }
 
 .checklist-row {
-  min-height: 38px;
+  min-height: 40px;
   display: flex;
   align-items: center;
   gap: 10px;
-  border-top: 1px solid #edf0ed;
+  border-top: 1px solid #edf1ee;
   padding-top: 7px;
 }
 
@@ -468,7 +600,7 @@ h3 {
 .checklist-row input {
   width: 18px;
   min-height: 18px;
-  accent-color: var(--accent);
+  accent-color: var(--sage);
 }
 
 .checklist-label {
@@ -488,10 +620,42 @@ h3 {
 
 .completion-details summary {
   width: fit-content;
-  color: var(--accent-strong);
+  color: var(--sage-strong);
   cursor: pointer;
   font-size: 13px;
   font-weight: 750;
+}
+
+.completion-grid {
+  margin-top: 12px;
+}
+
+.nutrition-sections {
+  display: grid;
+  gap: 20px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.section-title::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+
+.section-title-positive::before {
+  background: var(--sage);
+}
+
+.section-title-warn::before {
+  background: var(--clay);
 }
 
 .nutrition-list {

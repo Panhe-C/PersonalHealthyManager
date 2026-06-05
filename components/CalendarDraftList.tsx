@@ -66,6 +66,17 @@ export function CalendarDraftList({ drafts }: { drafts: Draft[] }) {
                   {new Date(draft.startsAt).toLocaleString()} –{" "}
                   {new Date(draft.endsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </div>
+                <span
+                  className={
+                    draft.status === "confirmed"
+                      ? "status status-positive"
+                      : draft.operation === "cancel"
+                        ? "status status-warn"
+                        : "status status-info"
+                  }
+                >
+                  {draft.status === "confirmed" ? "Confirmed" : draft.operation === "cancel" ? "Cancellation" : "Draft"}
+                </span>
               </div>
               <ActionButton
                 type="button"

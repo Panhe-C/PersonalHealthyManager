@@ -23,9 +23,9 @@ export function NutritionPanel({ nutrition }: NutritionPanelProps) {
         <span className="status status-positive">{nutrition.proteinTargetGrams}g protein</span>
       </div>
 
-      <div className="grid" style={{ gap: 20 }}>
+      <div className="nutrition-sections">
         <div>
-          <h3>Recommended menu choices</h3>
+          <h3 className="section-title section-title-positive">Recommended menu choices</h3>
           <ul className="nutrition-list">
             {nutrition.recommended.map((item) => (
               <li className="nutrition-item" key={item.name}>
@@ -39,7 +39,7 @@ export function NutritionPanel({ nutrition }: NutritionPanelProps) {
         </div>
 
         <div>
-          <h3>Use caution</h3>
+          <h3 className="section-title section-title-warn">Use caution</h3>
           <ul className="nutrition-list">
             {nutrition.caution.map((item) => (
               <li className="nutrition-item" key={item.name}>

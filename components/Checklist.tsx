@@ -98,7 +98,7 @@ export function Checklist({
       ) : (
         <details className="completion-details">
           <summary>Completion details</summary>
-          <div className="grid form-grid" style={{ marginTop: 12 }}>
+          <div className="grid form-grid completion-grid">
             <label className="field">
               Actual minutes
               <input
