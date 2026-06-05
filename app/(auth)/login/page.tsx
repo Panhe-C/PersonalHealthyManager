@@ -1,24 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { LogIn } from "lucide-react";
-
-const fieldStyle = {
-  display: "grid",
-  gap: 8,
-  color: "var(--ink)",
-  fontWeight: 600
-} as const;
-
-const inputStyle = {
-  width: "100%",
-  minHeight: 44,
-  padding: "10px 12px",
-  border: "1px solid var(--line)",
-  borderRadius: 6,
-  background: "var(--panel)",
-  color: "var(--ink)"
-} as const;
+import { Activity, LogIn } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("demo@example.com");
@@ -52,24 +35,20 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="page">
-      <form
-        className="surface"
-        onSubmit={submit}
-        style={{
-          display: "grid",
-          gap: 20,
-          maxWidth: 420,
-          margin: "80px auto",
-          padding: 24
-        }}
-      >
-        <div>
-          <h1 style={{ margin: 0, fontSize: 28 }}>Healthy Body Manager</h1>
-          <p style={{ margin: "8px 0 0", color: "var(--muted)" }}>Sign in to continue</p>
+    <main className="login-shell">
+      <form className="surface login-card" onSubmit={submit}>
+        <div className="login-brand">
+          <span className="brand-mark">
+            <Activity aria-hidden="true" size={18} />
+          </span>
+          <div>
+            <span className="eyebrow">Personal recovery journal</span>
+            <h1>Healthy Body Manager</h1>
+            <p className="page-subtitle">Sign in to continue</p>
+          </div>
         </div>
 
-        <label style={fieldStyle}>
+        <label className="field">
           Email
           <input
             autoComplete="email"
@@ -78,11 +57,10 @@ export default function LoginPage() {
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             required
-            style={inputStyle}
           />
         </label>
 
-        <label style={fieldStyle}>
+        <label className="field">
           Password
           <input
             autoComplete="current-password"
@@ -91,34 +69,16 @@ export default function LoginPage() {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             required
-            style={inputStyle}
           />
         </label>
 
         {error ? (
-          <p role="alert" style={{ margin: 0, color: "var(--danger)" }}>
+          <p className="message message-error" role="alert">
             {error}
           </p>
         ) : null}
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            minHeight: 44,
-            border: 0,
-            borderRadius: 6,
-            background: "var(--accent)",
-            color: "#ffffff",
-            cursor: isSubmitting ? "wait" : "pointer",
-            fontWeight: 700,
-            opacity: isSubmitting ? 0.75 : 1
-          }}
-        >
+        <button className="button login-submit" type="submit" disabled={isSubmitting}>
           <LogIn aria-hidden="true" size={18} />
           {isSubmitting ? "Signing in..." : "Sign in"}
         </button>

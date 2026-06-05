@@ -87,7 +87,7 @@ export function SyncDemoDataButton() {
   }
 
   return (
-    <div className="grid" style={{ gap: 6 }}>
+    <div className="action-stack">
       <ActionButton variant="secondary" type="button" onClick={sync} disabled={state === "loading"}>
         <DatabaseZap aria-hidden="true" size={16} /> {state === "loading" ? "Syncing..." : "Sync demo data"}
       </ActionButton>

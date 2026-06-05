@@ -33,7 +33,7 @@ export function GeneratePlanButton({ disabled = false }: { disabled?: boolean })
   }
 
   return (
-    <div className="grid" style={{ gap: 6 }}>
+    <div className="action-stack">
       <ActionButton type="button" onClick={generate} disabled={disabled || state === "loading"}>
         <RefreshCw aria-hidden="true" size={16} /> {state === "loading" ? "Generating..." : "Generate this week"}
       </ActionButton>
