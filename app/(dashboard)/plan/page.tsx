@@ -81,6 +81,8 @@ export default async function PlanPage() {
       <section className="grid two-column-grid">
         <WeeklyPlan
           plan={plan}
+          today={today}
+          weekStart={weekStart}
           activities={activities.map((activity) => ({
             id: activity.id,
             label: `${activity.sportType} · ${activity.startedAt.toLocaleDateString()} · ${activity.durationMinutes} min`
