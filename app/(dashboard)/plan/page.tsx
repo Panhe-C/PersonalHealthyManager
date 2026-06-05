@@ -1,3 +1,4 @@
+import { CalendarCheck2, Clock3, HeartPulse, Moon } from "lucide-react";
 import { CalendarDraftList } from "@/components/CalendarDraftList";
 import { GeneratePlanButton } from "@/components/GeneratePlanButton";
 import { MetricCard } from "@/components/MetricCard";
@@ -15,7 +16,7 @@ export default async function PlanPage() {
   weekStart.setDate(today.getDate() - day + 1);
   weekStart.setHours(0, 0, 0, 0);
   const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
-  const [profile, calendar, plan, activities] = await Promise.all([
+  const [profile, calendar, plan, activities, primaryGoal, latestSleep, latestRecovery] = await Promise.all([
     prisma.bodyProfile.findUnique({ where: { userId: user.id } }),
     prisma.calendarSnapshot.findFirst({
       where: {
@@ -39,7 +40,13 @@ export default async function PlanPage() {
       where: { userId: user.id },
       orderBy: { startedAt: "desc" },
       take: 10
-    })
+    }),
+    prisma.goal.findFirst({
+      where: { userId: user.id, status: "active" },
+      orderBy: { priority: "desc" }
+    }),
+    prisma.sleepRecord.findFirst({ where: { userId: user.id }, orderBy: { date: "desc" } }),
+    prisma.recoveryRecord.findFirst({ where: { userId: user.id }, orderBy: { date: "desc" } })
   ]);
   const drafts = plan
     ? await prisma.calendarEventDraft.findMany({
@@ -57,8 +64,11 @@ export default async function PlanPage() {
     <main className="page grid" style={{ gap: 20 }}>
       <div className="page-header">
         <div>
-          <h1>Plan</h1>
-          <p className="page-subtitle">Weekly training, daily checklist, nutrition targets, and calendar confirmation.</p>
+          <span className="eyebrow">
+            {weekStart.toLocaleDateString()} – {weekEnd.toLocaleDateString()}
+          </span>
+          <h1>{primaryGoal ? primaryGoal.title : "This week's rhythm"}</h1>
+          <p className="page-subtitle">{plan?.summary ?? "Weekly training, recovery, nutrition, and calendar decisions."}</p>
         </div>
         <div className="toolbar">
           <SyncDemoDataButton />
@@ -72,13 +82,38 @@ export default async function PlanPage() {
         </div>
       ) : null}
 
-      <section className="grid metric-grid">
-        <MetricCard label="Weekly sessions" value={plan ? String(plan.trainingTasks.length) : "—"} hint={`${completedCount} updated`} />
-        <MetricCard label="Planned volume" value={plan ? `${plannedMinutes} min` : "—"} hint="Adjusts with checklist feedback" />
-        <MetricCard label="Calendar status" value={`${confirmedDrafts}/${drafts.length}`} hint="Confirmed training events" />
+      <section className="grid metric-grid metric-grid-plan">
+        <MetricCard
+          icon={HeartPulse}
+          label="Recovery"
+          value={latestRecovery?.recoveryPercent ? `${latestRecovery.recoveryPercent}%` : "—"}
+          hint="Latest readiness signal"
+          tone="sage"
+        />
+        <MetricCard
+          icon={Moon}
+          label="Sleep"
+          value={latestSleep ? `${(latestSleep.durationMinutes / 60).toFixed(1)}h` : "—"}
+          hint="Latest sleep duration"
+          tone="blue"
+        />
+        <MetricCard
+          icon={Clock3}
+          label="Planned volume"
+          value={plan ? `${plannedMinutes} min` : "—"}
+          hint={`${completedCount} sessions updated`}
+          tone="clay"
+        />
+        <MetricCard
+          icon={CalendarCheck2}
+          label="Calendar"
+          value={`${confirmedDrafts}/${drafts.length}`}
+          hint="Confirmed training events"
+          tone="neutral"
+        />
       </section>
 
-      <section className="grid two-column-grid">
+      <section className="plan-content-grid">
         <WeeklyPlan
           plan={plan}
           today={today}
@@ -88,7 +123,7 @@ export default async function PlanPage() {
             label: `${activity.sportType} · ${activity.startedAt.toLocaleDateString()} · ${activity.durationMinutes} min`
           }))}
         />
-        <div className="grid">
+        <div className="support-stack">
           <NutritionPanel nutrition={nutrition} />
           <CalendarDraftList
             drafts={drafts.map((draft) => ({
