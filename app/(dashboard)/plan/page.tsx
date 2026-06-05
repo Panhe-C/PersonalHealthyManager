@@ -86,7 +86,7 @@ export default async function PlanPage() {
         <MetricCard
           icon={HeartPulse}
           label="Recovery"
-          value={latestRecovery?.recoveryPercent ? `${latestRecovery.recoveryPercent}%` : "—"}
+          value={latestRecovery?.recoveryPercent != null ? `${latestRecovery.recoveryPercent}%` : "—"}
           hint="Latest readiness signal"
           tone="sage"
         />
