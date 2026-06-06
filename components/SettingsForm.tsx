@@ -117,7 +117,11 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
         <div className="grid form-grid">
           <label className="field">
             Provider
-            <select value={modelProvider} onChange={(event) => setModelProvider(event.target.value as SettingsView["modelProvider"])}>
+            <select
+              name="modelProvider"
+              value={modelProvider}
+              onChange={(event) => setModelProvider(event.target.value as SettingsView["modelProvider"])}
+            >
               {modelProviders.map((provider) => (
                 <option value={provider.value} key={provider.value}>
                   {provider.label}
@@ -127,16 +131,28 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
           </label>
           <label className="field">
             Model
-            <input value={modelName} onChange={(event) => setModelName(event.target.value)} placeholder="gpt-4o-mini" required />
+            <input
+              name="modelName"
+              value={modelName}
+              onChange={(event) => setModelName(event.target.value)}
+              placeholder="gpt-4o-mini"
+              required
+            />
           </label>
           <label className="field field-span">
             Base URL
-            <input value={modelBaseUrl} onChange={(event) => setModelBaseUrl(event.target.value)} placeholder="https://api.openai.com/v1" />
+            <input
+              name="modelBaseUrl"
+              value={modelBaseUrl}
+              onChange={(event) => setModelBaseUrl(event.target.value)}
+              placeholder="https://api.openai.com/v1"
+            />
           </label>
           <label className="field field-span">
             API key
             <input
               autoComplete="new-password"
+              name="apiKey"
               type="password"
               value={apiKey}
               onChange={(event) => setApiKey(event.target.value)}

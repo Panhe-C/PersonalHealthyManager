@@ -983,16 +983,24 @@ summary:focus-visible {
   }
 
   .app-nav {
-    gap: 10px;
-    overflow-x: auto;
+    flex-wrap: wrap;
+    gap: 10px 12px;
   }
 
   .brand {
     min-width: max-content;
   }
 
+  .app-nav > .icon-button {
+    margin-left: auto;
+    order: 2;
+  }
+
   .nav-links {
-    min-width: max-content;
+    order: 3;
+    width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
   }
 
   .page-header,
@@ -1031,6 +1039,23 @@ summary:focus-visible {
 
   .brand span:last-child {
     display: none;
+  }
+
+  .nav-link {
+    min-height: 34px;
+    gap: 5px;
+    padding: 0 8px;
+    font-size: 13px;
+  }
+
+  .settings-panel > .panel-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settings-panel > .panel-heading .button {
+    width: 100%;
+    justify-content: center;
   }
 
   .metric-grid-plan {
