@@ -115,6 +115,42 @@ describe("SettingsForm", () => {
     });
   });
 
+  it("shows model test progress and then the result after clicking Test model", async () => {
+    let resolveFetch: (value: { ok: boolean; json: () => Promise<unknown> }) => void = () => {};
+    vi.mocked(fetch).mockReturnValue(
+      new Promise((resolve) => {
+        resolveFetch = resolve;
+      }) as never
+    );
+
+    render(
+      <SettingsForm
+        initialSettings={{
+          modelProvider: "openai",
+          modelName: "gpt-4o-mini",
+          modelBaseUrl: "https://api.openai.com/v1",
+          hasApiKey: false,
+          apiKeyHint: null,
+          dataMcpConnections: defaultDataMcpConnections
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Test model" }));
+
+    expect(screen.getByText("Testing model runtime...")).toBeInTheDocument();
+
+    resolveFetch({
+      ok: true,
+      json: async () => ({
+        results: [{ id: "model", label: "Model runtime", status: "connected", message: "Model responded.", latencyMs: 12 }]
+      })
+    });
+
+    expect(await screen.findByText("Model responded.")).toBeInTheDocument();
+    expect(screen.queryByText("Testing model runtime...")).not.toBeInTheDocument();
+  });
+
   it("runs all settings tests from the toolbar", async () => {
     render(
       <SettingsForm

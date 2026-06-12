@@ -196,16 +196,18 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
             {testingTarget === "model" ? "Testing..." : "Test model"}
           </button>
         </div>
-      </section>
 
-      {testResults.length > 0 ? (
-        <section className="surface panel settings-panel">
-          <div className="panel-heading">
-            <div>
-              <h2>Test results</h2>
-              <p className="page-subtitle">Latest connection check output.</p>
+        {testingTarget === "model" ? (
+          <div className="test-result-list" role="status" aria-live="polite">
+            <div className="test-result">
+              <strong>Model runtime</strong>
+              <span>Testing</span>
+              <p>Testing model runtime...</p>
             </div>
           </div>
+        ) : null}
+
+        {testResults.length > 0 ? (
           <div className="test-result-list">
             {testResults.map((result) => (
               <div className={resultClass(result.status)} key={result.id}>
@@ -216,8 +218,8 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
               </div>
             ))}
           </div>
-        </section>
-      ) : null}
+        ) : null}
+      </section>
 
       <section className="surface panel settings-panel">
         <div className="panel-heading">
