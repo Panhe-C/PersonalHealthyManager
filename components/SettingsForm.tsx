@@ -43,6 +43,16 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
     setTestResults([]);
   }
 
+  function updateModelProvider(value: SettingsView["modelProvider"]) {
+    const provider = modelProviders.find((item) => item.value === value);
+    setModelProvider(value);
+    if (provider) {
+      setModelName(provider.defaultModel);
+      setModelBaseUrl(provider.defaultBaseUrl);
+    }
+    setTestResults([]);
+  }
+
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
@@ -120,7 +130,7 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
             <select
               name="modelProvider"
               value={modelProvider}
-              onChange={(event) => setModelProvider(event.target.value as SettingsView["modelProvider"])}
+              onChange={(event) => updateModelProvider(event.target.value as SettingsView["modelProvider"])}
             >
               {modelProviders.map((provider) => (
                 <option value={provider.value} key={provider.value}>

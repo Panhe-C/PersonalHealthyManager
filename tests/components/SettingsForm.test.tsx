@@ -36,6 +36,46 @@ describe("SettingsForm", () => {
     expect(screen.queryByText("sk-test-1234")).not.toBeInTheDocument();
   });
 
+  it("shows Chinese model providers in the provider picker", () => {
+    render(
+      <SettingsForm
+        initialSettings={{
+          modelProvider: "openai",
+          modelName: "gpt-4o-mini",
+          modelBaseUrl: "https://api.openai.com/v1",
+          hasApiKey: false,
+          apiKeyHint: null,
+          dataMcpConnections: defaultDataMcpConnections
+        }}
+      />
+    );
+
+    expect(screen.getByRole("option", { name: "DeepSeek" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "MiniMax" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Kimi / Moonshot" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "GLM / Zhipu" })).toBeInTheDocument();
+  });
+
+  it("fills provider defaults when the provider changes", () => {
+    render(
+      <SettingsForm
+        initialSettings={{
+          modelProvider: "openai",
+          modelName: "gpt-4o-mini",
+          modelBaseUrl: "https://api.openai.com/v1",
+          hasApiKey: false,
+          apiKeyHint: null,
+          dataMcpConnections: defaultDataMcpConnections
+        }}
+      />
+    );
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Provider" }), { target: { value: "kimi" } });
+
+    expect(screen.getByRole("textbox", { name: "Model" })).toHaveValue("kimi-k2.6");
+    expect(screen.getByRole("textbox", { name: "Base URL" })).toHaveValue("https://api.moonshot.ai/v1");
+  });
+
   it("runs all settings tests from the toolbar", async () => {
     render(
       <SettingsForm

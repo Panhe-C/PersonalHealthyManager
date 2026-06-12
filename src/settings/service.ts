@@ -172,6 +172,10 @@ function getProviderBaseUrl(provider: ModelProvider, configuredBaseUrl: string) 
   return modelProviders.find((item) => item.value === provider)?.defaultBaseUrl.replace(/\/$/, "") ?? "";
 }
 
+function getProviderLabel(provider: ModelProvider) {
+  return modelProviders.find((item) => item.value === provider)?.label ?? "Model provider";
+}
+
 function statusMessage(status: number) {
   if (status === 401 || status === 403) return "Authentication failed. Check the API key.";
   if (status === 404) return "Endpoint or model was not found.";
@@ -200,6 +204,7 @@ async function testModel(record: SettingsRecord | null): Promise<SettingsTestRes
         apiKeyTag: record.apiKeyTag as string
       });
       const baseUrl = getProviderBaseUrl(view.modelProvider, view.modelBaseUrl);
+      const providerLabel = getProviderLabel(view.modelProvider);
 
       if (view.modelProvider === "custom") {
         if (!baseUrl) {
@@ -247,7 +252,7 @@ async function testModel(record: SettingsRecord | null): Promise<SettingsTestRes
         })
       });
       return response.ok
-        ? { id: "model", label, status: "connected", message: `OpenAI model ${view.modelName} responded.` }
+        ? { id: "model", label, status: "connected", message: `${providerLabel} model ${view.modelName} responded.` }
         : { id: "model", label, status: "failed", message: statusMessage(response.status) };
     } catch (error) {
       return {

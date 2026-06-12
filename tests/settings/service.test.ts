@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/src/db/client";
+import { defaultDataMcpConnections } from "@/src/settings/defaults";
+import { encryptApiKey } from "@/src/settings/crypto";
 import { loadUserSettings, saveUserSettings, testUserSettings } from "@/src/settings/service";
 
 vi.mock("@/src/db/client", () => ({
@@ -63,6 +65,69 @@ describe("settings service", () => {
         })
       })
     );
+  });
+
+  it("accepts Chinese model providers when saving settings", async () => {
+    vi.mocked(prisma.userSettings.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.userSettings.upsert).mockResolvedValue({} as never);
+
+    await saveUserSettings("user-1", {
+      modelProvider: "deepseek",
+      modelName: "deepseek-v4-flash",
+      modelBaseUrl: "https://api.deepseek.com",
+      apiKey: "",
+      dataMcpConnections: defaultDataMcpConnections
+    });
+
+    expect(prisma.userSettings.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          modelProvider: "deepseek",
+          modelName: "deepseek-v4-flash",
+          modelBaseUrl: "https://api.deepseek.com"
+        })
+      })
+    );
+  });
+
+  it("tests Chinese model providers through chat completions", async () => {
+    const encrypted = encryptApiKey("sk-deepseek-test");
+    vi.mocked(prisma.userSettings.findUnique).mockResolvedValue({
+      modelProvider: "deepseek",
+      modelName: "deepseek-v4-flash",
+      modelBaseUrl: "",
+      encryptedApiKey: encrypted.encryptedApiKey,
+      apiKeyIv: encrypted.apiKeyIv,
+      apiKeyTag: encrypted.apiKeyTag,
+      apiKeyHint: encrypted.apiKeyHint,
+      dataMcpConnectionsJson: JSON.stringify(defaultDataMcpConnections)
+    } as never);
+    vi.mocked(fetch).mockResolvedValue({ ok: true, status: 200 } as never);
+
+    const results = await testUserSettings("user-1", "model");
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://api.deepseek.com/chat/completions",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer sk-deepseek-test",
+          "Content-Type": "application/json"
+        }),
+        body: JSON.stringify({
+          model: "deepseek-v4-flash",
+          max_tokens: 1,
+          messages: [{ role: "user", content: "ping" }]
+        })
+      })
+    );
+    expect(results).toEqual([
+      expect.objectContaining({
+        id: "model",
+        status: "connected",
+        message: "DeepSeek model deepseek-v4-flash responded."
+      })
+    ]);
   });
 
   it("reports model as not configured when no key is saved", async () => {

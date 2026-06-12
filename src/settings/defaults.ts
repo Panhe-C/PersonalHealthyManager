@@ -1,4 +1,4 @@
-export type ModelProvider = "openai" | "anthropic" | "custom";
+export type ModelProvider = "openai" | "anthropic" | "deepseek" | "minimax" | "kimi" | "glm" | "custom";
 
 export type DataMcpConnectionId = "coros" | "calendar" | "meal_menu";
 
@@ -28,6 +28,10 @@ export const modelProviders: Array<{
   defaultBaseUrl: string;
 }> = [
   { value: "openai", label: "OpenAI", defaultModel: "gpt-4o-mini", defaultBaseUrl: "https://api.openai.com/v1" },
+  { value: "deepseek", label: "DeepSeek", defaultModel: "deepseek-v4-flash", defaultBaseUrl: "https://api.deepseek.com" },
+  { value: "minimax", label: "MiniMax", defaultModel: "MiniMax-M1", defaultBaseUrl: "https://api.minimax.io/v1" },
+  { value: "kimi", label: "Kimi / Moonshot", defaultModel: "kimi-k2.6", defaultBaseUrl: "https://api.moonshot.ai/v1" },
+  { value: "glm", label: "GLM / Zhipu", defaultModel: "glm-5.1", defaultBaseUrl: "https://open.bigmodel.cn/api/paas/v4" },
   {
     value: "anthropic",
     label: "Anthropic",
