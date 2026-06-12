@@ -53,6 +53,16 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
     setTestResults([]);
   }
 
+  function buildModelDraft() {
+    return {
+      modelProvider,
+      modelName,
+      modelBaseUrl,
+      apiKey,
+      dataMcpConnections: connections
+    };
+  }
+
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
@@ -92,22 +102,28 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
   async function runTest(target: string) {
     setTestingTarget(target);
     setError("");
+    setMessage("");
+    setTestResults([]);
 
-    const response = await fetch("/api/settings/test", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ target })
-    });
-    const body = await response.json();
+    try {
+      const response = await fetch("/api/settings/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(target === "model" ? { target, draft: buildModelDraft() } : { target })
+      });
+      const body = await response.json().catch(() => ({}));
 
-    if (!response.ok) {
-      setError(body.error ?? "Settings test failed");
+      if (!response.ok) {
+        setError(body.error ?? "Settings test failed");
+        return;
+      }
+
+      setTestResults(body.results ?? []);
+    } catch (testError) {
+      setError(testError instanceof Error ? testError.message : "Settings test failed");
+    } finally {
       setTestingTarget(null);
-      return;
     }
-
-    setTestResults(body.results ?? []);
-    setTestingTarget(null);
   }
 
   return (
@@ -182,6 +198,27 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
         </div>
       </section>
 
+      {testResults.length > 0 ? (
+        <section className="surface panel settings-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Test results</h2>
+              <p className="page-subtitle">Latest connection check output.</p>
+            </div>
+          </div>
+          <div className="test-result-list">
+            {testResults.map((result) => (
+              <div className={resultClass(result.status)} key={result.id}>
+                <strong>{result.label}</strong>
+                <span>{statusLabel[result.status]}</span>
+                <p>{result.message}</p>
+                {result.latencyMs != null ? <small>{result.latencyMs} ms</small> : null}
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <section className="surface panel settings-panel">
         <div className="panel-heading">
           <div>
@@ -230,27 +267,6 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
           ))}
         </div>
       </section>
-
-      {testResults.length > 0 ? (
-        <section className="surface panel settings-panel">
-          <div className="panel-heading">
-            <div>
-              <h2>Test results</h2>
-              <p className="page-subtitle">Latest connection check output.</p>
-            </div>
-          </div>
-          <div className="test-result-list">
-            {testResults.map((result) => (
-              <div className={resultClass(result.status)} key={result.id}>
-                <strong>{result.label}</strong>
-                <span>{statusLabel[result.status]}</span>
-                <p>{result.message}</p>
-                {result.latencyMs != null ? <small>{result.latencyMs} ms</small> : null}
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
 
       <div className="toolbar">
         <button className="button button-primary" type="submit" disabled={saving}>

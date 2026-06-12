@@ -29,6 +29,14 @@ export type SettingsSaveInput = {
   dataMcpConnections: DataMcpConnection[];
 };
 
+export type SettingsTestDraftInput = {
+  modelProvider?: ModelProvider;
+  modelName?: string;
+  modelBaseUrl?: string;
+  apiKey?: string;
+  dataMcpConnections?: DataMcpConnection[];
+};
+
 export type SettingsTestTarget = "model" | DataMcpConnectionId | "all";
 
 export type SettingsTestResult = {
@@ -114,6 +122,39 @@ function toSettingsView(record: SettingsRecord | null): SettingsView {
     hasApiKey: Boolean(record.encryptedApiKey && record.apiKeyIv && record.apiKeyTag),
     apiKeyHint: record.apiKeyHint,
     dataMcpConnections: parseConnections(record.dataMcpConnectionsJson)
+  };
+}
+
+function toDraftSettingsRecord(record: SettingsRecord | null, draft: SettingsTestDraftInput): SettingsRecord {
+  const baseView = toSettingsView(record);
+  const provider = draft.modelProvider ?? baseView.modelProvider;
+  assertProvider(provider);
+
+  const modelName = String(draft.modelName ?? baseView.modelName).trim();
+  if (!modelName) throw new Error("Model name is required");
+
+  const modelBaseUrl = String(draft.modelBaseUrl ?? baseView.modelBaseUrl ?? "").trim();
+  assertUrl(modelBaseUrl, "Model base URL");
+
+  const trimmedApiKey = String(draft.apiKey ?? "").trim();
+  const encrypted = trimmedApiKey
+    ? encryptApiKey(trimmedApiKey)
+    : {
+        encryptedApiKey: record?.encryptedApiKey ?? null,
+        apiKeyIv: record?.apiKeyIv ?? null,
+        apiKeyTag: record?.apiKeyTag ?? null,
+        apiKeyHint: record?.apiKeyHint ?? null
+      };
+
+  return {
+    modelProvider: provider,
+    modelName,
+    modelBaseUrl: modelBaseUrl || null,
+    encryptedApiKey: encrypted.encryptedApiKey,
+    apiKeyIv: encrypted.apiKeyIv,
+    apiKeyTag: encrypted.apiKeyTag,
+    apiKeyHint: encrypted.apiKeyHint,
+    dataMcpConnectionsJson: JSON.stringify(normalizeConnections(draft.dataMcpConnections ?? baseView.dataMcpConnections))
   };
 }
 
@@ -313,20 +354,25 @@ async function testMcpConnection(connection: DataMcpConnection): Promise<Setting
   });
 }
 
-export async function testUserSettings(userId: string, target: SettingsTestTarget): Promise<SettingsTestResult[]> {
+export async function testUserSettings(
+  userId: string,
+  target: SettingsTestTarget,
+  draft?: SettingsTestDraftInput
+): Promise<SettingsTestResult[]> {
   if (!["model", "coros", "calendar", "meal_menu", "all"].includes(target)) {
     throw new Error("Invalid settings test target");
   }
 
   const record = await prisma.userSettings.findUnique({ where: { userId } });
-  const view = toSettingsView(record);
+  const settingsRecord = draft ? toDraftSettingsRecord(record, draft) : record;
+  const view = toSettingsView(settingsRecord);
 
-  if (target === "model") return [await testModel(record)];
+  if (target === "model") return [await testModel(settingsRecord)];
 
   const enabledConnectionTests = view.dataMcpConnections.filter((connection) => connection.enabled).map((connection) => testMcpConnection(connection));
 
   if (target === "all") {
-    return [await testModel(record), ...(await Promise.all(enabledConnectionTests))];
+    return [await testModel(settingsRecord), ...(await Promise.all(enabledConnectionTests))];
   }
 
   const connection = view.dataMcpConnections.find((item) => item.id === target);

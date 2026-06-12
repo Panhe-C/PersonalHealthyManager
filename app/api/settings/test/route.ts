@@ -5,7 +5,7 @@ import { testUserSettings } from "@/src/settings/service";
 export const POST = withUser(async (user, request: Request) => {
   try {
     const body = await request.json();
-    return NextResponse.json({ results: await testUserSettings(user.id, body.target) });
+    return NextResponse.json({ results: await testUserSettings(user.id, body.target, body.draft) });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Settings test failed" },

@@ -130,6 +130,35 @@ describe("settings service", () => {
     ]);
   });
 
+  it("tests a draft API key without requiring saved settings", async () => {
+    vi.mocked(prisma.userSettings.findUnique).mockResolvedValue(null);
+    vi.mocked(fetch).mockResolvedValue({ ok: true, status: 200 } as never);
+
+    const results = await testUserSettings("user-1", "model", {
+      modelProvider: "deepseek",
+      modelName: "deepseek-v4-flash",
+      modelBaseUrl: "",
+      apiKey: "sk-draft-test",
+      dataMcpConnections: defaultDataMcpConnections
+    } as never);
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://api.deepseek.com/chat/completions",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer sk-draft-test"
+        })
+      })
+    );
+    expect(results).toEqual([
+      expect.objectContaining({
+        id: "model",
+        status: "connected"
+      })
+    ]);
+    expect(prisma.userSettings.upsert).not.toHaveBeenCalled();
+  });
+
   it("reports model as not configured when no key is saved", async () => {
     vi.mocked(prisma.userSettings.findUnique).mockResolvedValue(null);
 

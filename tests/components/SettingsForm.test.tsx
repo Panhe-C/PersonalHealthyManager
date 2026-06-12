@@ -76,6 +76,45 @@ describe("SettingsForm", () => {
     expect(screen.getByRole("textbox", { name: "Base URL" })).toHaveValue("https://api.moonshot.ai/v1");
   });
 
+  it("sends the current model draft when testing the model", async () => {
+    render(
+      <SettingsForm
+        initialSettings={{
+          modelProvider: "openai",
+          modelName: "gpt-4o-mini",
+          modelBaseUrl: "https://api.openai.com/v1",
+          hasApiKey: false,
+          apiKeyHint: null,
+          dataMcpConnections: defaultDataMcpConnections
+        }}
+      />
+    );
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Provider" }), { target: { value: "deepseek" } });
+    fireEvent.change(screen.getByLabelText("API key"), { target: { value: "sk-draft-1234" } });
+    fireEvent.click(screen.getByRole("button", { name: "Test model" }));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/settings/test",
+        expect.objectContaining({
+          method: "POST"
+        })
+      );
+    });
+
+    const [, requestInit] = vi.mocked(fetch).mock.calls.at(-1) ?? [];
+    expect(JSON.parse(String(requestInit?.body))).toEqual({
+      target: "model",
+      draft: expect.objectContaining({
+        modelProvider: "deepseek",
+        modelName: "deepseek-v4-flash",
+        modelBaseUrl: "https://api.deepseek.com",
+        apiKey: "sk-draft-1234"
+      })
+    });
+  });
+
   it("runs all settings tests from the toolbar", async () => {
     render(
       <SettingsForm
