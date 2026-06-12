@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { withUser } from "@/src/auth/api";
 import { prisma } from "@/src/db/client";
-import { createAgentResponse } from "@/src/services/agent";
+import { createAgentResponseForUser } from "@/src/services/agent";
 
 export const POST = withUser(async (user, request: Request) => {
   const body = await request.json();
@@ -11,7 +11,16 @@ export const POST = withUser(async (user, request: Request) => {
     return NextResponse.json({ error: "Message is required" }, { status: 400 });
   }
 
-  const response = createAgentResponse(content);
+  const history = await prisma.agentMessage.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "desc" },
+    take: 8
+  });
+  const response = await createAgentResponseForUser(
+    user.id,
+    content,
+    history.reverse().map((message) => ({ role: message.role, content: message.content }))
+  );
 
   await prisma.agentMessage.createMany({
     data: [
@@ -20,7 +29,13 @@ export const POST = withUser(async (user, request: Request) => {
         userId: user.id,
         role: "assistant",
         content: response.message,
-        metadataJson: JSON.stringify({ intent: response.intent })
+        metadataJson: JSON.stringify({
+          intent: response.intent,
+          source: response.source,
+          modelProvider: response.modelProvider,
+          modelName: response.modelName,
+          error: response.error
+        })
       }
     ]
   });

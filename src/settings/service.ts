@@ -37,6 +37,14 @@ export type SettingsTestDraftInput = {
   dataMcpConnections?: DataMcpConnection[];
 };
 
+export type ModelRuntimeConfig = {
+  provider: ModelProvider;
+  providerLabel: string;
+  modelName: string;
+  baseUrl: string;
+  apiKey: string;
+};
+
 export type SettingsTestTarget = "model" | DataMcpConnectionId | "all";
 
 export type SettingsTestResult = {
@@ -215,6 +223,31 @@ function getProviderBaseUrl(provider: ModelProvider, configuredBaseUrl: string) 
 
 function getProviderLabel(provider: ModelProvider) {
   return modelProviders.find((item) => item.value === provider)?.label ?? "Model provider";
+}
+
+function toModelRuntimeConfig(record: SettingsRecord | null): ModelRuntimeConfig | null {
+  if (!record?.encryptedApiKey || !record.apiKeyIv || !record.apiKeyTag) return null;
+
+  const view = toSettingsView(record);
+  const baseUrl = getProviderBaseUrl(view.modelProvider, view.modelBaseUrl);
+  if (!baseUrl) return null;
+
+  return {
+    provider: view.modelProvider,
+    providerLabel: getProviderLabel(view.modelProvider),
+    modelName: view.modelName,
+    baseUrl,
+    apiKey: decryptApiKey({
+      encryptedApiKey: record.encryptedApiKey,
+      apiKeyIv: record.apiKeyIv,
+      apiKeyTag: record.apiKeyTag
+    })
+  };
+}
+
+export async function loadModelRuntimeConfig(userId: string): Promise<ModelRuntimeConfig | null> {
+  const record = await prisma.userSettings.findUnique({ where: { userId } });
+  return toModelRuntimeConfig(record);
 }
 
 function statusMessage(status: number) {
