@@ -280,18 +280,8 @@ async function testModel(record: SettingsRecord | null): Promise<SettingsTestRes
       const baseUrl = getProviderBaseUrl(view.modelProvider, view.modelBaseUrl);
       const providerLabel = getProviderLabel(view.modelProvider);
 
-      if (view.modelProvider === "custom") {
-        if (!baseUrl) {
-          return { id: "model", label, status: "not_configured", message: "Custom provider needs a base URL." };
-        }
-
-        const response = await fetch(baseUrl, {
-          method: "GET",
-          headers: { Authorization: `Bearer ${apiKey}` }
-        });
-        return response.ok
-          ? { id: "model", label, status: "connected", message: `Custom endpoint responded with HTTP ${response.status}.` }
-          : { id: "model", label, status: "failed", message: statusMessage(response.status) };
+      if (!baseUrl) {
+        return { id: "model", label, status: "not_configured", message: `${providerLabel} provider needs a base URL.` };
       }
 
       if (view.modelProvider === "anthropic") {

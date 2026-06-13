@@ -78,4 +78,26 @@ describe("agent response shell", () => {
       })
     );
   });
+
+  it("shows the provider error when the configured model call fails", async () => {
+    vi.mocked(loadModelRuntimeConfig).mockResolvedValue({
+      provider: "custom",
+      providerLabel: "Custom",
+      modelName: "local-loopback-model-updated",
+      baseUrl: "http://127.0.0.1:3002/login",
+      apiKey: "sk-configured"
+    });
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: async () => ({})
+    } as never);
+
+    const response = await createAgentResponseForUser("user-1", "你好");
+
+    expect(response.source).toBe("rules");
+    expect(response.error).toBe("Custom returned HTTP 404.");
+    expect(response.message).toContain("Custom returned HTTP 404");
+    expect(response.message).toContain("using local guidance instead");
+  });
 });

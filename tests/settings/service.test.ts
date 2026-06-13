@@ -130,6 +130,46 @@ describe("settings service", () => {
     ]);
   });
 
+  it("tests custom model providers through the same chat completions endpoint used by agent chat", async () => {
+    const encrypted = encryptApiKey("sk-custom-test");
+    vi.mocked(prisma.userSettings.findUnique).mockResolvedValue({
+      modelProvider: "custom",
+      modelName: "custom-chat-model",
+      modelBaseUrl: "https://llm.example.test/v1",
+      encryptedApiKey: encrypted.encryptedApiKey,
+      apiKeyIv: encrypted.apiKeyIv,
+      apiKeyTag: encrypted.apiKeyTag,
+      apiKeyHint: encrypted.apiKeyHint,
+      dataMcpConnectionsJson: JSON.stringify(defaultDataMcpConnections)
+    } as never);
+    vi.mocked(fetch).mockResolvedValue({ ok: true, status: 200 } as never);
+
+    const results = await testUserSettings("user-1", "model");
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://llm.example.test/v1/chat/completions",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer sk-custom-test",
+          "Content-Type": "application/json"
+        }),
+        body: JSON.stringify({
+          model: "custom-chat-model",
+          max_tokens: 1,
+          messages: [{ role: "user", content: "ping" }]
+        })
+      })
+    );
+    expect(results).toEqual([
+      expect.objectContaining({
+        id: "model",
+        status: "connected",
+        message: "Custom model custom-chat-model responded."
+      })
+    ]);
+  });
+
   it("tests a draft API key without requiring saved settings", async () => {
     vi.mocked(prisma.userSettings.findUnique).mockResolvedValue(null);
     vi.mocked(fetch).mockResolvedValue({ ok: true, status: 200 } as never);

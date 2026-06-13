@@ -175,10 +175,11 @@ export async function createAgentResponseForUser(
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Model call failed.";
+    const normalizedErrorMessage = errorMessage.replace(/[.。]+$/, "");
     return {
       ...fallback,
       error: errorMessage,
-      message: `Model call failed, using local guidance instead. ${fallback.message}`
+      message: `Model call failed: ${normalizedErrorMessage}; using local guidance instead. ${fallback.message}`
     };
   }
 }
