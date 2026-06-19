@@ -53,7 +53,7 @@ export type DataMcpConnection = {
   serverName: string;
   capabilityName: string;
   endpoint: string;
-  loginUrl: string;
+  loginUrl?: string;
   auth: DataMcpAuthConfig;
   notes: string;
 };
