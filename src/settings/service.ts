@@ -541,7 +541,10 @@ async function testModel(record: SettingsRecord | null): Promise<SettingsTestRes
           : { id: "model", label, status: "failed", message: statusMessage(response.status) };
       }
 
-      const response = await fetch(`${baseUrl}/chat/completions`, {
+      // MiniMax uses a different endpoint path
+      const endpoint = view.modelProvider === "minimax" ? "/text/chatcompletion_v2" : "/chat/completions";
+
+      const response = await fetch(`${baseUrl}${endpoint}`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
