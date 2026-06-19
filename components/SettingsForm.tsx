@@ -164,7 +164,9 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
       setTestResults(results);
       const authRequiredResult = results.find((result) => result.status === "auth_required");
       if (authRequiredResult) {
-        setLoginPromptConnectionId(authRequiredResult.id);
+        const connection = connections.find((item) => item.id === authRequiredResult.id);
+        if (!connection) return;
+        setLoginPromptConnectionId(connection.id);
         setLoginPromptMessage(authRequiredResult.message);
       }
     } catch (testError) {

@@ -1732,6 +1732,32 @@ h3 {
   color: var(--muted);
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(15 23 42 / 0.28);
+}
+
+.modal-panel {
+  width: min(520px, 100%);
+  display: grid;
+  gap: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.modal-panel p {
+  margin: 0;
+  color: var(--muted);
+}
+
 .login-shell {
   min-height: 100vh;
   display: grid;
