@@ -423,6 +423,71 @@ describe("SettingsForm", () => {
     });
   });
 
+  it("shows fallback guidance when auth-required test result has an empty message", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        results: [{ id: "coros", label: "COROS", status: "auth_required", message: "", latencyMs: null }]
+      })
+    } as never);
+
+    render(
+      <SettingsForm
+        initialSettings={{
+          modelProvider: "openai",
+          modelName: "gpt-4o-mini",
+          modelBaseUrl: "https://api.openai.com/v1",
+          hasApiKey: false,
+          apiKeyHint: null,
+          dataMcpConnections: defaultDataMcpConnections
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Test" })[0]);
+
+    expect(await screen.findByRole("dialog", { name: "COROS login required" })).toBeInTheDocument();
+    expect(screen.getByText("This MCP connection needs authentication before testing can continue.")).toBeInTheDocument();
+  });
+
+  it("closes the login-required modal from the secondary Cancel action", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        results: [
+          {
+            id: "coros",
+            label: "COROS",
+            status: "auth_required",
+            message: "COROS login is required before this MCP connection can be tested.",
+            latencyMs: null
+          }
+        ]
+      })
+    } as never);
+
+    render(
+      <SettingsForm
+        initialSettings={{
+          modelProvider: "openai",
+          modelName: "gpt-4o-mini",
+          modelBaseUrl: "https://api.openai.com/v1",
+          hasApiKey: false,
+          apiKeyHint: null,
+          dataMcpConnections: defaultDataMcpConnections
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Test" })[0]);
+
+    expect(await screen.findByRole("dialog", { name: "COROS login required" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("dialog", { name: "COROS login required" })).not.toBeInTheDocument();
+  });
+
   it("opens a configured external login URL for non-OAuth MCP login", async () => {
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,

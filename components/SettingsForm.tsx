@@ -462,7 +462,7 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
             role="dialog"
           >
             <h2 id="login-prompt-title">{loginPromptConnection.label} login required</h2>
-            <p>{loginPromptMessage}</p>
+            <p>{loginPromptMessage || "This MCP connection needs authentication before testing can continue."}</p>
             {loginPromptError ? (
               <p className="message message-error" role="alert">
                 {loginPromptError}
@@ -473,7 +473,7 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
                 Login {loginPromptConnection.label}
               </button>
               <button className="button" type="button" onClick={closeLoginPrompt}>
-                Close
+                Cancel
               </button>
             </div>
           </section>
