@@ -255,6 +255,49 @@ describe("settings service", () => {
     });
   });
 
+  it("saves and loads a Data MCP login URL", async () => {
+    vi.mocked(prisma.userSettings.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.userSettings.upsert).mockResolvedValue({} as never);
+
+    const settings = await saveUserSettings("user-1", {
+      modelProvider: "openai",
+      modelName: "gpt-4o-mini",
+      modelBaseUrl: "https://api.openai.com/v1",
+      apiKey: "",
+      dataMcpConnections: [
+        {
+          ...defaultDataMcpConnections[0],
+          endpoint: "https://mcp.example.test/coros",
+          loginUrl: "https://coros.example.test/login"
+        }
+      ]
+    });
+
+    const [upsertArg] = vi.mocked(prisma.userSettings.upsert).mock.calls.at(0) ?? [];
+    const savedConnections = JSON.parse(String(upsertArg?.create?.dataMcpConnectionsJson ?? upsertArg?.update?.dataMcpConnectionsJson));
+    expect(savedConnections[0].loginUrl).toBe("https://coros.example.test/login");
+    expect(settings.dataMcpConnections[0].loginUrl).toBe("https://coros.example.test/login");
+  });
+
+  it("rejects malformed Data MCP login URLs", async () => {
+    vi.mocked(prisma.userSettings.findUnique).mockResolvedValue(null);
+
+    await expect(
+      saveUserSettings("user-1", {
+        modelProvider: "openai",
+        modelName: "gpt-4o-mini",
+        modelBaseUrl: "https://api.openai.com/v1",
+        apiKey: "",
+        dataMcpConnections: [
+          {
+            ...defaultDataMcpConnections[0],
+            loginUrl: "not-a-url"
+          }
+        ]
+      })
+    ).rejects.toThrow("COROS login URL must be a valid URL");
+  });
+
   it("uses configured MCP bearer credentials when testing an endpoint", async () => {
     const saved = await saveUserSettings("user-1", {
       modelProvider: "openai",
@@ -294,6 +337,81 @@ describe("settings service", () => {
       })
     );
     expect(results).toEqual([expect.objectContaining({ id: "coros", status: "connected" })]);
+  });
+
+  it("reports MCP endpoint 401 responses as auth required", async () => {
+    const saved = await saveUserSettings("user-1", {
+      modelProvider: "openai",
+      modelName: "gpt-4o-mini",
+      modelBaseUrl: "https://api.openai.com/v1",
+      apiKey: "",
+      dataMcpConnections: [
+        {
+          ...defaultDataMcpConnections[0],
+          endpoint: "https://mcp.example.test/coros",
+          loginUrl: "https://coros.example.test/login",
+          auth: { type: "bearer", token: "expired-token-123456" }
+        }
+      ]
+    });
+    const [upsertArg] = vi.mocked(prisma.userSettings.upsert).mock.calls.at(0) ?? [];
+    vi.mocked(prisma.userSettings.findUnique).mockResolvedValue({
+      modelProvider: "openai",
+      modelName: "gpt-4o-mini",
+      modelBaseUrl: "https://api.openai.com/v1",
+      encryptedApiKey: null,
+      apiKeyIv: null,
+      apiKeyTag: null,
+      apiKeyHint: null,
+      dataMcpConnectionsJson: String(upsertArg?.create?.dataMcpConnectionsJson ?? upsertArg?.update?.dataMcpConnectionsJson)
+    } as never);
+    vi.mocked(fetch).mockResolvedValue({ ok: false, status: 401 } as never);
+
+    const results = await testUserSettings("user-1", saved.dataMcpConnections[0].id);
+
+    expect(results).toEqual([
+      expect.objectContaining({
+        id: "coros",
+        status: "auth_required",
+        message: "COROS login is required before this MCP connection can be tested."
+      })
+    ]);
+  });
+
+  it("reports OAuth2 MCP tests without an access token as auth required", async () => {
+    vi.mocked(prisma.userSettings.findUnique).mockResolvedValue({
+      modelProvider: "openai",
+      modelName: "gpt-4o-mini",
+      modelBaseUrl: "https://api.openai.com/v1",
+      encryptedApiKey: null,
+      apiKeyIv: null,
+      apiKeyTag: null,
+      apiKeyHint: null,
+      dataMcpConnectionsJson: JSON.stringify([
+        {
+          ...defaultDataMcpConnections[0],
+          endpoint: "https://mcp.example.test/coros",
+          auth: {
+            type: "oauth2",
+            authorizeUrl: "https://login.example.test/oauth/authorize",
+            tokenUrl: "https://login.example.test/oauth/token",
+            clientId: "client-1",
+            scopes: "sleep recovery"
+          }
+        }
+      ])
+    } as never);
+
+    const results = await testUserSettings("user-1", "coros");
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(results).toEqual([
+      expect.objectContaining({
+        id: "coros",
+        status: "auth_required",
+        message: "COROS login is required before this MCP connection can be tested."
+      })
+    ]);
   });
 
   it("creates an OAuth authorization URL and stores callback state", async () => {

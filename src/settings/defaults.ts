@@ -53,6 +53,7 @@ export type DataMcpConnection = {
   serverName: string;
   capabilityName: string;
   endpoint: string;
+  loginUrl: string;
   auth: DataMcpAuthConfig;
   notes: string;
 };
@@ -94,6 +95,7 @@ export const defaultDataMcpConnections: DataMcpConnection[] = [
     serverName: "coros",
     capabilityName: "daily-health",
     endpoint: "",
+    loginUrl: "",
     auth: { type: "none" },
     notes: "Workout, sleep, HRV, recovery, and training load."
   },
@@ -104,6 +106,7 @@ export const defaultDataMcpConnections: DataMcpConnection[] = [
     serverName: "calendar",
     capabilityName: "agenda",
     endpoint: "",
+    loginUrl: "",
     auth: { type: "none" },
     notes: "Schedule, free windows, and training event drafts."
   },
@@ -114,6 +117,7 @@ export const defaultDataMcpConnections: DataMcpConnection[] = [
     serverName: "meal-menu",
     capabilityName: "today-menu",
     endpoint: "",
+    loginUrl: "",
     auth: { type: "none" },
     notes: "Daily breakfast, lunch, dinner, and nutrition choices."
   }

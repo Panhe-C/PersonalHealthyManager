@@ -61,7 +61,7 @@ export type SettingsTestTarget = "model" | DataMcpConnectionId | "all";
 export type SettingsTestResult = {
   id: string;
   label: string;
-  status: "connected" | "failed" | "not_configured";
+  status: "connected" | "failed" | "not_configured" | "auth_required";
   message: string;
   latencyMs: number | null;
 };
@@ -309,6 +309,8 @@ function normalizeConnection(input: DataMcpConnection, existing?: DataMcpConnect
 
   const endpoint = stringValue(input.endpoint);
   assertUrl(endpoint, `${base.label} endpoint`);
+  const loginUrl = stringValue(input.loginUrl);
+  assertUrl(loginUrl, `${base.label} login URL`);
 
   return {
     id: base.id,
@@ -317,6 +319,7 @@ function normalizeConnection(input: DataMcpConnection, existing?: DataMcpConnect
     serverName: stringValue(input.serverName),
     capabilityName: stringValue(input.capabilityName),
     endpoint,
+    loginUrl,
     auth: normalizeAuth(input.auth, existing?.auth),
     notes: stringValue(input.notes)
   };
@@ -494,9 +497,10 @@ function statusMessage(status: number) {
   return `Provider returned HTTP ${status}.`;
 }
 
-async function withLatency(run: () => Promise<Omit<SettingsTestResult, "latencyMs">>): Promise<SettingsTestResult> {
+async function withLatency(run: () => Promise<Omit<SettingsTestResult, "latencyMs"> | SettingsTestResult>): Promise<SettingsTestResult> {
   const start = Date.now();
   const result = await run();
+  if ("latencyMs" in result) return result;
   return { ...result, latencyMs: Date.now() - start };
 }
 
@@ -607,6 +611,16 @@ export function buildDataMcpAuthHeaders(connection: DataMcpConnection): Record<s
   return buildMcpAuthHeaders(connection.auth);
 }
 
+function mcpLoginRequiredResult(connection: DataMcpConnection): SettingsTestResult {
+  return {
+    id: connection.id,
+    label: connection.label,
+    status: "auth_required",
+    message: `${connection.label} login is required before this MCP connection can be tested.`,
+    latencyMs: null
+  };
+}
+
 async function testMcpConnection(connection: DataMcpConnection): Promise<SettingsTestResult> {
   if (!connection.enabled) {
     return {
@@ -640,13 +654,7 @@ async function testMcpConnection(connection: DataMcpConnection): Promise<Setting
 
   const headers = buildMcpAuthHeaders(connection.auth);
   if (!headers) {
-    return {
-      id: connection.id,
-      label: connection.label,
-      status: "not_configured",
-      message: `${connection.label} authentication is not configured.`,
-      latencyMs: null
-    };
+    return mcpLoginRequiredResult(connection);
   }
 
   return withLatency(async () => {
@@ -655,14 +663,14 @@ async function testMcpConnection(connection: DataMcpConnection): Promise<Setting
       if (response.ok) {
         return { id: connection.id, label: connection.label, status: "connected", message: `Endpoint responded with HTTP ${response.status}.` };
       }
+      if (response.status === 401 || response.status === 403) {
+        return mcpLoginRequiredResult(connection);
+      }
       return {
         id: connection.id,
         label: connection.label,
         status: "failed",
-        message:
-          response.status === 401 || response.status === 403
-            ? "Authentication failed. Check the MCP credentials."
-            : `Endpoint returned HTTP ${response.status}.`
+        message: `Endpoint returned HTTP ${response.status}.`
       };
     } catch (error) {
       return {
