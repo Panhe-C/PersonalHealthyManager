@@ -14,8 +14,8 @@ describe("settings defaults", () => {
         expect.objectContaining({
           value: "minimax",
           label: "MiniMax",
-          defaultModel: "MiniMax-M1",
-          defaultBaseUrl: "https://api.minimax.io/v1"
+          defaultModel: "MiniMax-Text-01",
+          defaultBaseUrl: "https://api.minimax.chat/v1"
         }),
         expect.objectContaining({
           value: "kimi",
