@@ -1,4 +1,4 @@
-import { CalendarCheck2, Clock3, HeartPulse, Moon } from "lucide-react";
+import { CalendarCheck2, CheckCircle2, Clock3, HeartPulse, Moon } from "lucide-react";
 import { CalendarDraftList } from "@/components/CalendarDraftList";
 import { GeneratePlanButton } from "@/components/GeneratePlanButton";
 import { MetricCard } from "@/components/MetricCard";
@@ -7,6 +7,15 @@ import { SyncDemoDataButton } from "@/components/SyncDemoDataButton";
 import { WeeklyPlan } from "@/components/WeeklyPlan";
 import { requireUser } from "@/src/auth/session";
 import { prisma } from "@/src/db/client";
+
+function isSameCalendarDay(left: Date, right: Date) {
+  return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate();
+}
+
+function statusLabel(status: string) {
+  if (status === "over_completed") return "completed above plan";
+  return status.replace(/_/g, " ");
+}
 
 export default async function PlanPage() {
   const user = await requireUser();
@@ -59,6 +68,21 @@ export default async function PlanPage() {
   const plannedMinutes = plan?.trainingTasks.reduce((total, task) => total + task.durationMinutes, 0) ?? 0;
   const confirmedDrafts = drafts.filter((draft) => draft.status === "confirmed").length;
   const readyToGenerate = Boolean(profile && calendar);
+  const todayTask = plan?.trainingTasks.find((task) => isSameCalendarDay(task.date, today));
+  const todayFocus = todayTask
+    ? `${todayTask.title} · ${todayTask.durationMinutes} min`
+    : plan
+      ? "No planned training today"
+      : "Generate this week to see today's focus";
+  const recoverySignal =
+    latestRecovery?.recoveryPercent != null ? `${latestRecovery.recoveryPercent}% recovery` : "Recovery data pending";
+  const nextAction = !profile
+    ? "Save your body profile"
+    : !calendar
+      ? "Sync schedule data"
+      : plan
+        ? "Review and confirm drafts"
+        : "Generate this week's plan";
 
   return (
     <main className="page grid" style={{ gap: 20 }}>
@@ -76,10 +100,56 @@ export default async function PlanPage() {
         </div>
       </div>
 
-      {!readyToGenerate ? (
-        <div className="message message-error">
-          Save a body profile and sync schedule data before generating a plan.
+      <section className="surface today-card" aria-label="Today summary">
+        <div className="today-card-main">
+          <span className="eyebrow">Today&apos;s plan</span>
+          <h2>{todayFocus}</h2>
+          <p className="page-subtitle">
+            {todayTask
+              ? `${statusLabel(todayTask.status)} · ${todayTask.trainingType} · ${todayTask.intensity} intensity`
+              : "Complete setup to receive a weekly plan that accounts for recovery, calendar availability, and nutrition."}
+          </p>
         </div>
+        <div className="today-card-side">
+          <div>
+            <span>Readiness</span>
+            <strong>{recoverySignal}</strong>
+          </div>
+          <div>
+            <span>Next action</span>
+            <strong>{nextAction}</strong>
+          </div>
+        </div>
+      </section>
+
+      {!readyToGenerate ? (
+        <section className="surface setup-card" aria-label="Setup checklist">
+          <div>
+            <span className="eyebrow">Setup checklist</span>
+            <h2>Finish the inputs before generating a plan.</h2>
+            <p className="page-subtitle">The planner needs your body profile and this week&apos;s schedule before it can place training safely.</p>
+          </div>
+          <div className="setup-steps">
+            <div className={profile ? "setup-step setup-step-done" : "setup-step"}>
+              <span className="setup-dot" aria-hidden="true">
+                {profile ? <CheckCircle2 size={14} /> : null}
+              </span>
+              <div>
+                <strong>Body profile</strong>
+                <span>{profile ? "Saved" : "Add height, training context, and preferences"}</span>
+              </div>
+            </div>
+            <div className={calendar ? "setup-step setup-step-done" : "setup-step"}>
+              <span className="setup-dot" aria-hidden="true">
+                {calendar ? <CheckCircle2 size={14} /> : null}
+              </span>
+              <div>
+                <strong>Schedule data</strong>
+                <span>{calendar ? "Synced for this week" : "Sync demo data or connect your calendar"}</span>
+              </div>
+            </div>
+          </div>
+        </section>
       ) : null}
 
       <section className="grid metric-grid metric-grid-plan">
@@ -87,28 +157,28 @@ export default async function PlanPage() {
           icon={HeartPulse}
           label="Recovery"
           value={latestRecovery?.recoveryPercent != null ? `${latestRecovery.recoveryPercent}%` : "—"}
-          hint="Latest readiness signal"
+          hint={latestRecovery ? "Latest readiness signal" : "Sync recovery data"}
           tone="sage"
         />
         <MetricCard
           icon={Moon}
           label="Sleep"
           value={latestSleep ? `${(latestSleep.durationMinutes / 60).toFixed(1)}h` : "—"}
-          hint="Latest sleep duration"
+          hint={latestSleep ? "Latest synced duration" : "Sync sleep data"}
           tone="blue"
         />
         <MetricCard
           icon={Clock3}
           label="Planned volume"
           value={plan ? `${plannedMinutes} min` : "—"}
-          hint={`${completedCount} sessions updated`}
+          hint={plan ? `${completedCount}/${plan.trainingTasks.length} sessions updated` : "Generate to calculate"}
           tone="clay"
         />
         <MetricCard
           icon={CalendarCheck2}
           label="Calendar"
-          value={`${confirmedDrafts}/${drafts.length}`}
-          hint="Confirmed training events"
+          value={plan ? `${confirmedDrafts}/${drafts.length}` : "—"}
+          hint={drafts.length > 0 ? "Confirmed training events" : "No drafts yet"}
           tone="neutral"
         />
       </section>

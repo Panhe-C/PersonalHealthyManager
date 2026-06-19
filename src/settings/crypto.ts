@@ -1,11 +1,13 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
-export type EncryptedApiKey = {
+export type EncryptedSecret = {
   encryptedApiKey: string;
   apiKeyIv: string;
   apiKeyTag: string;
   apiKeyHint: string;
 };
+
+export type EncryptedApiKey = EncryptedSecret;
 
 function parseEncryptionKey() {
   const configured = process.env.SETTINGS_ENCRYPTION_KEY;
@@ -31,22 +33,30 @@ export function maskApiKey(apiKey: string) {
   return `...${suffix}`;
 }
 
-export function encryptApiKey(apiKey: string): EncryptedApiKey {
+export function encryptSecret(secret: string): EncryptedSecret {
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", parseEncryptionKey(), iv);
-  const encrypted = Buffer.concat([cipher.update(apiKey, "utf8"), cipher.final()]);
+  const encrypted = Buffer.concat([cipher.update(secret, "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
 
   return {
     encryptedApiKey: encrypted.toString("base64"),
     apiKeyIv: iv.toString("base64"),
     apiKeyTag: tag.toString("base64"),
-    apiKeyHint: maskApiKey(apiKey)
+    apiKeyHint: maskApiKey(secret)
   };
 }
 
-export function decryptApiKey(input: { encryptedApiKey: string; apiKeyIv: string; apiKeyTag: string }) {
+export function encryptApiKey(apiKey: string): EncryptedApiKey {
+  return encryptSecret(apiKey);
+}
+
+export function decryptSecret(input: { encryptedApiKey: string; apiKeyIv: string; apiKeyTag: string }) {
   const decipher = createDecipheriv("aes-256-gcm", parseEncryptionKey(), Buffer.from(input.apiKeyIv, "base64"));
   decipher.setAuthTag(Buffer.from(input.apiKeyTag, "base64"));
   return Buffer.concat([decipher.update(Buffer.from(input.encryptedApiKey, "base64")), decipher.final()]).toString("utf8");
+}
+
+export function decryptApiKey(input: { encryptedApiKey: string; apiKeyIv: string; apiKeyTag: string }) {
+  return decryptSecret(input);
 }

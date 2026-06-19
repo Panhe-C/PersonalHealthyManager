@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/src/db/client";
 import { defaultDataMcpConnections } from "@/src/settings/defaults";
 import { encryptApiKey } from "@/src/settings/crypto";
-import { loadUserSettings, saveUserSettings, testUserSettings } from "@/src/settings/service";
+import { createMcpOAuthAuthorizationUrl, handleMcpOAuthCallback, loadUserSettings, saveUserSettings, testUserSettings } from "@/src/settings/service";
 
 vi.mock("@/src/db/client", () => ({
   prisma: {
@@ -223,5 +223,171 @@ describe("settings service", () => {
         status: "connected"
       })
     ]);
+  });
+
+  it("saves MCP bearer credentials encrypted and returns only a sanitized hint", async () => {
+    vi.mocked(prisma.userSettings.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.userSettings.upsert).mockResolvedValue({} as never);
+
+    const settings = await saveUserSettings("user-1", {
+      modelProvider: "openai",
+      modelName: "gpt-4o-mini",
+      modelBaseUrl: "https://api.openai.com/v1",
+      apiKey: "",
+      dataMcpConnections: [
+        {
+          ...defaultDataMcpConnections[0],
+          endpoint: "https://mcp.example.test/coros",
+          auth: { type: "bearer", token: "coros-token-123456" }
+        }
+      ]
+    });
+
+    const [upsertArg] = vi.mocked(prisma.userSettings.upsert).mock.calls.at(0) ?? [];
+    const savedConnections = JSON.parse(String(upsertArg?.create?.dataMcpConnectionsJson ?? upsertArg?.update?.dataMcpConnectionsJson));
+    expect(savedConnections[0].auth.token).toBeUndefined();
+    expect(savedConnections[0].auth.encryptedToken).toEqual(expect.any(String));
+    expect(savedConnections[0].auth.tokenHint).toBe("...3456");
+
+    expect(settings.dataMcpConnections[0].auth).toEqual({
+      type: "bearer",
+      tokenHint: "...3456"
+    });
+  });
+
+  it("uses configured MCP bearer credentials when testing an endpoint", async () => {
+    const saved = await saveUserSettings("user-1", {
+      modelProvider: "openai",
+      modelName: "gpt-4o-mini",
+      modelBaseUrl: "https://api.openai.com/v1",
+      apiKey: "",
+      dataMcpConnections: [
+        {
+          ...defaultDataMcpConnections[0],
+          endpoint: "https://mcp.example.test/coros",
+          auth: { type: "bearer", token: "coros-token-123456" }
+        }
+      ]
+    });
+    const [upsertArg] = vi.mocked(prisma.userSettings.upsert).mock.calls.at(0) ?? [];
+    vi.mocked(prisma.userSettings.findUnique).mockResolvedValue({
+      modelProvider: "openai",
+      modelName: "gpt-4o-mini",
+      modelBaseUrl: "https://api.openai.com/v1",
+      encryptedApiKey: null,
+      apiKeyIv: null,
+      apiKeyTag: null,
+      apiKeyHint: null,
+      dataMcpConnectionsJson: String(upsertArg?.create?.dataMcpConnectionsJson ?? upsertArg?.update?.dataMcpConnectionsJson)
+    } as never);
+    vi.mocked(fetch).mockResolvedValue({ ok: true, status: 200 } as never);
+
+    const results = await testUserSettings("user-1", saved.dataMcpConnections[0].id);
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://mcp.example.test/coros",
+      expect.objectContaining({
+        method: "GET",
+        headers: expect.objectContaining({
+          Authorization: "Bearer coros-token-123456"
+        })
+      })
+    );
+    expect(results).toEqual([expect.objectContaining({ id: "coros", status: "connected" })]);
+  });
+
+  it("creates an OAuth authorization URL and stores callback state", async () => {
+    vi.mocked(prisma.userSettings.findUnique).mockResolvedValue({
+      modelProvider: "openai",
+      modelName: "gpt-4o-mini",
+      modelBaseUrl: "https://api.openai.com/v1",
+      encryptedApiKey: null,
+      apiKeyIv: null,
+      apiKeyTag: null,
+      apiKeyHint: null,
+      dataMcpConnectionsJson: JSON.stringify([
+        {
+          ...defaultDataMcpConnections[0],
+          auth: {
+            type: "oauth2",
+            authorizeUrl: "https://login.example.test/oauth/authorize",
+            tokenUrl: "https://login.example.test/oauth/token",
+            clientId: "client-1",
+            scopes: "sleep recovery"
+          }
+        }
+      ])
+    } as never);
+    vi.mocked(prisma.userSettings.upsert).mockResolvedValue({} as never);
+
+    const url = await createMcpOAuthAuthorizationUrl("user-1", "coros", "http://localhost:3001/settings");
+
+    expect(url.origin).toBe("https://login.example.test");
+    expect(url.searchParams.get("client_id")).toBe("client-1");
+    expect(url.searchParams.get("scope")).toBe("sleep recovery");
+    expect(url.searchParams.get("redirect_uri")).toBe("http://localhost:3001/api/settings/mcp/oauth/callback");
+    expect(url.searchParams.get("state")).toEqual(expect.any(String));
+
+    const [upsertArg] = vi.mocked(prisma.userSettings.upsert).mock.calls.at(0) ?? [];
+    const savedConnections = JSON.parse(String(upsertArg?.update?.dataMcpConnectionsJson));
+    expect(savedConnections[0].auth.oauthState).toBe(url.searchParams.get("state"));
+  });
+
+  it("exchanges an OAuth callback code and stores encrypted returned tokens", async () => {
+    const state = "state-123";
+    vi.mocked(prisma.userSettings.findUnique).mockResolvedValue({
+      modelProvider: "openai",
+      modelName: "gpt-4o-mini",
+      modelBaseUrl: "https://api.openai.com/v1",
+      encryptedApiKey: null,
+      apiKeyIv: null,
+      apiKeyTag: null,
+      apiKeyHint: null,
+      dataMcpConnectionsJson: JSON.stringify([
+        {
+          ...defaultDataMcpConnections[0],
+          auth: {
+            type: "oauth2",
+            tokenUrl: "https://login.example.test/oauth/token",
+            clientId: "client-1",
+            scopes: "sleep recovery",
+            oauthState: state
+          }
+        }
+      ])
+    } as never);
+    vi.mocked(prisma.userSettings.upsert).mockResolvedValue({} as never);
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        access_token: "access-token-abcdef",
+        refresh_token: "refresh-token-ghijkl",
+        expires_in: 3600
+      })
+    } as never);
+
+    await handleMcpOAuthCallback("user-1", {
+      code: "oauth-code",
+      state,
+      origin: "http://localhost:3001"
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://login.example.test/oauth/token",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ "Content-Type": "application/x-www-form-urlencoded" }),
+        body: expect.stringContaining("code=oauth-code")
+      })
+    );
+
+    const [upsertArg] = vi.mocked(prisma.userSettings.upsert).mock.calls.at(0) ?? [];
+    const savedConnections = JSON.parse(String(upsertArg?.update?.dataMcpConnectionsJson));
+    expect(savedConnections[0].auth.accessToken).toBeUndefined();
+    expect(savedConnections[0].auth.encryptedAccessToken).toEqual(expect.any(String));
+    expect(savedConnections[0].auth.accessTokenHint).toBe("...cdef");
+    expect(savedConnections[0].auth.refreshTokenHint).toBe("...ijkl");
+    expect(savedConnections[0].auth.oauthState).toBeUndefined();
   });
 });

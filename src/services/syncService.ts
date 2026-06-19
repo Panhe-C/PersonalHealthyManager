@@ -1,10 +1,61 @@
 import { prisma } from "@/src/db/client";
 import { normalizeFeishuCalendarSnapshot } from "@/src/providers/calendar";
 import { normalizeCorosActivity, normalizeCorosRecovery, normalizeCorosSleep } from "@/src/providers/coros";
+import { buildDataMcpAuthHeaders, loadDataMcpConnection } from "@/src/settings/service";
+
+type CorosImportPayload = {
+  activities?: unknown[];
+  sleep?: unknown[];
+  recovery?: unknown[];
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function parseJsonText(value: unknown): unknown {
+  if (typeof value !== "string") return null;
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeCorosMcpPayload(payload: unknown): CorosImportPayload {
+  if (!isRecord(payload)) return {};
+
+  if (Array.isArray(payload.activities) || Array.isArray(payload.sleep) || Array.isArray(payload.recovery)) {
+    return {
+      activities: Array.isArray(payload.activities) ? payload.activities : undefined,
+      sleep: Array.isArray(payload.sleep) ? payload.sleep : undefined,
+      recovery: Array.isArray(payload.recovery) ? payload.recovery : undefined
+    };
+  }
+
+  for (const key of ["data", "result", "payload"] as const) {
+    const nested = normalizeCorosMcpPayload(payload[key]);
+    if (nested.activities || nested.sleep || nested.recovery) return nested;
+  }
+
+  if (Array.isArray(payload.content)) {
+    for (const item of payload.content) {
+      if (!isRecord(item)) continue;
+      const nested = normalizeCorosMcpPayload(item);
+      if (nested.activities || nested.sleep || nested.recovery) return nested;
+
+      const parsed = normalizeCorosMcpPayload(parseJsonText(item.text));
+      if (parsed.activities || parsed.sleep || parsed.recovery) return parsed;
+    }
+  }
+
+  return {};
+}
 
 export async function importCorosPayload(
   userId: string,
-  payload: { activities?: unknown[]; sleep?: unknown[]; recovery?: unknown[] }
+  payload: CorosImportPayload
 ) {
   const activities = (payload.activities ?? []).map((item) => normalizeCorosActivity(item as never));
   const sleepRecords = (payload.sleep ?? []).map((item) => normalizeCorosSleep(item as never));
@@ -97,6 +148,36 @@ export async function importCorosPayload(
   });
 
   return { activities: activities.length, sleep: sleepRecords.length, recovery: recoveryRecords.length };
+}
+
+export async function syncCorosFromSettings(userId: string) {
+  const connection = await loadDataMcpConnection(userId, "coros");
+  if (!connection?.enabled) throw new Error("COROS MCP connection is disabled.");
+  if (!connection.endpoint) throw new Error("COROS MCP endpoint is not configured.");
+
+  const authHeaders = buildDataMcpAuthHeaders(connection);
+  if (!authHeaders) throw new Error("COROS MCP authentication is not configured.");
+
+  const response = await fetch(connection.endpoint, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      ...authHeaders
+    }
+  });
+
+  if (!response.ok) {
+    let body = "";
+    try {
+      body = await response.text();
+    } catch {
+      body = "";
+    }
+    const suffix = body ? `: ${body.slice(0, 200)}` : "";
+    throw new Error(`COROS MCP endpoint returned HTTP ${response.status}${suffix}.`);
+  }
+
+  return importCorosPayload(userId, normalizeCorosMcpPayload(await response.json()));
 }
 
 export async function importCalendarPayload(userId: string, payload: unknown) {

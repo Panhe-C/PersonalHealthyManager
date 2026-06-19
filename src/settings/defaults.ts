@@ -2,6 +2,50 @@ export type ModelProvider = "openai" | "anthropic" | "deepseek" | "minimax" | "k
 
 export type DataMcpConnectionId = "coros" | "calendar" | "meal_menu";
 
+export type DataMcpAuthType = "none" | "bearer" | "api_key" | "basic" | "oauth2";
+
+export type DataMcpAuthConfig = {
+  type: DataMcpAuthType;
+  token?: string;
+  tokenHint?: string;
+  encryptedToken?: string;
+  tokenIv?: string;
+  tokenTag?: string;
+  headerName?: string;
+  apiKey?: string;
+  apiKeyHint?: string;
+  encryptedApiKey?: string;
+  apiKeyIv?: string;
+  apiKeyTag?: string;
+  username?: string;
+  password?: string;
+  passwordHint?: string;
+  encryptedPassword?: string;
+  passwordIv?: string;
+  passwordTag?: string;
+  authorizeUrl?: string;
+  tokenUrl?: string;
+  clientId?: string;
+  clientSecret?: string;
+  clientSecretHint?: string;
+  encryptedClientSecret?: string;
+  clientSecretIv?: string;
+  clientSecretTag?: string;
+  scopes?: string;
+  accessToken?: string;
+  accessTokenHint?: string;
+  encryptedAccessToken?: string;
+  accessTokenIv?: string;
+  accessTokenTag?: string;
+  refreshToken?: string;
+  refreshTokenHint?: string;
+  encryptedRefreshToken?: string;
+  refreshTokenIv?: string;
+  refreshTokenTag?: string;
+  expiresAt?: string;
+  oauthState?: string;
+};
+
 export type DataMcpConnection = {
   id: DataMcpConnectionId;
   label: string;
@@ -9,6 +53,7 @@ export type DataMcpConnection = {
   serverName: string;
   capabilityName: string;
   endpoint: string;
+  auth: DataMcpAuthConfig;
   notes: string;
 };
 
@@ -49,6 +94,7 @@ export const defaultDataMcpConnections: DataMcpConnection[] = [
     serverName: "coros",
     capabilityName: "daily-health",
     endpoint: "",
+    auth: { type: "none" },
     notes: "Workout, sleep, HRV, recovery, and training load."
   },
   {
@@ -58,6 +104,7 @@ export const defaultDataMcpConnections: DataMcpConnection[] = [
     serverName: "calendar",
     capabilityName: "agenda",
     endpoint: "",
+    auth: { type: "none" },
     notes: "Schedule, free windows, and training event drafts."
   },
   {
@@ -67,6 +114,7 @@ export const defaultDataMcpConnections: DataMcpConnection[] = [
     serverName: "meal-menu",
     capabilityName: "today-menu",
     endpoint: "",
+    auth: { type: "none" },
     notes: "Daily breakfast, lunch, dinner, and nutrition choices."
   }
 ];

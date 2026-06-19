@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, type FormEvent } from "react";
+import React, { useMemo, useState, type FormEvent } from "react";
 import { FlaskConical, Save } from "lucide-react";
-import { modelProviders, type DataMcpConnection, type SettingsView } from "@/src/settings/defaults";
+import { modelProviders, type DataMcpAuthConfig, type DataMcpConnection, type SettingsView } from "@/src/settings/defaults";
 
 type TestResult = {
   id: string;
@@ -43,6 +43,23 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
     setTestResults([]);
   }
 
+  function updateConnectionAuth(id: DataMcpConnection["id"], updates: Partial<DataMcpAuthConfig>) {
+    setConnections((items) =>
+      items.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              auth: {
+                ...(item.auth ?? { type: "none" }),
+                ...updates
+              }
+            }
+          : item
+      )
+    );
+    setTestResults([]);
+  }
+
   function updateModelProvider(value: SettingsView["modelProvider"]) {
     const provider = modelProviders.find((item) => item.value === value);
     setModelProvider(value);
@@ -53,7 +70,20 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
     setTestResults([]);
   }
 
-  function buildModelDraft() {
+  const oauthCallbackMessage = useMemo(() => {
+    if (typeof window === "undefined") return "";
+
+    const params = new URLSearchParams(window.location.search);
+    const auth = params.get("auth");
+    const mcp = params.get("mcp");
+    const connection = initialSettings.dataMcpConnections.find((item) => item.id === mcp);
+
+    if (auth === "connected" && connection) return `${connection.label} OAuth connected.`;
+    if (auth === "failed") return params.get("error") || "OAuth login failed.";
+    return "";
+  }, [initialSettings.dataMcpConnections]);
+
+  function buildSettingsDraft() {
     return {
       modelProvider,
       modelName,
@@ -109,7 +139,7 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
       const response = await fetch("/api/settings/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(target === "model" ? { target, draft: buildModelDraft() } : { target })
+        body: JSON.stringify({ target, draft: buildSettingsDraft() })
       });
       const body = await response.json().catch(() => ({}));
 
@@ -124,6 +154,162 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
     } finally {
       setTestingTarget(null);
     }
+  }
+
+  function authHint(auth: DataMcpAuthConfig | undefined) {
+    if (!auth) return null;
+    if (auth.type === "bearer" && auth.tokenHint) return `Bearer token · ${auth.tokenHint}`;
+    if (auth.type === "api_key" && auth.apiKeyHint) return `API key · ${auth.apiKeyHint}`;
+    if (auth.type === "basic" && auth.passwordHint) return `Basic password · ${auth.passwordHint}`;
+    if (auth.type === "oauth2" && auth.accessTokenHint) return `OAuth token · ${auth.accessTokenHint}`;
+    return null;
+  }
+
+  function renderAuthFields(connection: DataMcpConnection) {
+    const auth = connection.auth ?? { type: "none" };
+    const hint = authHint(auth);
+
+    return (
+      <div className="connection-auth">
+        <label className="field">
+          Auth type
+          <select
+            aria-label={`Auth type for ${connection.label}`}
+            value={auth.type}
+            onChange={(event) => updateConnectionAuth(connection.id, { type: event.target.value as DataMcpAuthConfig["type"] })}
+          >
+            <option value="none">None</option>
+            <option value="bearer">Bearer token</option>
+            <option value="api_key">API key header</option>
+            <option value="basic">Basic auth</option>
+            <option value="oauth2">OAuth2</option>
+          </select>
+        </label>
+
+        {hint ? <span className="status status-positive secret-status">{hint}</span> : null}
+
+        {auth.type === "bearer" ? (
+          <label className="field">
+            Bearer token
+            <input
+              aria-label={`Bearer token for ${connection.label}`}
+              autoComplete="new-password"
+              type="password"
+              value={auth.token ?? ""}
+              onChange={(event) => updateConnectionAuth(connection.id, { token: event.target.value })}
+              placeholder={auth.tokenHint ? "Leave blank to keep existing token" : "Enter bearer token"}
+            />
+          </label>
+        ) : null}
+
+        {auth.type === "api_key" ? (
+          <div className="auth-grid">
+            <label className="field">
+              Header name
+              <input
+                aria-label={`API key header for ${connection.label}`}
+                value={auth.headerName ?? "x-api-key"}
+                onChange={(event) => updateConnectionAuth(connection.id, { headerName: event.target.value })}
+              />
+            </label>
+            <label className="field">
+              API key
+              <input
+                aria-label={`API key for ${connection.label}`}
+                autoComplete="new-password"
+                type="password"
+                value={auth.apiKey ?? ""}
+                onChange={(event) => updateConnectionAuth(connection.id, { apiKey: event.target.value })}
+                placeholder={auth.apiKeyHint ? "Leave blank to keep existing key" : "Enter API key"}
+              />
+            </label>
+          </div>
+        ) : null}
+
+        {auth.type === "basic" ? (
+          <div className="auth-grid">
+            <label className="field">
+              Username
+              <input
+                aria-label={`Username for ${connection.label}`}
+                value={auth.username ?? ""}
+                onChange={(event) => updateConnectionAuth(connection.id, { username: event.target.value })}
+              />
+            </label>
+            <label className="field">
+              Password
+              <input
+                aria-label={`Password for ${connection.label}`}
+                autoComplete="new-password"
+                type="password"
+                value={auth.password ?? ""}
+                onChange={(event) => updateConnectionAuth(connection.id, { password: event.target.value })}
+                placeholder={auth.passwordHint ? "Leave blank to keep existing password" : "Enter password"}
+              />
+            </label>
+          </div>
+        ) : null}
+
+        {auth.type === "oauth2" ? (
+          <div className="oauth-fields">
+            <label className="field">
+              Authorize URL
+              <input
+                aria-label={`Authorize URL for ${connection.label}`}
+                value={auth.authorizeUrl ?? ""}
+                onChange={(event) => updateConnectionAuth(connection.id, { authorizeUrl: event.target.value })}
+                placeholder="https://provider.example/oauth/authorize"
+              />
+            </label>
+            <label className="field">
+              Token URL
+              <input
+                aria-label={`Token URL for ${connection.label}`}
+                value={auth.tokenUrl ?? ""}
+                onChange={(event) => updateConnectionAuth(connection.id, { tokenUrl: event.target.value })}
+                placeholder="https://provider.example/oauth/token"
+              />
+            </label>
+            <div className="auth-grid">
+              <label className="field">
+                Client ID
+                <input
+                  aria-label={`Client ID for ${connection.label}`}
+                  value={auth.clientId ?? ""}
+                  onChange={(event) => updateConnectionAuth(connection.id, { clientId: event.target.value })}
+                />
+              </label>
+              <label className="field">
+                Client secret
+                <input
+                  aria-label={`Client secret for ${connection.label}`}
+                  autoComplete="new-password"
+                  type="password"
+                  value={auth.clientSecret ?? ""}
+                  onChange={(event) => updateConnectionAuth(connection.id, { clientSecret: event.target.value })}
+                  placeholder={auth.clientSecretHint ? "Leave blank to keep existing secret" : "Optional client secret"}
+                />
+              </label>
+            </div>
+            <label className="field">
+              Scopes
+              <input
+                aria-label={`Scopes for ${connection.label}`}
+                value={auth.scopes ?? ""}
+                onChange={(event) => updateConnectionAuth(connection.id, { scopes: event.target.value })}
+                placeholder="read write"
+              />
+            </label>
+            <div className="oauth-actions">
+              <a className="button" href={`/api/settings/mcp/oauth/start?connection=${connection.id}`}>
+                Login {connection.label}
+              </a>
+              {auth.expiresAt ? <span className="status">Expires {new Date(auth.expiresAt).toLocaleString()}</span> : null}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
   }
 
   return (
@@ -221,6 +407,12 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
         ) : null}
       </section>
 
+      {oauthCallbackMessage ? (
+        <div className={oauthCallbackMessage.includes("failed") ? "message message-error" : "message"} role="status">
+          {oauthCallbackMessage}
+        </div>
+      ) : null}
+
       <section className="surface panel settings-panel">
         <div className="panel-heading">
           <div>
@@ -248,22 +440,37 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
               </div>
               <label className="field">
                 MCP server
-                <input value={connection.serverName} onChange={(event) => updateConnection(connection.id, { serverName: event.target.value })} />
+                <input
+                  aria-label={`MCP server for ${connection.label}`}
+                  value={connection.serverName}
+                  onChange={(event) => updateConnection(connection.id, { serverName: event.target.value })}
+                />
               </label>
               <label className="field">
                 Capability
                 <input
+                  aria-label={`Capability for ${connection.label}`}
                   value={connection.capabilityName}
                   onChange={(event) => updateConnection(connection.id, { capabilityName: event.target.value })}
                 />
               </label>
               <label className="field">
                 Endpoint
-                <input value={connection.endpoint} onChange={(event) => updateConnection(connection.id, { endpoint: event.target.value })} />
+                <input
+                  aria-label={`Endpoint for ${connection.label}`}
+                  value={connection.endpoint}
+                  onChange={(event) => updateConnection(connection.id, { endpoint: event.target.value })}
+                />
               </label>
+              {renderAuthFields(connection)}
               <label className="field">
                 Notes
-                <textarea rows={3} value={connection.notes} onChange={(event) => updateConnection(connection.id, { notes: event.target.value })} />
+                <textarea
+                  aria-label={`Notes for ${connection.label}`}
+                  rows={3}
+                  value={connection.notes}
+                  onChange={(event) => updateConnection(connection.id, { notes: event.target.value })}
+                />
               </label>
             </article>
           ))}

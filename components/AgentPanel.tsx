@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { useState, type FormEvent } from "react";
 import { Send } from "lucide-react";
 import { ActionButton } from "@/components/ActionButton";
@@ -53,11 +54,20 @@ export function AgentPanel({ initialMessages }: { initialMessages: ChatMessage[]
           <div className="empty-state">Ask about today&apos;s training, recovery, schedule, or meal choices.</div>
         ) : (
           messages.map((item) => (
-            <div className={item.role === "user" ? "chat-row chat-row-user" : "chat-row"} key={item.id}>
-              <span className="chat-avatar" aria-hidden="true">
+            <div
+              aria-label={item.role === "user" ? "User message" : "AI message"}
+              className={item.role === "user" ? "chat-row chat-row-user" : "chat-row chat-row-assistant"}
+              key={item.id}
+            >
+              <span
+                className={item.role === "user" ? "chat-avatar chat-avatar-user" : "chat-avatar chat-avatar-assistant"}
+                aria-hidden="true"
+              >
                 {item.role === "user" ? "You" : "AI"}
               </span>
-              <div className={item.role === "user" ? "chat-bubble chat-bubble-user" : "chat-bubble"}>{item.content}</div>
+              <div className={item.role === "user" ? "chat-bubble chat-bubble-user" : "chat-bubble chat-bubble-assistant"}>
+                {item.content}
+              </div>
             </div>
           ))
         )}

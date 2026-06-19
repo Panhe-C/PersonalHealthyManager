@@ -7,6 +7,7 @@ import { defaultDataMcpConnections } from "@/src/settings/defaults";
 describe("SettingsForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.history.replaceState({}, "", "/settings");
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -172,10 +173,178 @@ describe("SettingsForm", () => {
         "/api/settings/test",
         expect.objectContaining({
           method: "POST",
-          body: JSON.stringify({ target: "all" })
+          body: expect.stringContaining("\"target\":\"all\"")
         })
       );
     });
+    const [, requestInit] = vi.mocked(fetch).mock.calls.at(-1) ?? [];
+    expect(JSON.parse(String(requestInit?.body))).toEqual({
+      target: "all",
+      draft: expect.objectContaining({
+        dataMcpConnections: defaultDataMcpConnections
+      })
+    });
     expect(await screen.findByText("Model responded.")).toBeInTheDocument();
+  });
+
+  it("sends the current MCP draft when testing a connection", async () => {
+    render(
+      <SettingsForm
+        initialSettings={{
+          modelProvider: "openai",
+          modelName: "gpt-4o-mini",
+          modelBaseUrl: "https://api.openai.com/v1",
+          hasApiKey: false,
+          apiKeyHint: null,
+          dataMcpConnections: defaultDataMcpConnections
+        }}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText("Auth type for COROS"), { target: { value: "bearer" } });
+    fireEvent.change(screen.getByLabelText("Endpoint for COROS"), { target: { value: "https://mcp.example.test/coros" } });
+    fireEvent.change(screen.getByLabelText("Bearer token for COROS"), { target: { value: "coros-token-123456" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Test" })[0]);
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/settings/test",
+        expect.objectContaining({
+          method: "POST"
+        })
+      );
+    });
+
+    const [, requestInit] = vi.mocked(fetch).mock.calls.at(-1) ?? [];
+    const body = JSON.parse(String(requestInit?.body));
+    expect(body).toEqual({
+      target: "coros",
+      draft: expect.objectContaining({
+        dataMcpConnections: expect.arrayContaining([
+          expect.objectContaining({
+            id: "coros",
+            endpoint: "https://mcp.example.test/coros",
+            auth: { type: "bearer", token: "coros-token-123456" }
+          })
+        ])
+      })
+    });
+  });
+
+  it("shows an OAuth callback success message from the current URL", () => {
+    window.history.replaceState({}, "", "/settings?mcp=coros&auth=connected");
+
+    render(
+      <SettingsForm
+        initialSettings={{
+          modelProvider: "openai",
+          modelName: "gpt-4o-mini",
+          modelBaseUrl: "https://api.openai.com/v1",
+          hasApiKey: false,
+          apiKeyHint: null,
+          dataMcpConnections: defaultDataMcpConnections
+        }}
+      />
+    );
+
+    expect(screen.getByText("COROS OAuth connected.")).toBeInTheDocument();
+  });
+
+  it("saves MCP bearer authentication fields with the connection draft", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        modelProvider: "openai",
+        modelName: "gpt-4o-mini",
+        modelBaseUrl: "https://api.openai.com/v1",
+        hasApiKey: false,
+        apiKeyHint: null,
+        dataMcpConnections: [
+          {
+            ...defaultDataMcpConnections[0],
+            endpoint: "https://mcp.example.test/coros",
+            auth: { type: "bearer", tokenHint: "...3456" }
+          },
+          defaultDataMcpConnections[1],
+          defaultDataMcpConnections[2]
+        ]
+      })
+    } as never);
+
+    render(
+      <SettingsForm
+        initialSettings={{
+          modelProvider: "openai",
+          modelName: "gpt-4o-mini",
+          modelBaseUrl: "https://api.openai.com/v1",
+          hasApiKey: false,
+          apiKeyHint: null,
+          dataMcpConnections: defaultDataMcpConnections
+        }}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText("Auth type for COROS"), { target: { value: "bearer" } });
+    fireEvent.change(screen.getByLabelText("Endpoint for COROS"), { target: { value: "https://mcp.example.test/coros" } });
+    fireEvent.change(screen.getByLabelText("Bearer token for COROS"), { target: { value: "coros-token-123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/settings",
+        expect.objectContaining({
+          method: "POST"
+        })
+      );
+    });
+
+    const [, requestInit] = vi.mocked(fetch).mock.calls.at(-1) ?? [];
+    const body = JSON.parse(String(requestInit?.body));
+    expect(body.dataMcpConnections[0]).toEqual(
+      expect.objectContaining({
+        endpoint: "https://mcp.example.test/coros",
+        auth: { type: "bearer", token: "coros-token-123456" }
+      })
+    );
+  });
+
+  it("renders OAuth2 fields and login link for an MCP connection", () => {
+    render(
+      <SettingsForm
+        initialSettings={{
+          modelProvider: "openai",
+          modelName: "gpt-4o-mini",
+          modelBaseUrl: "https://api.openai.com/v1",
+          hasApiKey: false,
+          apiKeyHint: null,
+          dataMcpConnections: [
+            {
+              ...defaultDataMcpConnections[0],
+              auth: {
+                type: "oauth2",
+                authorizeUrl: "https://login.example.test/oauth/authorize",
+                tokenUrl: "https://login.example.test/oauth/token",
+                clientId: "client-1",
+                scopes: "sleep recovery",
+                accessTokenHint: "...cdef"
+              }
+            },
+            defaultDataMcpConnections[1],
+            defaultDataMcpConnections[2]
+          ]
+        }}
+      />
+    );
+
+    expect(screen.getByLabelText("Auth type for COROS")).toHaveValue("oauth2");
+    expect(screen.getByLabelText("Authorize URL for COROS")).toHaveValue("https://login.example.test/oauth/authorize");
+    expect(screen.getByLabelText("Token URL for COROS")).toHaveValue("https://login.example.test/oauth/token");
+    expect(screen.getByLabelText("Client ID for COROS")).toHaveValue("client-1");
+    expect(screen.getByLabelText("Scopes for COROS")).toHaveValue("sleep recovery");
+    expect(screen.getByText("OAuth token · ...cdef")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Login COROS" })).toHaveAttribute(
+      "href",
+      "/api/settings/mcp/oauth/start?connection=coros"
+    );
   });
 });

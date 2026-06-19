@@ -1,6 +1,7 @@
 import { Activity, HeartPulse, Moon } from "lucide-react";
 import { MetricCard } from "@/components/MetricCard";
 import { ProfileForm } from "@/components/ProfileForm";
+import { ProfileInsights } from "@/components/ProfileInsights";
 import { SyncDemoDataButton } from "@/components/SyncDemoDataButton";
 import { requireUser } from "@/src/auth/session";
 import { prisma } from "@/src/db/client";
@@ -12,12 +13,15 @@ function parseStringList(value: string | undefined) {
 
 export default async function ProfilePage() {
   const user = await requireUser();
-  const [profile, latestActivity, latestSleep, latestRecovery] = await Promise.all([
+  const [profile, activities, sleepRecords, recoveryRecords] = await Promise.all([
     prisma.bodyProfile.findUnique({ where: { userId: user.id } }),
-    prisma.activityRecord.findFirst({ where: { userId: user.id }, orderBy: { startedAt: "desc" } }),
-    prisma.sleepRecord.findFirst({ where: { userId: user.id }, orderBy: { date: "desc" } }),
-    prisma.recoveryRecord.findFirst({ where: { userId: user.id }, orderBy: { date: "desc" } })
+    prisma.activityRecord.findMany({ where: { userId: user.id }, orderBy: { startedAt: "desc" }, take: 7 }),
+    prisma.sleepRecord.findMany({ where: { userId: user.id }, orderBy: { date: "desc" }, take: 7 }),
+    prisma.recoveryRecord.findMany({ where: { userId: user.id }, orderBy: { date: "desc" }, take: 7 })
   ]);
+  const latestActivity = activities[0];
+  const latestSleep = sleepRecords[0];
+  const latestRecovery = recoveryRecords[0];
   const initialProfile = profile
     ? {
         heightCm: profile.heightCm,
@@ -66,6 +70,8 @@ export default async function ProfilePage() {
           tone="sage"
         />
       </section>
+
+      <ProfileInsights activities={activities} sleepRecords={sleepRecords} recoveryRecords={recoveryRecords} />
 
       <section>
         <div className="panel-heading">
