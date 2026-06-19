@@ -7,7 +7,7 @@ import { modelProviders, type DataMcpAuthConfig, type DataMcpConnection, type Se
 type TestResult = {
   id: string;
   label: string;
-  status: "connected" | "failed" | "not_configured";
+  status: "connected" | "failed" | "not_configured" | "auth_required";
   message: string;
   latencyMs: number | null;
 };
@@ -15,12 +15,13 @@ type TestResult = {
 const statusLabel = {
   connected: "Connected",
   failed: "Failed",
-  not_configured: "Not configured"
+  not_configured: "Not configured",
+  auth_required: "Login required"
 };
 
 function resultClass(status: TestResult["status"]) {
   if (status === "connected") return "test-result test-result-positive";
-  if (status === "failed") return "test-result test-result-warn";
+  if (status === "failed" || status === "auth_required") return "test-result test-result-warn";
   return "test-result";
 }
 
@@ -37,6 +38,14 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
   const [saving, setSaving] = useState(false);
   const [testingTarget, setTestingTarget] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
+  const [loginPromptConnectionId, setLoginPromptConnectionId] = useState<DataMcpConnection["id"] | null>(null);
+  const [loginPromptMessage, setLoginPromptMessage] = useState("");
+  const [loginPromptError, setLoginPromptError] = useState("");
+
+  const loginPromptConnection = useMemo(
+    () => connections.find((connection) => connection.id === loginPromptConnectionId) ?? null,
+    [connections, loginPromptConnectionId]
+  );
 
   function updateConnection(id: DataMcpConnection["id"], updates: Partial<DataMcpConnection>) {
     setConnections((items) => items.map((item) => (item.id === id ? { ...item, ...updates } : item)));
@@ -134,6 +143,9 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
     setError("");
     setMessage("");
     setTestResults([]);
+    setLoginPromptConnectionId(null);
+    setLoginPromptMessage("");
+    setLoginPromptError("");
 
     try {
       const response = await fetch("/api/settings/test", {
@@ -148,12 +160,40 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
         return;
       }
 
-      setTestResults(body.results ?? []);
+      const results = (body.results ?? []) as TestResult[];
+      setTestResults(results);
+      const authRequiredResult = results.find((result) => result.status === "auth_required");
+      if (authRequiredResult) {
+        setLoginPromptConnectionId(authRequiredResult.id);
+        setLoginPromptMessage(authRequiredResult.message);
+      }
     } catch (testError) {
       setError(testError instanceof Error ? testError.message : "Settings test failed");
     } finally {
       setTestingTarget(null);
     }
+  }
+
+  function closeLoginPrompt() {
+    setLoginPromptConnectionId(null);
+    setLoginPromptMessage("");
+    setLoginPromptError("");
+  }
+
+  function startLogin() {
+    if (!loginPromptConnection) return;
+
+    if (loginPromptConnection.auth?.type === "oauth2") {
+      window.location.assign(`/api/settings/mcp/oauth/start?connection=${loginPromptConnection.id}`);
+      return;
+    }
+
+    if (loginPromptConnection.loginUrl) {
+      window.open(loginPromptConnection.loginUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    setLoginPromptError("No login URL configured. Configure OAuth2 or a login URL first.");
   }
 
   function authHint(auth: DataMcpAuthConfig | undefined) {
@@ -399,7 +439,7 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
               <div className={resultClass(result.status)} key={result.id}>
                 <strong>{result.label}</strong>
                 <span>{statusLabel[result.status]}</span>
-                <p>{result.message}</p>
+                <p>{result.status === "auth_required" ? "Open the login prompt to continue." : result.message}</p>
                 {result.latencyMs != null ? <small>{result.latencyMs} ms</small> : null}
               </div>
             ))}
@@ -410,6 +450,33 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
       {oauthCallbackMessage ? (
         <div className={oauthCallbackMessage.includes("failed") ? "message message-error" : "message"} role="status">
           {oauthCallbackMessage}
+        </div>
+      ) : null}
+
+      {loginPromptConnection ? (
+        <div className="modal-backdrop">
+          <section
+            aria-labelledby="login-prompt-title"
+            aria-modal="true"
+            className="modal-panel"
+            role="dialog"
+          >
+            <h2 id="login-prompt-title">{loginPromptConnection.label} login required</h2>
+            <p>{loginPromptMessage}</p>
+            {loginPromptError ? (
+              <p className="message message-error" role="alert">
+                {loginPromptError}
+              </p>
+            ) : null}
+            <div className="toolbar">
+              <button className="button button-primary" type="button" onClick={startLogin}>
+                Login {loginPromptConnection.label}
+              </button>
+              <button className="button" type="button" onClick={closeLoginPrompt}>
+                Close
+              </button>
+            </div>
+          </section>
         </div>
       ) : null}
 
@@ -460,6 +527,15 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
                   aria-label={`Endpoint for ${connection.label}`}
                   value={connection.endpoint}
                   onChange={(event) => updateConnection(connection.id, { endpoint: event.target.value })}
+                />
+              </label>
+              <label className="field">
+                Login URL
+                <input
+                  aria-label={`Login URL for ${connection.label}`}
+                  value={connection.loginUrl ?? ""}
+                  onChange={(event) => updateConnection(connection.id, { loginUrl: event.target.value })}
+                  placeholder="https://provider.example/login"
                 />
               </label>
               {renderAuthFields(connection)}
