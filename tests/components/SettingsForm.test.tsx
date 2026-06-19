@@ -359,6 +359,16 @@ describe("SettingsForm", () => {
   });
 
   it("opens a login-required modal and routes OAuth2 login through the OAuth start endpoint", async () => {
+    const oauthConnection = {
+      ...defaultDataMcpConnections[0],
+      auth: {
+        type: "oauth2" as const,
+        authorizeUrl: "https://login.example.test/oauth/authorize",
+        tokenUrl: "https://login.example.test/oauth/token",
+        clientId: "client-1",
+        scopes: "sleep recovery"
+      }
+    };
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -371,6 +381,16 @@ describe("SettingsForm", () => {
             latencyMs: null
           }
         ]
+      })
+    } as never).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        modelProvider: "openai",
+        modelName: "gpt-4o-mini",
+        modelBaseUrl: "https://api.openai.com/v1",
+        hasApiKey: false,
+        apiKeyHint: null,
+        dataMcpConnections: [oauthConnection, defaultDataMcpConnections[1], defaultDataMcpConnections[2]]
       })
     } as never);
 
@@ -390,16 +410,7 @@ describe("SettingsForm", () => {
           hasApiKey: false,
           apiKeyHint: null,
           dataMcpConnections: [
-            {
-              ...defaultDataMcpConnections[0],
-              auth: {
-                type: "oauth2",
-                authorizeUrl: "https://login.example.test/oauth/authorize",
-                tokenUrl: "https://login.example.test/oauth/token",
-                clientId: "client-1",
-                scopes: "sleep recovery"
-              }
-            },
+            oauthConnection,
             defaultDataMcpConnections[1],
             defaultDataMcpConnections[2]
           ]
@@ -415,6 +426,18 @@ describe("SettingsForm", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Login COROS" }));
 
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/settings",
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+    const [, requestInit] = vi.mocked(fetch).mock.calls.at(-1) ?? [];
+    expect(JSON.parse(String(requestInit?.body))).toEqual(
+      expect.objectContaining({
+        dataMcpConnections: expect.arrayContaining([expect.objectContaining({ id: "coros", auth: oauthConnection.auth })])
+      })
+    );
     expect(assign).toHaveBeenCalledWith("/api/settings/mcp/oauth/start?connection=coros");
 
     Object.defineProperty(window, "location", {

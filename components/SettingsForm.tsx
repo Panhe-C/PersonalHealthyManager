@@ -102,40 +102,46 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
     };
   }
 
+  function applySavedSettings(settings: SettingsView) {
+    setModelProvider(settings.modelProvider);
+    setModelName(settings.modelName);
+    setModelBaseUrl(settings.modelBaseUrl);
+    setConnections(settings.dataMcpConnections);
+    setHasApiKey(settings.hasApiKey);
+    setApiKeyHint(settings.apiKeyHint);
+    setApiKey("");
+  }
+
+  async function persistSettingsDraft() {
+    const response = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildSettingsDraft())
+    });
+    const body = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(body.error ?? "Settings could not be saved");
+    }
+
+    applySavedSettings(body);
+    return body as SettingsView;
+  }
+
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setError("");
     setMessage("");
 
-    const response = await fetch("/api/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        modelProvider,
-        modelName,
-        modelBaseUrl,
-        apiKey,
-        dataMcpConnections: connections
-      })
-    });
-    const body = await response.json();
-
-    if (!response.ok) {
-      setError(body.error ?? "Settings could not be saved");
+    try {
+      await persistSettingsDraft();
+      setMessage("Settings saved");
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Settings could not be saved");
+    } finally {
       setSaving(false);
-      return;
     }
-
-    setModelProvider(body.modelProvider);
-    setModelName(body.modelName);
-    setModelBaseUrl(body.modelBaseUrl);
-    setConnections(body.dataMcpConnections);
-    setHasApiKey(body.hasApiKey);
-    setApiKeyHint(body.apiKeyHint);
-    setApiKey("");
-    setMessage("Settings saved");
-    setSaving(false);
   }
 
   async function runTest(target: string) {
@@ -182,11 +188,20 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
     setLoginPromptError("");
   }
 
-  function startLogin() {
+  async function startLogin() {
     if (!loginPromptConnection) return;
 
     if (loginPromptConnection.auth?.type === "oauth2") {
-      window.location.assign(`/api/settings/mcp/oauth/start?connection=${loginPromptConnection.id}`);
+      setSaving(true);
+      setLoginPromptError("");
+      try {
+        await persistSettingsDraft();
+        window.location.assign(`/api/settings/mcp/oauth/start?connection=${loginPromptConnection.id}`);
+      } catch (loginError) {
+        setLoginPromptError(loginError instanceof Error ? loginError.message : "Settings could not be saved");
+      } finally {
+        setSaving(false);
+      }
       return;
     }
 
