@@ -2,7 +2,14 @@
 
 import React, { useMemo, useState, type FormEvent } from "react";
 import { FlaskConical, Save } from "lucide-react";
-import { modelProviders, type DataMcpAuthConfig, type DataMcpConnection, type SettingsView } from "@/src/settings/defaults";
+import {
+  corosMcpRegionOptions,
+  modelProviders,
+  type CorosMcpRegion,
+  type DataMcpAuthConfig,
+  type DataMcpConnection,
+  type SettingsView
+} from "@/src/settings/defaults";
 
 type TestResult = {
   id: string;
@@ -58,6 +65,22 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
       )
     );
     setTestResults([]);
+  }
+
+  function selectedCorosRegion(connection: DataMcpConnection) {
+    return connection.corosRegion ?? corosMcpRegionOptions.find((option) => option.url === connection.endpoint)?.value ?? "";
+  }
+
+  function updateCorosRegion(region: CorosMcpRegion) {
+    const option = corosMcpRegionOptions.find((item) => item.value === region);
+    if (!option) return;
+
+    updateConnection("coros", {
+      corosRegion: option.value,
+      endpoint: option.url,
+      serverName: "coros",
+      capabilityName: "daily-health"
+    });
   }
 
   function updateModelProvider(value: SettingsView["modelProvider"]) {
@@ -312,6 +335,45 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
     );
   }
 
+  function renderCorosConnectionAssistant(connection: DataMcpConnection) {
+    if (connection.id !== "coros") return null;
+
+    const region = selectedCorosRegion(connection);
+    const selectedOption = corosMcpRegionOptions.find((option) => option.value === region);
+
+    return (
+      <div className="connection-auth coros-mcp-assistant">
+        <div>
+          <strong>COROS remote MCP</strong>
+          <p>Choose the region that matches your COROS account.</p>
+          <p>After opening COROS, sign in with your phone number or email and password.</p>
+          <p>COROS remote MCP login needs MCP OAuth discovery support before this website can open the COROS login page.</p>
+        </div>
+        <label className="field">
+          COROS MCP region
+          <select
+            aria-label="COROS MCP region"
+            value={region}
+            onChange={(event) => updateCorosRegion(event.target.value as CorosMcpRegion)}
+          >
+            <option value="">Choose region</option>
+            {corosMcpRegionOptions.map((option) => (
+              <option value={option.value} key={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="page-subtitle">
+          {selectedOption ? `Official MCP URL: ${selectedOption.url}` : "Select a region to fill the official COROS MCP URL."}
+        </p>
+        <button className="button" type="button" disabled>
+          Connect COROS
+        </button>
+      </div>
+    );
+  }
+
   return (
     <form className="settings-grid" onSubmit={save}>
       <section className="surface panel settings-panel">
@@ -462,6 +524,7 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
                   onChange={(event) => updateConnection(connection.id, { endpoint: event.target.value })}
                 />
               </label>
+              {renderCorosConnectionAssistant(connection)}
               {renderAuthFields(connection)}
               <label className="field">
                 Notes

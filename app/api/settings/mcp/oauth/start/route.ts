@@ -15,9 +15,12 @@ export const GET = withUser(async (user, request: Request) => {
     const authorizationUrl = await createMcpOAuthAuthorizationUrl(user.id, connection, url.origin);
     return NextResponse.redirect(authorizationUrl);
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "OAuth login could not be started" },
-      { status: 400 }
-    );
+    const url = new URL(request.url);
+    const failed = new URL("/settings", url.origin);
+    const connection = url.searchParams.get("connection");
+    if (connection) failed.searchParams.set("mcp", connection);
+    failed.searchParams.set("auth", "failed");
+    failed.searchParams.set("error", error instanceof Error ? error.message : "OAuth login could not be started");
+    return NextResponse.redirect(failed);
   }
 });

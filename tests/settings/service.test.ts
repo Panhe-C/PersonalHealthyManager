@@ -255,6 +255,74 @@ describe("settings service", () => {
     });
   });
 
+  it("saves and loads a Data MCP login URL", async () => {
+    vi.mocked(prisma.userSettings.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.userSettings.upsert).mockResolvedValue({} as never);
+
+    const settings = await saveUserSettings("user-1", {
+      modelProvider: "openai",
+      modelName: "gpt-4o-mini",
+      modelBaseUrl: "https://api.openai.com/v1",
+      apiKey: "",
+      dataMcpConnections: [
+        {
+          ...defaultDataMcpConnections[0],
+          endpoint: "https://mcp.example.test/coros",
+          loginUrl: "https://coros.example.test/login"
+        }
+      ]
+    });
+
+    const [upsertArg] = vi.mocked(prisma.userSettings.upsert).mock.calls.at(0) ?? [];
+    const savedConnections = JSON.parse(String(upsertArg?.create?.dataMcpConnectionsJson ?? upsertArg?.update?.dataMcpConnectionsJson));
+    expect(savedConnections[0].loginUrl).toBe("https://coros.example.test/login");
+    expect(settings.dataMcpConnections[0].loginUrl).toBe("https://coros.example.test/login");
+  });
+
+  it("saves and loads the selected COROS MCP region", async () => {
+    vi.mocked(prisma.userSettings.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.userSettings.upsert).mockResolvedValue({} as never);
+
+    const settings = await saveUserSettings("user-1", {
+      modelProvider: "openai",
+      modelName: "gpt-4o-mini",
+      modelBaseUrl: "https://api.openai.com/v1",
+      apiKey: "",
+      dataMcpConnections: [
+        {
+          ...defaultDataMcpConnections[0],
+          corosRegion: "eu",
+          endpoint: "https://mcpeu.coros.com/mcp"
+        }
+      ]
+    });
+
+    const [upsertArg] = vi.mocked(prisma.userSettings.upsert).mock.calls.at(0) ?? [];
+    const savedConnections = JSON.parse(String(upsertArg?.create?.dataMcpConnectionsJson ?? upsertArg?.update?.dataMcpConnectionsJson));
+    expect(savedConnections[0].corosRegion).toBe("eu");
+    expect(savedConnections[0].endpoint).toBe("https://mcpeu.coros.com/mcp");
+    expect(settings.dataMcpConnections[0].corosRegion).toBe("eu");
+  });
+
+  it("rejects malformed Data MCP login URLs", async () => {
+    vi.mocked(prisma.userSettings.findUnique).mockResolvedValue(null);
+
+    await expect(
+      saveUserSettings("user-1", {
+        modelProvider: "openai",
+        modelName: "gpt-4o-mini",
+        modelBaseUrl: "https://api.openai.com/v1",
+        apiKey: "",
+        dataMcpConnections: [
+          {
+            ...defaultDataMcpConnections[0],
+            loginUrl: "not-a-url"
+          }
+        ]
+      })
+    ).rejects.toThrow("COROS login URL must be a valid URL");
+  });
+
   it("uses configured MCP bearer credentials when testing an endpoint", async () => {
     const saved = await saveUserSettings("user-1", {
       modelProvider: "openai",

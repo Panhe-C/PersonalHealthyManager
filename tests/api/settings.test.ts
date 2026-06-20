@@ -87,6 +87,17 @@ describe("settings API", () => {
     expect(createMcpOAuthAuthorizationUrl).toHaveBeenCalledWith("user-1", "coros", "http://localhost");
   });
 
+  it("redirects OAuth start failures back to Settings with an error message", async () => {
+    vi.mocked(createMcpOAuthAuthorizationUrl).mockRejectedValue(new Error("MCP connection is not configured for OAuth2."));
+
+    const response = await OAUTH_START_GET(new Request("http://localhost/api/settings/mcp/oauth/start?connection=coros"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      "http://localhost/settings?mcp=coros&auth=failed&error=MCP+connection+is+not+configured+for+OAuth2."
+    );
+  });
+
   it("handles MCP OAuth callback and redirects back to Settings", async () => {
     vi.mocked(handleMcpOAuthCallback).mockResolvedValue("coros");
 

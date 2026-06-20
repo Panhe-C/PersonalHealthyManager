@@ -231,6 +231,87 @@ describe("SettingsForm", () => {
     });
   });
 
+  it("renders the official COROS MCP region selector and URL preview", () => {
+    render(
+      <SettingsForm
+        initialSettings={{
+          modelProvider: "openai",
+          modelName: "gpt-4o-mini",
+          modelBaseUrl: "https://api.openai.com/v1",
+          hasApiKey: false,
+          apiKeyHint: null,
+          dataMcpConnections: defaultDataMcpConnections
+        }}
+      />
+    );
+
+    expect(screen.getByLabelText("COROS MCP region")).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "China" })).toHaveValue("china");
+    expect(screen.getByRole("option", { name: "North America or other regions" })).toHaveValue("us");
+    expect(screen.getByRole("option", { name: "Europe" })).toHaveValue("eu");
+    expect(screen.getByText("Choose the region that matches your COROS account.")).toBeInTheDocument();
+    expect(screen.getByText("After opening COROS, sign in with your phone number or email and password.")).toBeInTheDocument();
+    expect(screen.getByText("COROS remote MCP login needs MCP OAuth discovery support before this website can open the COROS login page.")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Connect COROS" })).not.toBeInTheDocument();
+  });
+
+  it("auto-fills the COROS MCP endpoint when the region changes", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        modelProvider: "openai",
+        modelName: "gpt-4o-mini",
+        modelBaseUrl: "https://api.openai.com/v1",
+        hasApiKey: false,
+        apiKeyHint: null,
+        dataMcpConnections: [
+          {
+            ...defaultDataMcpConnections[0],
+            corosRegion: "eu",
+            endpoint: "https://mcpeu.coros.com/mcp"
+          },
+          defaultDataMcpConnections[1],
+          defaultDataMcpConnections[2]
+        ]
+      })
+    } as never);
+
+    render(
+      <SettingsForm
+        initialSettings={{
+          modelProvider: "openai",
+          modelName: "gpt-4o-mini",
+          modelBaseUrl: "https://api.openai.com/v1",
+          hasApiKey: false,
+          apiKeyHint: null,
+          dataMcpConnections: defaultDataMcpConnections
+        }}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText("COROS MCP region"), { target: { value: "eu" } });
+
+    expect(screen.getByLabelText("Endpoint for COROS")).toHaveValue("https://mcpeu.coros.com/mcp");
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/settings",
+        expect.objectContaining({
+          method: "POST"
+        })
+      );
+    });
+    const [, requestInit] = vi.mocked(fetch).mock.calls.at(-1) ?? [];
+    expect(JSON.parse(String(requestInit?.body)).dataMcpConnections[0]).toEqual(
+      expect.objectContaining({
+        id: "coros",
+        corosRegion: "eu",
+        endpoint: "https://mcpeu.coros.com/mcp"
+      })
+    );
+  });
+
   it("shows an OAuth callback success message from the current URL", () => {
     window.history.replaceState({}, "", "/settings?mcp=coros&auth=connected");
 

@@ -3,6 +3,7 @@ export type ModelProvider = "openai" | "anthropic" | "deepseek" | "minimax" | "k
 export type DataMcpConnectionId = "coros" | "calendar" | "meal_menu";
 
 export type DataMcpAuthType = "none" | "bearer" | "api_key" | "basic" | "oauth2";
+export type CorosMcpRegion = "china" | "us" | "eu";
 
 export type DataMcpAuthConfig = {
   type: DataMcpAuthType;
@@ -54,6 +55,8 @@ export type DataMcpConnection = {
   capabilityName: string;
   endpoint: string;
   auth: DataMcpAuthConfig;
+  loginUrl?: string;
+  corosRegion?: CorosMcpRegion;
   notes: string;
 };
 
@@ -84,6 +87,22 @@ export const modelProviders: Array<{
     defaultBaseUrl: "https://api.anthropic.com/v1"
   },
   { value: "custom", label: "Custom", defaultModel: "custom-model", defaultBaseUrl: "" }
+];
+
+export const corosMcpUrlByRegion: Record<CorosMcpRegion, string> = {
+  china: "https://mcpcn.coros.com/mcp",
+  us: "https://mcpus.coros.com/mcp",
+  eu: "https://mcpeu.coros.com/mcp"
+};
+
+export const corosMcpRegionOptions: Array<{
+  value: CorosMcpRegion;
+  label: string;
+  url: string;
+}> = [
+  { value: "china", label: "China", url: corosMcpUrlByRegion.china },
+  { value: "us", label: "North America or other regions", url: corosMcpUrlByRegion.us },
+  { value: "eu", label: "Europe", url: corosMcpUrlByRegion.eu }
 ];
 
 export const defaultDataMcpConnections: DataMcpConnection[] = [

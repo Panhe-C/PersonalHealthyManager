@@ -2,9 +2,11 @@ import { randomBytes } from "node:crypto";
 import { prisma } from "@/src/db/client";
 import { decryptApiKey, decryptSecret, encryptApiKey, encryptSecret } from "@/src/settings/crypto";
 import {
+  corosMcpRegionOptions,
   defaultDataMcpConnections,
   defaultSettingsView,
   modelProviders,
+  type CorosMcpRegion,
   type DataMcpAuthConfig,
   type DataMcpAuthType,
   type DataMcpConnection,
@@ -69,6 +71,7 @@ export type SettingsTestResult = {
 const knownProviderValues = new Set(modelProviders.map((provider) => provider.value));
 const knownConnectionIds = new Set(defaultDataMcpConnections.map((connection) => connection.id));
 const knownAuthTypes = new Set<DataMcpAuthType>(["none", "bearer", "api_key", "basic", "oauth2"]);
+const knownCorosRegions = new Set(corosMcpRegionOptions.map((region) => region.value));
 
 const tokenFields: SecretFieldNames = {
   input: "token",
@@ -143,6 +146,10 @@ function stringValue(value: unknown) {
 
 function authType(value: unknown): DataMcpAuthType {
   return typeof value === "string" && knownAuthTypes.has(value as DataMcpAuthType) ? (value as DataMcpAuthType) : "none";
+}
+
+function corosRegionValue(value: unknown): CorosMcpRegion | undefined {
+  return typeof value === "string" && knownCorosRegions.has(value as CorosMcpRegion) ? (value as CorosMcpRegion) : undefined;
 }
 
 function cloneDefaultConnections() {
@@ -309,6 +316,9 @@ function normalizeConnection(input: DataMcpConnection, existing?: DataMcpConnect
 
   const endpoint = stringValue(input.endpoint);
   assertUrl(endpoint, `${base.label} endpoint`);
+  const loginUrl = stringValue(input.loginUrl);
+  assertUrl(loginUrl, `${base.label} login URL`);
+  const corosRegion = base.id === "coros" ? corosRegionValue(input.corosRegion) : undefined;
 
   return {
     id: base.id,
@@ -318,6 +328,8 @@ function normalizeConnection(input: DataMcpConnection, existing?: DataMcpConnect
     capabilityName: stringValue(input.capabilityName),
     endpoint,
     auth: normalizeAuth(input.auth, existing?.auth),
+    ...(loginUrl ? { loginUrl } : {}),
+    ...(corosRegion ? { corosRegion } : {}),
     notes: stringValue(input.notes)
   };
 }
