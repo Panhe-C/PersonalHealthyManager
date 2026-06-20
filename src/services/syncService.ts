@@ -1,7 +1,8 @@
 import { prisma } from "@/src/db/client";
 import { normalizeFeishuCalendarSnapshot } from "@/src/providers/calendar";
 import { normalizeCorosActivity, normalizeCorosRecovery, normalizeCorosSleep } from "@/src/providers/coros";
-import { buildDataMcpAuthHeaders, loadDataMcpConnection } from "@/src/settings/service";
+import { fetchCorosRemoteMcpSnapshot } from "@/src/providers/coros-mcp";
+import { loadDataMcpConnection } from "@/src/settings/service";
 
 type CorosImportPayload = {
   activities?: unknown[];
@@ -155,29 +156,8 @@ export async function syncCorosFromSettings(userId: string) {
   if (!connection?.enabled) throw new Error("COROS MCP connection is disabled.");
   if (!connection.endpoint) throw new Error("COROS MCP endpoint is not configured.");
 
-  const authHeaders = buildDataMcpAuthHeaders(connection);
-  if (!authHeaders) throw new Error("COROS MCP authentication is not configured.");
-
-  const response = await fetch(connection.endpoint, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      ...authHeaders
-    }
-  });
-
-  if (!response.ok) {
-    let body = "";
-    try {
-      body = await response.text();
-    } catch {
-      body = "";
-    }
-    const suffix = body ? `: ${body.slice(0, 200)}` : "";
-    throw new Error(`COROS MCP endpoint returned HTTP ${response.status}${suffix}.`);
-  }
-
-  return importCorosPayload(userId, normalizeCorosMcpPayload(await response.json()));
+  const snapshot = await fetchCorosRemoteMcpSnapshot(connection);
+  return importCorosPayload(userId, snapshot);
 }
 
 export async function importCalendarPayload(userId: string, payload: unknown) {

@@ -69,33 +69,94 @@ describe("COROS settings sync", () => {
     vi.mocked(prisma.userSettings.findUnique).mockResolvedValue(
       settingsRecord(String(upsertArg?.create?.dataMcpConnectionsJson ?? upsertArg?.update?.dataMcpConnectionsJson)) as never
     );
-    vi.mocked(fetch).mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        data: {
-          activities: [
-            {
-              labelId: "activity-from-mcp",
-              sportType: 100,
-              startTime: "2026-06-01T10:00:00+08:00",
-              endTime: "2026-06-01T10:45:00+08:00",
-              distanceKm: 8.2
+    vi.mocked(fetch).mockImplementation(async (_input, init) => {
+      const body = init && typeof init.body === "string" ? JSON.parse(init.body) : ({} as Record<string, unknown>);
+      const method = (body as { method?: string }).method;
+
+      if (method === "initialize") {
+        return { ok: true, status: 200, json: async () => ({ jsonrpc: "2.0", id: (body as { id: unknown }).id, result: {} }) } as never;
+      }
+
+      if (method === "tools/list") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            jsonrpc: "2.0",
+            id: (body as { id: unknown }).id,
+            result: {
+              tools: [
+                { name: "get_activities", description: "Fetch activities" },
+                { name: "get_sleep_records", description: "Fetch sleep data" },
+                { name: "get_recovery_status", description: "Fetch recovery data" }
+              ]
             }
-          ],
-          sleep: [{ date: "2026-06-02", durationMinutes: 410, score: 78 }],
-          recovery: [{ date: "2026-06-02", recoveryPercent: 72, hrvMs: 55 }]
+          })
+        } as never;
+      }
+
+      if (method === "tools/call") {
+        const params = (body as { params?: { name?: string } }).params;
+        const toolName = params?.name ?? "";
+
+        if (toolName.includes("activit")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              jsonrpc: "2.0",
+              id: (body as { id: unknown }).id,
+              result: {
+                data: [
+                  {
+                    labelId: "activity-from-mcp",
+                    sportType: 100,
+                    startTime: "2026-06-01T10:00:00+08:00",
+                    endTime: "2026-06-01T10:45:00+08:00",
+                    distanceKm: 8.2
+                  }
+                ]
+              }
+            })
+          } as never;
         }
-      })
-    } as never);
+
+        if (toolName.includes("sleep")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              jsonrpc: "2.0",
+              id: (body as { id: unknown }).id,
+              result: { data: [{ date: "2026-06-02", durationMinutes: 410, score: 78 }] }
+            })
+          } as never;
+        }
+
+        if (toolName.includes("recovery")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              jsonrpc: "2.0",
+              id: (body as { id: unknown }).id,
+              result: { data: [{ date: "2026-06-02", recoveryPercent: 72, hrvMs: 55 }] }
+            })
+          } as never;
+        }
+      }
+
+      return { ok: true, status: 200, json: async () => ({}) } as never;
+    });
 
     const result = await syncCorosFromSettings("user-1");
 
     expect(fetch).toHaveBeenCalledWith(
       "https://mcp.example.test/coros",
       expect.objectContaining({
-        method: "GET",
+        method: "POST",
         headers: expect.objectContaining({
+          "Content-Type": "application/json",
           Authorization: "Bearer coros-token-123456"
         })
       })
