@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { prisma } from "@/src/db/client";
+import { discoverCorosMcpOAuthEndpoints } from "@/src/providers/coros-mcp";
 import { decryptApiKey, decryptSecret, encryptApiKey, encryptSecret } from "@/src/settings/crypto";
 import {
   corosMcpRegionOptions,
@@ -743,11 +744,40 @@ export async function createMcpOAuthAuthorizationUrl(userId: string, connectionI
   const connections = parseStoredConnections(record.dataMcpConnectionsJson);
   const connection = connections.find((item) => item.id === connectionId);
   if (!connection) throw new Error("Invalid MCP connection");
+
+  // For COROS, try MCP OAuth discovery before requiring pre-configured OAuth2 URLs
+  let { authorizeUrl, tokenUrl, clientId, scopes } = connection.auth;
+
+  if (connectionId === "coros" && (!authorizeUrl || !tokenUrl)) {
+    const discovered = await discoverCorosMcpOAuthEndpoints(connection);
+
+    if (discovered) {
+      connection.auth = {
+        ...connection.auth,
+        type: "oauth2",
+        authorizeUrl: discovered.authorizeUrl,
+        tokenUrl: discovered.tokenUrl
+      };
+      await persistConnections(userId, record, connections);
+      authorizeUrl = discovered.authorizeUrl;
+      tokenUrl = discovered.tokenUrl;
+    }
+  }
+
   if (connection.auth.type !== "oauth2") throw new Error("MCP connection is not configured for OAuth2.");
 
-  const { authorizeUrl, tokenUrl, clientId, scopes } = connection.auth;
-  if (!authorizeUrl || !tokenUrl || !clientId) {
-    throw new Error("OAuth authorize URL, token URL, and client ID are required.");
+  // Use discovered or stored values
+  authorizeUrl = authorizeUrl || connection.auth.authorizeUrl;
+  tokenUrl = tokenUrl || connection.auth.tokenUrl;
+  clientId = clientId || connection.auth.clientId;
+  scopes = scopes || connection.auth.scopes;
+
+  if (!authorizeUrl || !tokenUrl) {
+    throw new Error("OAuth authorize URL and token URL are required. Try saving settings with OAuth2 auth type first, or use the Login URL field.");
+  }
+
+  if (!clientId) {
+    throw new Error("OAuth client ID is required. Add it in the COROS connection settings.");
   }
 
   const state = randomBytes(18).toString("hex");

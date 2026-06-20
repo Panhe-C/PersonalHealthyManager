@@ -351,6 +351,22 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
     );
   }
 
+  async function connectCoros() {
+    const response = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildSettingsDraft())
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      setError(body.error ?? "Could not save settings before connecting COROS.");
+      return;
+    }
+
+    window.location.assign("/api/settings/mcp/oauth/start?connection=coros");
+  }
+
   function closeLoginPrompt() {
     setLoginPromptConnectionId(null);
     setLoginPromptMessage("");
@@ -405,8 +421,13 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
         <p className="page-subtitle">
           {selectedOption ? `Official MCP URL: ${selectedOption.url}` : "Select a region to fill the official COROS MCP URL."}
         </p>
-        <button className="button" type="button" disabled>
-          Connect COROS
+        <button
+          className="button"
+          type="button"
+          disabled={!connection.endpoint || connection.endpoint === ""}
+          onClick={connectCoros}
+        >
+          {connection.endpoint ? "Connect COROS" : "Connect COROS (select a region first)"}
         </button>
       </div>
     );

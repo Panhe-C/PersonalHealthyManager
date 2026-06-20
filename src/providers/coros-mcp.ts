@@ -182,6 +182,67 @@ export async function fetchCorosRemoteMcpSnapshot(connection: DataMcpConnection)
   return snapshot;
 }
 
+export type CorosMcpOAuthEndpoints = {
+  authorizeUrl: string;
+  tokenUrl: string;
+};
+
+export async function discoverCorosMcpOAuthEndpoints(connection: DataMcpConnection): Promise<CorosMcpOAuthEndpoints | null> {
+  if (!connection.endpoint) return null;
+
+  const endpoint = connection.endpoint.replace(/\/$/, "");
+
+  // Try MCP initialize to discover OAuth metadata
+  try {
+    const result = await jsonRpcCall(endpoint, {}, "initialize", {
+      protocolVersion: "2024-11-05",
+      capabilities: {},
+      clientInfo: {
+        name: "healthy-body-manager",
+        version: "0.1.0"
+      }
+    });
+
+    if (result && typeof result === "object") {
+      const meta = result as Record<string, unknown>;
+
+      // Look for OAuth metadata in various possible locations
+      const oauth = (meta._meta as Record<string, unknown>)?.oauth as Record<string, string> | undefined;
+      const serverOAuth = (meta.serverInfo as Record<string, unknown>)?.oauth as Record<string, string> | undefined;
+
+      const authorizeUrl = oauth?.authorizationUrl || oauth?.authorizeUrl || serverOAuth?.authorizationUrl || serverOAuth?.authorizeUrl;
+      const tokenUrl = oauth?.tokenUrl || serverOAuth?.tokenUrl;
+
+      if (authorizeUrl && tokenUrl) {
+        return { authorizeUrl, tokenUrl };
+      }
+    }
+  } catch {
+    // MCP initialize failed, try well-known discovery
+  }
+
+  // Fallback: try OAuth well-known discovery
+  try {
+    const baseUrl = new URL(endpoint);
+    const wellKnownUrl = `${baseUrl.origin}/.well-known/oauth-authorization-server`;
+    const response = await fetch(wellKnownUrl);
+
+    if (response.ok) {
+      const metadata = (await response.json()) as Record<string, unknown>;
+      const authorizeUrl = (metadata.authorization_endpoint || metadata.authorizeUrl) as string | undefined;
+      const tokenUrl = (metadata.token_endpoint || metadata.tokenUrl) as string | undefined;
+
+      if (authorizeUrl && tokenUrl) {
+        return { authorizeUrl, tokenUrl };
+      }
+    }
+  } catch {
+    // Well-known discovery also failed
+  }
+
+  return null;
+}
+
 function extractPayloadArray(result: unknown): unknown[] {
   if (Array.isArray(result)) return result;
 
