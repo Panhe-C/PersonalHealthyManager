@@ -63,7 +63,7 @@ export type SettingsTestTarget = "model" | DataMcpConnectionId | "all";
 export type SettingsTestResult = {
   id: string;
   label: string;
-  status: "connected" | "failed" | "not_configured";
+  status: "connected" | "failed" | "not_configured" | "auth_required";
   message: string;
   latencyMs: number | null;
 };
@@ -328,7 +328,7 @@ function normalizeConnection(input: DataMcpConnection, existing?: DataMcpConnect
     capabilityName: stringValue(input.capabilityName),
     endpoint,
     auth: normalizeAuth(input.auth, existing?.auth),
-    ...(loginUrl ? { loginUrl } : {}),
+    loginUrl,
     ...(corosRegion ? { corosRegion } : {}),
     notes: stringValue(input.notes)
   };
@@ -619,6 +619,16 @@ export function buildDataMcpAuthHeaders(connection: DataMcpConnection): Record<s
   return buildMcpAuthHeaders(connection.auth);
 }
 
+function mcpLoginRequiredResult(connection: DataMcpConnection): SettingsTestResult {
+  return {
+    id: connection.id,
+    label: connection.label,
+    status: "auth_required",
+    message: `${connection.label} login is required before this MCP connection can be tested.`,
+    latencyMs: null
+  };
+}
+
 async function testMcpConnection(connection: DataMcpConnection): Promise<SettingsTestResult> {
   if (!connection.enabled) {
     return {
@@ -652,13 +662,7 @@ async function testMcpConnection(connection: DataMcpConnection): Promise<Setting
 
   const headers = buildMcpAuthHeaders(connection.auth);
   if (!headers) {
-    return {
-      id: connection.id,
-      label: connection.label,
-      status: "not_configured",
-      message: `${connection.label} authentication is not configured.`,
-      latencyMs: null
-    };
+    return mcpLoginRequiredResult(connection);
   }
 
   return withLatency(async () => {
@@ -667,14 +671,14 @@ async function testMcpConnection(connection: DataMcpConnection): Promise<Setting
       if (response.ok) {
         return { id: connection.id, label: connection.label, status: "connected", message: `Endpoint responded with HTTP ${response.status}.` };
       }
+      if (response.status === 401 || response.status === 403) {
+        return mcpLoginRequiredResult(connection);
+      }
       return {
         id: connection.id,
         label: connection.label,
         status: "failed",
-        message:
-          response.status === 401 || response.status === 403
-            ? "Authentication failed. Check the MCP credentials."
-            : `Endpoint returned HTTP ${response.status}.`
+        message: `Endpoint returned HTTP ${response.status}.`
       };
     } catch (error) {
       return {
