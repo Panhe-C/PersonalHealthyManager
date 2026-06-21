@@ -27,14 +27,7 @@ export default async function AgentPage() {
   });
 
   return (
-    <main className="page grid" style={{ gap: 20 }}>
-      <div className="page-header">
-        <div>
-          <span className="eyebrow">Health advisor</span>
-          <h1>Agent</h1>
-          <p className="page-subtitle">Explain plans, check recovery, prepare calendar drafts, and route replanning requests.</p>
-        </div>
-      </div>
+    <main className="page grid" style={{ gap: 0 }}>
       <AgentPanel
         initialConversations={conversations.map((conversation) => ({
           id: conversation.id,

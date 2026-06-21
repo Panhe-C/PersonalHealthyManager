@@ -1506,6 +1506,8 @@ h3 {
 }
 
 .agent-workspace {
+  height: min(760px, calc(100dvh - 300px));
+  min-height: 480px;
   display: grid;
   grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
   gap: 16px;
@@ -1513,7 +1515,9 @@ h3 {
 }
 
 .agent-conversation-rail {
-  min-height: 560px;
+  min-height: 0;
+  max-height: 100%;
+  overflow-y: auto;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--panel);
@@ -1533,6 +1537,85 @@ h3 {
   cursor: pointer;
 }
 
+.agent-conversation-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+}
+
+.agent-conversation-select,
+.agent-conversation-delete,
+.agent-delete-confirm-button,
+.agent-delete-cancel-button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.agent-conversation-select {
+  min-width: 0;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.agent-conversation-delete {
+  width: 30px;
+  height: 30px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 10px;
+  color: color-mix(in oklch, var(--muted) 78%, var(--ink));
+  opacity: 0.74;
+  transition: background 0.18s ease, color 0.18s ease, opacity 0.18s ease;
+}
+
+.agent-conversation-item:hover .agent-conversation-delete,
+.agent-conversation-delete:focus-visible,
+.agent-conversation-delete[aria-expanded="true"] {
+  opacity: 1;
+}
+
+.agent-conversation-delete:hover,
+.agent-conversation-delete[aria-expanded="true"] {
+  color: var(--clay);
+  background: color-mix(in oklch, var(--clay) 12%, white);
+}
+
+.agent-delete-confirm {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px;
+  border-top: 1px solid color-mix(in oklch, var(--line) 70%, transparent);
+  margin-top: 2px;
+  padding: 8px 6px 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.agent-delete-confirm-button,
+.agent-delete-cancel-button {
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.agent-delete-confirm-button {
+  color: #fff;
+  background: var(--clay);
+}
+
+.agent-delete-cancel-button {
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.68);
+}
+
 .agent-new-chat {
   margin-bottom: 12px;
   font-weight: 700;
@@ -1543,7 +1626,7 @@ h3 {
   gap: 8px;
 }
 
-.agent-conversation-item span {
+.agent-conversation-select span {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1556,8 +1639,9 @@ h3 {
 }
 
 .agent-panel {
-  min-height: min(760px, calc(100dvh - 132px));
-  max-height: calc(100dvh - 132px);
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
   display: grid;
   grid-template-rows: 1fr auto auto;
   overflow: hidden;
@@ -1620,17 +1704,19 @@ h3 {
 }
 
 .chat-bubble {
-  max-width: min(720px, 78%);
+  max-width: min(900px, 100%);
   border-radius: 18px;
-  padding: 14px 18px;
+  padding: 16px 18px;
   color: var(--ink);
   background: var(--panel-soft);
-  line-height: 1.5;
-  font-size: 16px;
+  line-height: 1.62;
+  font-size: 15px;
+  overflow-wrap: break-word;
 }
 
 .chat-bubble-assistant {
   justify-self: start;
+  width: min(900px, 100%);
   border-top-left-radius: 8px;
   background: color-mix(in oklch, var(--blue-soft) 72%, white);
 }
@@ -1638,27 +1724,151 @@ h3 {
 .chat-bubble-user {
   grid-column: 1;
   justify-self: end;
+  max-width: min(680px, 78%);
   border-top-right-radius: 8px;
   color: #fff;
   background: linear-gradient(135deg, var(--sage), var(--sage-strong));
 }
 
+.rich-message-content {
+  display: grid;
+  gap: 12px;
+}
+
+.rich-heading {
+  margin: 0;
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1.28;
+  font-weight: 800;
+  text-wrap: pretty;
+}
+
+.rich-paragraph {
+  margin: 0;
+  max-width: 72ch;
+  color: color-mix(in oklch, var(--ink) 88%, var(--muted));
+}
+
+.rich-truncated {
+  margin: 0;
+  border: 1px solid color-mix(in oklch, var(--warn) 18%, var(--line));
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: var(--warn);
+  background: var(--warn-soft);
+  font-weight: 720;
+}
+
+.rich-strong {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.rich-code {
+  border: 1px solid color-mix(in oklch, var(--blue) 18%, var(--line));
+  border-radius: 6px;
+  padding: 1px 5px;
+  color: color-mix(in oklch, var(--blue) 70%, var(--ink));
+  background: rgba(255, 255, 255, 0.62);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.92em;
+}
+
+.rich-divider {
+  width: 100%;
+  height: 1px;
+  border: 0;
+  margin: 2px 0;
+  background: color-mix(in oklch, var(--blue) 18%, var(--line));
+}
+
+.rich-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.rich-list li {
+  padding-left: 2px;
+}
+
+.rich-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid color-mix(in oklch, var(--blue) 16%, var(--line));
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.rich-table-empty {
+  display: grid;
+  gap: 4px;
+  border: 1px solid color-mix(in oklch, var(--blue) 16%, var(--line));
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.rich-table-empty strong {
+  color: color-mix(in oklch, var(--blue) 58%, var(--ink));
+  font-size: 13px;
+}
+
+.rich-table-empty span {
+  font-size: 13px;
+}
+
+.rich-table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+
+.rich-table th,
+.rich-table td {
+  border-bottom: 1px solid color-mix(in oklch, var(--blue) 12%, var(--line));
+  padding: 9px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.rich-table th {
+  color: color-mix(in oklch, var(--blue) 58%, var(--ink));
+  background: color-mix(in oklch, var(--blue-soft) 50%, white);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.rich-table tr:last-child td {
+  border-bottom: 0;
+}
+
 .agent-suggestions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
   border-top: 1px solid var(--line);
-  padding: 12px 16px;
+  padding: 8px 14px 9px;
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .suggestion-button {
   border: 1px solid var(--line);
   border-radius: 999px;
-  padding: 8px 12px;
-  color: var(--muted);
-  background: rgba(255, 255, 255, 0.78);
+  min-height: 30px;
+  padding: 5px 9px;
+  color: color-mix(in oklch, var(--muted) 88%, var(--ink));
+  background: rgba(255, 255, 255, 0.58);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
   transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease, transform 0.18s ease;
 }
 
@@ -1666,7 +1876,7 @@ h3 {
   border-color: var(--accent);
   color: var(--accent-strong);
   background: var(--accent-soft);
-  transform: translateY(-1px);
+  transform: translateY(-0.5px);
 }
 
 .agent-composer {
@@ -1695,27 +1905,125 @@ h3 {
 
 .settings-grid {
   display: grid;
-  gap: 16px;
+  gap: 18px;
 }
 
 .settings-panel {
   display: grid;
-  gap: 18px;
+  gap: 20px;
+  padding: clamp(18px, 2.4vw, 28px);
+}
+
+.settings-panel > .panel-heading {
+  align-items: flex-start;
+  border-bottom: 1px solid color-mix(in oklch, var(--line) 78%, transparent);
+  padding-bottom: 16px;
+}
+
+.settings-panel > .panel-heading h2 {
+  margin: 0 0 4px;
+}
+
+.settings-panel > .panel-heading .page-subtitle {
+  max-width: 58ch;
+}
+
+.settings-panel .field {
+  gap: 8px;
+  color: color-mix(in oklch, var(--ink) 78%, var(--muted));
+  font-size: 12px;
+  font-weight: 760;
+  letter-spacing: 0.04em;
+}
+
+.settings-panel .field input,
+.settings-panel .field select,
+.settings-panel .field textarea {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid color-mix(in oklch, var(--line) 84%, var(--sage-soft));
+  border-radius: 14px;
+  padding: 11px 13px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.settings-panel .field textarea {
+  min-height: 104px;
+  resize: vertical;
+}
+
+.settings-panel .field input:focus,
+.settings-panel .field select:focus,
+.settings-panel .field textarea:focus {
+  outline: none;
+  border-color: color-mix(in oklch, var(--sage) 62%, var(--line));
+  background: #fff;
+  box-shadow: 0 0 0 4px color-mix(in oklch, var(--sage-soft) 72%, transparent);
+}
+
+.settings-form-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.settings-form-grid .field:nth-child(1),
+.settings-form-grid .field:nth-child(2) {
+  grid-column: span 2;
+}
+
+.settings-form-grid .field-span {
+  grid-column: span 2;
+}
+
+.settings-action-row {
+  justify-content: flex-end;
+  border-top: 1px solid color-mix(in oklch, var(--line) 70%, transparent);
+  padding-top: 14px;
+}
+
+.settings-grid > .toolbar {
+  justify-content: flex-end;
+  border: 1px solid color-mix(in oklch, var(--line) 82%, white);
+  border-radius: 18px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 12px 28px rgba(57, 72, 62, 0.06);
+}
+
+.settings-grid > .toolbar .message {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .connection-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr));
+  gap: 16px;
+  align-items: stretch;
 }
 
 .connection-card {
+  min-width: 0;
   display: grid;
-  gap: 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
+  grid-template-rows: auto 1fr;
+  gap: 14px;
+  border: 1px solid color-mix(in oklch, var(--line) 84%, white);
+  border-radius: 18px;
   padding: 16px;
-  background: rgba(255, 255, 255, 0.62);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(250, 252, 249, 0.72)),
+    var(--panel);
+  box-shadow: 0 12px 28px rgba(57, 72, 62, 0.06);
+}
+
+.connection-card-coros {
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in oklch, var(--sage-soft) 78%, transparent), transparent 17rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(247, 251, 247, 0.76));
 }
 
 .connection-auth,
@@ -1725,10 +2033,10 @@ h3 {
 }
 
 .connection-auth {
-  border: 1px solid color-mix(in oklch, var(--line) 78%, transparent);
-  border-radius: var(--radius-md);
-  padding: 12px;
-  background: color-mix(in oklch, var(--panel-soft) 72%, white);
+  border: 1px solid color-mix(in oklch, var(--line) 76%, transparent);
+  border-radius: 16px;
+  padding: 14px;
+  background: color-mix(in oklch, var(--panel-soft) 78%, white);
 }
 
 .auth-grid {
@@ -1756,6 +2064,18 @@ h3 {
   gap: 12px;
 }
 
+.connection-card-heading {
+  min-height: 44px;
+  border-bottom: 1px solid color-mix(in oklch, var(--line) 70%, transparent);
+  padding-bottom: 12px;
+}
+
+.connection-card-heading strong {
+  color: var(--ink-strong);
+  font-size: 15px;
+  font-weight: 820;
+}
+
 .toggle-field {
   display: inline-flex;
   align-items: center;
@@ -1770,6 +2090,17 @@ h3 {
   accent-color: var(--sage);
 }
 
+.coros-mcp-minimal {
+  min-height: 128px;
+  align-content: center;
+  justify-items: start;
+  gap: 12px;
+}
+
+.coros-mcp-minimal .button {
+  width: 100%;
+}
+
 .test-result-list {
   display: grid;
   gap: 10px;
@@ -1780,10 +2111,10 @@ h3 {
   grid-template-columns: minmax(120px, 0.4fr) auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in oklch, var(--line) 84%, transparent);
+  border-radius: 16px;
   padding: 13px 14px;
-  background: rgba(255, 255, 255, 0.62);
+  background: rgba(255, 255, 255, 0.74);
 }
 
 .test-result span {
@@ -2014,6 +2345,8 @@ summary:focus-visible {
   }
 
   .agent-workspace {
+    height: auto;
+    min-height: 0;
     grid-template-columns: 1fr;
   }
 
@@ -2053,11 +2386,21 @@ summary:focus-visible {
   }
 
   .agent-panel {
+    height: 500px;
     min-height: 500px;
+    max-height: none;
   }
 
   .connection-grid {
     grid-template-columns: 1fr;
+  }
+
+  .settings-form-grid,
+  .settings-form-grid .field:nth-child(1),
+  .settings-form-grid .field:nth-child(2),
+  .settings-form-grid .field-span {
+    grid-template-columns: 1fr;
+    grid-column: 1 / -1;
   }
 
   .connection-card-heading,
@@ -2071,6 +2414,11 @@ summary:focus-visible {
 
   .auth-grid {
     grid-template-columns: 1fr;
+  }
+
+  .settings-grid > .toolbar,
+  .settings-grid > .toolbar .button {
+    width: 100%;
   }
 
   .insight-side {

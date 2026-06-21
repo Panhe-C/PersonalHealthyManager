@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsForm } from "@/components/SettingsForm";
 import { defaultDataMcpConnections } from "@/src/settings/defaults";
@@ -187,7 +187,7 @@ describe("SettingsForm", () => {
     expect(await screen.findByText("Model responded.")).toBeInTheDocument();
   });
 
-  it("sends the current MCP draft when testing a connection", async () => {
+  it("sends the current MCP draft when testing a non-COROS connection", async () => {
     render(
       <SettingsForm
         initialSettings={{
@@ -201,9 +201,9 @@ describe("SettingsForm", () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText("Auth type for COROS"), { target: { value: "bearer" } });
-    fireEvent.change(screen.getByLabelText("Endpoint for COROS"), { target: { value: "https://mcp.example.test/coros" } });
-    fireEvent.change(screen.getByLabelText("Bearer token for COROS"), { target: { value: "coros-token-123456" } });
+    fireEvent.change(screen.getByLabelText("Auth type for Calendar"), { target: { value: "bearer" } });
+    fireEvent.change(screen.getByLabelText("Endpoint for Calendar"), { target: { value: "https://mcp.example.test/calendar" } });
+    fireEvent.change(screen.getByLabelText("Bearer token for Calendar"), { target: { value: "calendar-token-123456" } });
     fireEvent.click(screen.getAllByRole("button", { name: "Test" })[0]);
 
     await waitFor(() => {
@@ -218,20 +218,20 @@ describe("SettingsForm", () => {
     const [, requestInit] = vi.mocked(fetch).mock.calls.at(-1) ?? [];
     const body = JSON.parse(String(requestInit?.body));
     expect(body).toEqual({
-      target: "coros",
+      target: "calendar",
       draft: expect.objectContaining({
         dataMcpConnections: expect.arrayContaining([
           expect.objectContaining({
-            id: "coros",
-            endpoint: "https://mcp.example.test/coros",
-            auth: { type: "bearer", token: "coros-token-123456" }
+            id: "calendar",
+            endpoint: "https://mcp.example.test/calendar",
+            auth: { type: "bearer", token: "calendar-token-123456" }
           })
         ])
       })
     });
   });
 
-  it("renders the official COROS MCP region selector and URL preview", () => {
+  it("renders COROS MCP as a connect-only card with expiry status", () => {
     render(
       <SettingsForm
         initialSettings={{
@@ -240,62 +240,42 @@ describe("SettingsForm", () => {
           modelBaseUrl: "https://api.openai.com/v1",
           hasApiKey: false,
           apiKeyHint: null,
-          dataMcpConnections: defaultDataMcpConnections
+          dataMcpConnections: [
+            {
+              ...defaultDataMcpConnections[0],
+              endpoint: "https://mcpcn.coros.com/mcp",
+              auth: {
+                type: "oauth2",
+                accessTokenHint: "...cdef",
+                expiresAt: "2026-06-22T08:30:00.000Z"
+              }
+            },
+            defaultDataMcpConnections[1],
+            defaultDataMcpConnections[2]
+          ]
         }}
       />
     );
 
-    expect(screen.getByLabelText("COROS MCP region")).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "China" })).toHaveValue("china");
-    expect(screen.getByRole("option", { name: "North America or other regions" })).toHaveValue("us");
-    expect(screen.getByRole("option", { name: "Europe" })).toHaveValue("eu");
-    expect(
-      screen.getByText(
-        /Select the region that matches your COROS account\. This applies COROS's official regional MCP URLs \(China,/i
-      )
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText((_, element) =>
-        Boolean(
-          element?.tagName === "P" &&
-            element.textContent?.includes(
-              "Click Connect COROS to confirm your region on the server, then your browser opens COROS's login page. After you sign in, COROS redirects back here"
-            )
-        )
-      )
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Official COROS MCP hosts register an OAuth client for this app automatically\./i)
-    ).toBeInTheDocument();
-    expect(screen.getByText(/Changing host or port re-registers the OAuth client/i)).toBeInTheDocument();
-    expect(
-      screen.getByText((_, element) =>
-        Boolean(element?.tagName === "P" && element.textContent?.includes("try allowing cookies for coros.com"))
-      )
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Connect COROS" })).not.toBeInTheDocument();
+    const corosCard = screen.getByText("COROS").closest("article");
+    expect(corosCard).not.toBeNull();
+    const corosScope = within(corosCard as HTMLElement);
+
+    expect(corosScope.getByRole("button", { name: "Connect COROS" })).toBeInTheDocument();
+    expect(corosScope.getByText(/Expires /)).toBeInTheDocument();
+    expect(corosScope.queryByRole("button", { name: "Test" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("COROS MCP region")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("MCP server for COROS")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Capability for COROS")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Endpoint for COROS")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Login URL for COROS")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Auth type for COROS")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Notes for COROS")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Select the region that matches your COROS account/i)).not.toBeInTheDocument();
   });
 
-  it("auto-fills the COROS MCP endpoint when the region changes", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        modelProvider: "openai",
-        modelName: "gpt-4o-mini",
-        modelBaseUrl: "https://api.openai.com/v1",
-        hasApiKey: false,
-        apiKeyHint: null,
-        dataMcpConnections: [
-          {
-            ...defaultDataMcpConnections[0],
-            corosRegion: "eu",
-            endpoint: "https://mcpeu.coros.com/mcp"
-          },
-          defaultDataMcpConnections[1],
-          defaultDataMcpConnections[2]
-        ]
-      })
-    } as never);
+  it("prepares COROS login with the saved endpoint", async () => {
+    vi.mocked(fetch).mockReturnValueOnce(new Promise(() => {}) as never);
 
     render(
       <SettingsForm
@@ -305,32 +285,34 @@ describe("SettingsForm", () => {
           modelBaseUrl: "https://api.openai.com/v1",
           hasApiKey: false,
           apiKeyHint: null,
-          dataMcpConnections: defaultDataMcpConnections
+          dataMcpConnections: [
+            {
+              ...defaultDataMcpConnections[0],
+              endpoint: "https://mcpeu.coros.com/mcp",
+              corosRegion: "eu"
+            },
+            defaultDataMcpConnections[1],
+            defaultDataMcpConnections[2]
+          ]
         }}
       />
     );
 
-    fireEvent.change(screen.getByLabelText("COROS MCP region"), { target: { value: "eu" } });
-
-    expect(screen.getByLabelText("Endpoint for COROS")).toHaveValue("https://mcpeu.coros.com/mcp");
-    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Connect COROS" }));
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith(
-        "/api/settings",
+        "/api/settings/mcp/coros/prep",
         expect.objectContaining({
           method: "POST"
         })
       );
     });
     const [, requestInit] = vi.mocked(fetch).mock.calls.at(-1) ?? [];
-    expect(JSON.parse(String(requestInit?.body)).dataMcpConnections[0]).toEqual(
-      expect.objectContaining({
-        id: "coros",
-        corosRegion: "eu",
-        endpoint: "https://mcpeu.coros.com/mcp"
-      })
-    );
+    expect(JSON.parse(String(requestInit?.body))).toEqual({
+      endpoint: "https://mcpeu.coros.com/mcp",
+      corosRegion: "eu"
+    });
   });
 
   it("shows an OAuth callback success message from the current URL", () => {
@@ -352,7 +334,7 @@ describe("SettingsForm", () => {
     expect(screen.getByText("COROS OAuth connected.")).toBeInTheDocument();
   });
 
-  it("saves MCP bearer authentication fields with the connection draft", async () => {
+  it("saves non-COROS MCP bearer authentication fields with the connection draft", async () => {
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -364,10 +346,13 @@ describe("SettingsForm", () => {
         dataMcpConnections: [
           {
             ...defaultDataMcpConnections[0],
-            endpoint: "https://mcp.example.test/coros",
+            endpoint: "https://mcpcn.coros.com/mcp"
+          },
+          {
+            ...defaultDataMcpConnections[1],
+            endpoint: "https://mcp.example.test/calendar",
             auth: { type: "bearer", tokenHint: "...3456" }
           },
-          defaultDataMcpConnections[1],
           defaultDataMcpConnections[2]
         ]
       })
@@ -386,9 +371,9 @@ describe("SettingsForm", () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText("Auth type for COROS"), { target: { value: "bearer" } });
-    fireEvent.change(screen.getByLabelText("Endpoint for COROS"), { target: { value: "https://mcp.example.test/coros" } });
-    fireEvent.change(screen.getByLabelText("Bearer token for COROS"), { target: { value: "coros-token-123456" } });
+    fireEvent.change(screen.getByLabelText("Auth type for Calendar"), { target: { value: "bearer" } });
+    fireEvent.change(screen.getByLabelText("Endpoint for Calendar"), { target: { value: "https://mcp.example.test/calendar" } });
+    fireEvent.change(screen.getByLabelText("Bearer token for Calendar"), { target: { value: "calendar-token-123456" } });
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
 
     await waitFor(() => {
@@ -402,15 +387,15 @@ describe("SettingsForm", () => {
 
     const [, requestInit] = vi.mocked(fetch).mock.calls.at(-1) ?? [];
     const body = JSON.parse(String(requestInit?.body));
-    expect(body.dataMcpConnections[0]).toEqual(
+    expect(body.dataMcpConnections[1]).toEqual(
       expect.objectContaining({
-        endpoint: "https://mcp.example.test/coros",
-        auth: { type: "bearer", token: "coros-token-123456" }
+        endpoint: "https://mcp.example.test/calendar",
+        auth: { type: "bearer", token: "calendar-token-123456" }
       })
     );
   });
 
-  it("renders OAuth2 fields and login link for an MCP connection", () => {
+  it("renders OAuth2 fields and login link for a non-COROS MCP connection", () => {
     render(
       <SettingsForm
         initialSettings={{
@@ -421,7 +406,7 @@ describe("SettingsForm", () => {
           apiKeyHint: null,
           dataMcpConnections: [
             {
-              ...defaultDataMcpConnections[0],
+              ...defaultDataMcpConnections[1],
               auth: {
                 type: "oauth2",
                 authorizeUrl: "https://login.example.test/oauth/authorize",
@@ -431,22 +416,22 @@ describe("SettingsForm", () => {
                 accessTokenHint: "...cdef"
               }
             },
-            defaultDataMcpConnections[1],
+            defaultDataMcpConnections[0],
             defaultDataMcpConnections[2]
           ]
         }}
       />
     );
 
-    expect(screen.getByLabelText("Auth type for COROS")).toHaveValue("oauth2");
-    expect(screen.getByLabelText("Authorize URL for COROS")).toHaveValue("https://login.example.test/oauth/authorize");
-    expect(screen.getByLabelText("Token URL for COROS")).toHaveValue("https://login.example.test/oauth/token");
-    expect(screen.getByLabelText("Client ID for COROS")).toHaveValue("client-1");
-    expect(screen.getByLabelText("Scopes for COROS")).toHaveValue("sleep recovery");
+    expect(screen.getByLabelText("Auth type for Calendar")).toHaveValue("oauth2");
+    expect(screen.getByLabelText("Authorize URL for Calendar")).toHaveValue("https://login.example.test/oauth/authorize");
+    expect(screen.getByLabelText("Token URL for Calendar")).toHaveValue("https://login.example.test/oauth/token");
+    expect(screen.getByLabelText("Client ID for Calendar")).toHaveValue("client-1");
+    expect(screen.getByLabelText("Scopes for Calendar")).toHaveValue("sleep recovery");
     expect(screen.getByText("OAuth token · ...cdef")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Login COROS" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Login Calendar" })).toHaveAttribute(
       "href",
-      "/api/settings/mcp/oauth/start?connection=coros"
+      "/api/settings/mcp/oauth/start?connection=calendar"
     );
   });
 });

@@ -73,4 +73,46 @@ describe("agent context", () => {
       error: "COROS MCP endpoint is not configured."
     });
   });
+
+  it("keeps local activity context for weekly sport analysis when fresh sync fails", async () => {
+    vi.mocked(syncCorosFromSettings).mockRejectedValue(new Error("COROS MCP returned HTTP 404."));
+    vi.mocked(prisma.activityRecord.findMany).mockResolvedValue([
+      {
+        startedAt: new Date("2026-06-20T06:00:00+08:00"),
+        sportType: "boxing",
+        durationMinutes: 60,
+        distanceKm: null,
+        averageHeartRateBpm: 130,
+        intensity: "easy"
+      },
+      {
+        startedAt: new Date("2026-06-17T06:30:00+08:00"),
+        sportType: "run",
+        durationMinutes: 45,
+        distanceKm: 7.2,
+        averageHeartRateBpm: 148,
+        intensity: "moderate"
+      }
+    ] as never);
+
+    const context = await buildAgentContext("user-1", "training_analysis", "拉取最新数据，分析本周运动情况");
+
+    expect(context.freshSync).toEqual({
+      attempted: true,
+      succeeded: false,
+      error: "COROS MCP returned HTTP 404."
+    });
+    expect(context.sections).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          title: "Recent activities",
+          content: expect.stringContaining("2026-06-20: boxing, 60 min, HR 130, intensity easy.")
+        }),
+        expect.objectContaining({
+          title: "Recent activities",
+          content: expect.stringContaining("2026-06-17: run, 45 min, 7.2 km, HR 148, intensity moderate.")
+        })
+      ])
+    );
+  });
 });

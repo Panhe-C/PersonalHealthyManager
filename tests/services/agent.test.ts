@@ -25,6 +25,12 @@ describe("agent response shell", () => {
     expect(response.intent).toBe("calendar_confirmation");
   });
 
+  it("routes weekly activity data questions to training analysis", () => {
+    const response = createAgentResponse("看下我这周的运动数据");
+
+    expect(response.intent).toBe("training_analysis");
+  });
+
   it("routes meal questions to menu advice", () => {
     const response = createAgentResponse("今天午餐这些菜怎么选？");
 
@@ -101,6 +107,61 @@ describe("agent response shell", () => {
     const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body));
     expect(payload.messages[0].content).toContain("Recent recovery");
     expect(payload.messages[0].content).toContain("COROS MCP endpoint is not configured");
+  });
+
+  it("adds intent-specific instructions to configured model prompts", async () => {
+    vi.mocked(loadModelRuntimeConfig).mockResolvedValue({
+      provider: "deepseek",
+      providerLabel: "DeepSeek",
+      modelName: "deepseek-v4-flash",
+      baseUrl: "https://api.deepseek.com",
+      apiKey: "sk-configured"
+    });
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: "今天建议恢复训练。" } }] })
+    } as never);
+
+    await createAgentResponseForUser("user-1", "昨晚没睡好，今天还能跑吗？", [], {
+      intent: "recovery_check",
+      freshSync: { attempted: false, succeeded: false },
+      sections: [{ title: "Recent sleep", content: "2026-06-20: 360 min, score 58." }]
+    });
+
+    const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body));
+    expect(payload.messages[0].content).toContain("Recovery check instructions:");
+    expect(payload.messages[0].content).toContain("prioritize sleep quality, recovery score, HRV, resting heart rate, and recent hard sessions");
+    expect(payload.messages[0].content).toContain("If you use a table, include at least one data row");
+    expect(payload.messages[0].content).not.toContain("Calendar confirmation instructions:");
+  });
+
+  it("falls back instead of using an incomplete OpenAI-compatible model response", async () => {
+    vi.mocked(loadModelRuntimeConfig).mockResolvedValue({
+      provider: "deepseek",
+      providerLabel: "DeepSeek",
+      modelName: "deepseek-v4-flash",
+      baseUrl: "https://api.deepseek.com",
+      apiKey: "sk-configured"
+    });
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            finish_reason: "length",
+            message: { content: "好的，以下是对你 **6月15日（周一）至6月20日（周六）** 这一周运动" }
+          }
+        ]
+      })
+    } as never);
+
+    const response = await createAgentResponseForUser("user-1", "分析我这周的运动数据");
+
+    expect(response.source).toBe("rules");
+    expect(response.error).toBe("DeepSeek response was cut off before completion.");
+    expect(response.message).toContain("DeepSeek response was cut off");
+    expect(response.message).toContain("using local guidance instead");
+    expect(response.message).not.toContain("这一周运动");
   });
 
   it("shows the provider error when the configured model call fails", async () => {

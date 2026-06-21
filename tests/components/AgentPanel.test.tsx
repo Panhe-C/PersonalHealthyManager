@@ -66,6 +66,71 @@ describe("AgentPanel", () => {
     expect(screen.getByText("Recovery answer")).toBeInTheDocument();
   });
 
+  it("renders assistant markdown as structured rich content", () => {
+    const markdown = [
+      "### 睡眠时长与评分概览",
+      "| 日期 | 时长 | 评分 |",
+      "| --- | --- | --- |",
+      "| 6月17日 | 591 | 73 |",
+      "| 6月18日 | 462 | 64 |",
+      "",
+      "**关键发现**：6月21日睡眠时长偏短。",
+      "- 建议今天降低训练强度"
+    ].join("\n");
+
+    render(
+      <AgentPanel
+        initialConversations={conversations}
+        initialConversationId="conv-1"
+        initialMessages={[{ id: "assistant-1", role: "assistant", content: markdown }]}
+      />
+    );
+
+    const assistantMessage = screen.getByLabelText("AI message");
+    expect(within(assistantMessage).getByRole("heading", { name: "睡眠时长与评分概览" })).toBeInTheDocument();
+    expect(within(assistantMessage).getByRole("table")).toBeInTheDocument();
+    expect(within(assistantMessage).getByText("关键发现")).toHaveClass("rich-strong");
+    expect(within(assistantMessage).getByText("建议今天降低训练强度")).toBeInTheDocument();
+    expect(assistantMessage).not.toHaveTextContent("| --- | --- | --- |");
+  });
+
+  it("renders an explanatory fallback instead of an empty markdown table", () => {
+    const markdown = ["### 改进建议", "| 当前问题 | 建议调整 |", "| --- | --- |"].join("\n");
+
+    render(
+      <AgentPanel
+        initialConversations={conversations}
+        initialConversationId="conv-1"
+        initialMessages={[{ id: "assistant-1", role: "assistant", content: markdown }]}
+      />
+    );
+
+    const assistantMessage = screen.getByLabelText("AI message");
+    expect(within(assistantMessage).queryByRole("table")).not.toBeInTheDocument();
+    expect(within(assistantMessage).getByText("当前问题 / 建议调整")).toBeInTheDocument();
+    expect(within(assistantMessage).getByText("这张表没有提供明细。")).toBeInTheDocument();
+  });
+
+  it("shows a retry notice for clearly truncated assistant messages", () => {
+    render(
+      <AgentPanel
+        initialConversations={conversations}
+        initialConversationId="conv-1"
+        initialMessages={[
+          {
+            id: "assistant-1",
+            role: "assistant",
+            content: "好的，以下是对你 **6月15日（周一）至6月20日（周六）** 这一周运动"
+          }
+        ]}
+      />
+    );
+
+    const assistantMessage = screen.getByLabelText("AI message");
+    expect(within(assistantMessage).getByText("这条回复生成时被截断了，请重新发送问题以获取完整分析。")).toBeInTheDocument();
+    expect(assistantMessage).not.toHaveTextContent("这一周运动");
+  });
+
   it("loads messages when switching conversations", async () => {
     vi.stubGlobal(
       "fetch",
@@ -90,6 +155,62 @@ describe("AgentPanel", () => {
     vi.unstubAllGlobals();
   });
 
+  it("tailors suggested prompts to the current conversation content", () => {
+    render(
+      <AgentPanel
+        initialConversations={conversations}
+        initialConversationId="conv-1"
+        initialMessages={[
+          { id: "user-1", role: "user", content: "分析我这周的运动数据" },
+          { id: "assistant-1", role: "assistant", content: "本周跑步训练量偏高，建议降低强度；如果感到疲劳可减少一次。" }
+        ]}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "拉取最新 COROS 数据后再分析" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "给我下周跑步安排" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "今天午餐这些菜怎么选？" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "给我下周跑步安排" }));
+    expect(screen.getByPlaceholderText("Ask about training, recovery, calendar, or meals")).toHaveValue("给我下周跑步安排");
+  });
+
+  it("refreshes suggested prompts after switching conversations", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        expect(String(input)).toBe("/api/agent/conversations/conv-2");
+        return {
+          ok: true,
+          json: async () => ({
+            id: "conv-2",
+            title: "Calendar",
+            updatedAt: "2026-06-20T01:00:00.000Z",
+            messages: [
+              { id: "user-2", role: "user", content: "帮我把本周训练写入飞书日历" },
+              { id: "assistant-2", role: "assistant", content: "我可以先生成日历草稿，确认后再写入飞书。" }
+            ]
+          })
+        };
+      })
+    );
+
+    render(
+      <AgentPanel
+        initialConversations={conversations}
+        initialConversationId="conv-1"
+        initialMessages={[{ id: "user-1", role: "user", content: "分析我这周的运动数据" }]}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "拉取最新 COROS 数据后再分析" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Calendar" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "查看明天有哪些训练空档" })).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "拉取最新 COROS 数据后再分析" })).not.toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
   it("creates and selects a new conversation", async () => {
     vi.stubGlobal(
       "fetch",
@@ -108,6 +229,49 @@ describe("AgentPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "New chat" }));
 
     await waitFor(() => expect(screen.getByRole("button", { name: "New conversation" })).toHaveAttribute("aria-pressed", "true"));
+    vi.unstubAllGlobals();
+  });
+
+  it("confirms and deletes the selected conversation, then loads the next conversation", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input) === "/api/agent/conversations/conv-1") {
+          expect(init?.method).toBe("DELETE");
+          return {
+            ok: true,
+            json: async () => ({ deleted: true })
+          };
+        }
+        if (String(input) === "/api/agent/conversations/conv-2") {
+          return {
+            ok: true,
+            json: async () => ({
+              id: "conv-2",
+              title: "Calendar",
+              updatedAt: "2026-06-20T01:00:00.000Z",
+              messages: [{ id: "msg-2", role: "assistant", content: "Calendar answer" }]
+            })
+          };
+        }
+        throw new Error(`Unexpected request: ${String(input)}`);
+      })
+    );
+
+    render(
+      <AgentPanel
+        initialConversations={conversations}
+        initialConversationId="conv-1"
+        initialMessages={[{ id: "msg-1", role: "assistant", content: "Recovery answer" }]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete conversation Recovery" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete Recovery" }));
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Recovery" })).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Calendar" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("Calendar answer")).toBeInTheDocument();
     vi.unstubAllGlobals();
   });
 

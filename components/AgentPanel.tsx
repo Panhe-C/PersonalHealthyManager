@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Send } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { Send, Trash2 } from "lucide-react";
 import { ActionButton } from "@/components/ActionButton";
 
 type ChatMessage = {
@@ -23,11 +23,242 @@ type AgentPanelProps = {
   initialMessages: ChatMessage[];
 };
 
-const suggestions = [
+const fallbackSuggestions = [
   "我昨晚没睡好，今天还适合跑吗？",
   "帮我把本周训练写入飞书日历",
   "今天午餐这些菜怎么选？"
 ];
+
+const suggestionGroups = {
+  truncated: ["重新生成这次完整分析", "拉取最新 COROS 数据后再分析", "总结最需要调整的三件事"],
+  recovery: ["我昨晚没睡好，今天还适合跑吗？", "今天改成恢复训练可以吗？", "看下最近 HRV 和静息心率"],
+  training: ["拉取最新 COROS 数据后再分析", "给我下周跑步安排", "哪些训练需要降低强度？"],
+  calendar: ["帮我把本周训练写入飞书日历", "查看明天有哪些训练空档", "生成下周训练日历草稿"],
+  meal: ["今天午餐这些菜怎么选？", "训练日前后怎么吃？", "帮我按蛋白质优先选餐"],
+  replan: ["按恢复状态调整本周计划", "把高强度训练挪到哪天？", "重新生成更保守的计划"]
+};
+
+function uniqueSuggestions(items: string[]) {
+  return Array.from(new Set(items)).slice(0, 3);
+}
+
+function buildSuggestions(messages: ChatMessage[]) {
+  const recentMessages = messages.slice(-6);
+  const recentText = recentMessages.map((item) => item.content).join("\n").toLowerCase();
+  const latestAssistant = [...recentMessages].reverse().find((item) => item.role === "assistant");
+
+  if (latestAssistant && isLikelyTruncatedAssistantContent(latestAssistant.content)) {
+    return suggestionGroups.truncated;
+  }
+
+  if (/飞书|日历|calendar|空档|写入|草稿|安排到|预约/.test(recentText)) {
+    return suggestionGroups.calendar;
+  }
+
+  if (/睡|hrv|静息|压力|没睡好|恢复状态|恢复情况|recovery/.test(recentText)) {
+    return uniqueSuggestions([...suggestionGroups.recovery, ...suggestionGroups.replan]);
+  }
+
+  if (/午餐|晚餐|早餐|菜|饮食|蛋白|碳水|meal|吃/.test(recentText)) {
+    return suggestionGroups.meal;
+  }
+
+  if (/运动|训练|跑|跑步|强度|配速|coros|负荷|马拉松|周计划|计划/.test(recentText)) {
+    return uniqueSuggestions([...suggestionGroups.training, ...suggestionGroups.replan]);
+  }
+
+  return fallbackSuggestions;
+}
+
+function normalizeMarkdown(content: string) {
+  return content
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+---[ \t]+(#{1,4}[ \t]+)/g, "\n---\n$1")
+    .replace(/([^\n])([ \t]+#{2,4}[ \t]+)/g, "$1\n$2");
+}
+
+function renderInline(text: string) {
+  const nodes: React.ReactNode[] = [];
+  const pattern = /(\*\*([^*]+)\*\*|`([^`]+)`)/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > cursor) nodes.push(text.slice(cursor, match.index));
+    if (match[2]) {
+      nodes.push(
+        <strong className="rich-strong" key={`${match.index}-strong`}>
+          {match[2]}
+        </strong>
+      );
+    } else if (match[3]) {
+      nodes.push(
+        <code className="rich-code" key={`${match.index}-code`}>
+          {match[3]}
+        </code>
+      );
+    }
+    cursor = match.index + match[0].length;
+  }
+
+  if (cursor < text.length) nodes.push(text.slice(cursor));
+  return nodes.length > 0 ? nodes : text;
+}
+
+function parseTableRow(line: string) {
+  return line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+}
+
+function isTableLine(line: string) {
+  const value = line.trim();
+  return value.startsWith("|") && value.endsWith("|") && parseTableRow(value).length > 1;
+}
+
+function isTableDivider(line: string) {
+  const cells = parseTableRow(line);
+  return cells.length > 1 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+}
+
+function isLikelyTruncatedAssistantContent(content: string) {
+  if (content.includes("|")) return false;
+
+  const plain = content
+    .replace(/\*\*/g, "")
+    .replace(/`/g, "")
+    .trim();
+
+  if (plain.length === 0 || plain.length > 120) return false;
+  if (/[。.!！？?）)]$/.test(plain)) return false;
+  return /以下是|分析|这一周|本周|建议|概览/.test(plain);
+}
+
+function RichMessageContent({ content }: { content: string }) {
+  if (isLikelyTruncatedAssistantContent(content)) {
+    return (
+      <div className="rich-message-content">
+        <p className="rich-truncated">这条回复生成时被截断了，请重新发送问题以获取完整分析。</p>
+      </div>
+    );
+  }
+
+  const lines = normalizeMarkdown(content).split("\n");
+  const blocks: React.ReactNode[] = [];
+  let paragraph: string[] = [];
+
+  function flushParagraph() {
+    if (paragraph.length === 0) return;
+    const text = paragraph.join(" ").trim();
+    if (text) {
+      blocks.push(
+        <p className="rich-paragraph" key={`p-${blocks.length}`}>
+          {renderInline(text)}
+        </p>
+      );
+    }
+    paragraph = [];
+  }
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index].trim();
+
+    if (!line) {
+      flushParagraph();
+      continue;
+    }
+
+    if (/^-{3,}$/.test(line)) {
+      flushParagraph();
+      blocks.push(<hr className="rich-divider" key={`hr-${blocks.length}`} />);
+      continue;
+    }
+
+    const headingMatch = /^(#{2,4})\s+(.+)$/.exec(line);
+    if (headingMatch) {
+      flushParagraph();
+      const HeadingTag = headingMatch[1].length === 2 ? "h2" : "h3";
+      blocks.push(
+        <HeadingTag className="rich-heading" key={`h-${blocks.length}`}>
+          {renderInline(headingMatch[2].trim())}
+        </HeadingTag>
+      );
+      continue;
+    }
+
+    if (isTableLine(line) && lines[index + 1] && isTableDivider(lines[index + 1])) {
+      flushParagraph();
+      const headers = parseTableRow(line);
+      const rows: string[][] = [];
+      index += 2;
+      while (index < lines.length && isTableLine(lines[index])) {
+        rows.push(parseTableRow(lines[index]));
+        index += 1;
+      }
+      index -= 1;
+
+      if (rows.length === 0) {
+        blocks.push(
+          <div className="rich-table-empty" key={`table-empty-${blocks.length}`}>
+            <strong>{headers.join(" / ")}</strong>
+            <span>这张表没有提供明细。</span>
+          </div>
+        );
+        continue;
+      }
+
+      blocks.push(
+        <div className="rich-table-wrap" key={`table-${blocks.length}`}>
+          <table className="rich-table">
+            <thead>
+              <tr>
+                {headers.map((header, headerIndex) => (
+                  <th key={`${header}-${headerIndex}`}>{renderInline(header)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, rowIndex) => (
+                <tr key={`row-${rowIndex}`}>
+                  {headers.map((_, cellIndex) => (
+                    <td key={`cell-${rowIndex}-${cellIndex}`}>{renderInline(row[cellIndex] ?? "")}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+      continue;
+    }
+
+    if (/^[-*]\s+/.test(line)) {
+      flushParagraph();
+      const items: string[] = [];
+      while (index < lines.length && /^[-*]\s+/.test(lines[index].trim())) {
+        items.push(lines[index].trim().replace(/^[-*]\s+/, ""));
+        index += 1;
+      }
+      index -= 1;
+      blocks.push(
+        <ul className="rich-list" key={`ul-${blocks.length}`}>
+          {items.map((item, itemIndex) => (
+            <li key={`${item}-${itemIndex}`}>{renderInline(item)}</li>
+          ))}
+        </ul>
+      );
+      continue;
+    }
+
+    paragraph.push(line);
+  }
+
+  flushParagraph();
+  return <div className="rich-message-content">{blocks}</div>;
+}
 
 export function AgentPanel({ initialConversations, initialConversationId, initialMessages }: AgentPanelProps) {
   const [message, setMessage] = useState("");
@@ -35,9 +266,12 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
   const [conversations, setConversations] = useState(initialConversations);
   const [selectedConversationId, setSelectedConversationId] = useState(initialConversationId);
   const [loadingConversation, setLoadingConversation] = useState(false);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState("");
+  const [deletingConversationId, setDeletingConversationId] = useState("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const messagesRef = useRef<HTMLDivElement | null>(null);
+  const suggestions = useMemo(() => buildSuggestions(messages), [messages]);
 
   useEffect(() => {
     const messagesElement = messagesRef.current;
@@ -50,8 +284,7 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
     }
   }, [messages.length]);
 
-  async function selectConversation(conversationId: string) {
-    if (conversationId === selectedConversationId || loadingConversation) return;
+  async function loadConversation(conversationId: string) {
     setLoadingConversation(true);
     setError("");
     const response = await fetch(`/api/agent/conversations/${conversationId}`);
@@ -66,6 +299,12 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
       setError(body.error ?? "Conversation could not be loaded.");
     }
     setLoadingConversation(false);
+  }
+
+  async function selectConversation(conversationId: string) {
+    if (conversationId === selectedConversationId || loadingConversation) return;
+    setConfirmingDeleteId("");
+    await loadConversation(conversationId);
   }
 
   async function createConversation() {
@@ -83,6 +322,36 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
       setError(body.error ?? "Conversation could not be created.");
     }
     setLoadingConversation(false);
+  }
+
+  async function deleteConversation(conversationId: string) {
+    if (deletingConversationId) return;
+
+    setDeletingConversationId(conversationId);
+    setError("");
+    const response = await fetch(`/api/agent/conversations/${conversationId}`, { method: "DELETE" });
+    const body = await response.json();
+
+    if (!response.ok) {
+      setError(body.error ?? "Conversation could not be deleted.");
+      setDeletingConversationId("");
+      return;
+    }
+
+    const remaining = conversations.filter((item) => item.id !== conversationId);
+    setConversations(remaining);
+    setConfirmingDeleteId("");
+    setDeletingConversationId("");
+
+    if (conversationId !== selectedConversationId) return;
+    if (remaining.length > 0) {
+      await loadConversation(remaining[0].id);
+      return;
+    }
+
+    setSelectedConversationId("");
+    setMessages([]);
+    await createConversation();
   }
 
   async function send(event: FormEvent<HTMLFormElement>) {
@@ -124,15 +393,46 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
         </button>
         <div className="agent-conversation-list">
           {conversations.map((conversation) => (
-            <button
-              type="button"
+            <div
               key={conversation.id}
               className={conversation.id === selectedConversationId ? "agent-conversation-item active" : "agent-conversation-item"}
-              aria-pressed={conversation.id === selectedConversationId}
-              onClick={() => selectConversation(conversation.id)}
             >
-              <span>{conversation.title}</span>
-            </button>
+              <button
+                type="button"
+                className="agent-conversation-select"
+                aria-pressed={conversation.id === selectedConversationId}
+                onClick={() => selectConversation(conversation.id)}
+              >
+                <span>{conversation.title}</span>
+              </button>
+              <button
+                type="button"
+                className="agent-conversation-delete"
+                aria-label={`Delete conversation ${conversation.title}`}
+                aria-expanded={confirmingDeleteId === conversation.id}
+                onClick={() => setConfirmingDeleteId((value) => (value === conversation.id ? "" : conversation.id))}
+                disabled={Boolean(deletingConversationId)}
+              >
+                <Trash2 aria-hidden="true" size={15} />
+              </button>
+              {confirmingDeleteId === conversation.id ? (
+                <div className="agent-delete-confirm" role="group" aria-label={`Delete ${conversation.title} confirmation`}>
+                  <span>Delete this chat?</span>
+                  <button
+                    type="button"
+                    className="agent-delete-confirm-button"
+                    aria-label={`Confirm delete ${conversation.title}`}
+                    onClick={() => deleteConversation(conversation.id)}
+                    disabled={deletingConversationId === conversation.id}
+                  >
+                    {deletingConversationId === conversation.id ? "Deleting" : "Delete"}
+                  </button>
+                  <button type="button" className="agent-delete-cancel-button" onClick={() => setConfirmingDeleteId("")}>
+                    Cancel
+                  </button>
+                </div>
+              ) : null}
+            </div>
           ))}
         </div>
       </aside>
@@ -156,7 +456,7 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
                   {item.role === "user" ? "You" : "AI"}
                 </span>
                 <div className={item.role === "user" ? "chat-bubble chat-bubble-user" : "chat-bubble chat-bubble-assistant"}>
-                  {item.content}
+                  {item.role === "assistant" ? <RichMessageContent content={item.content} /> : item.content}
                 </div>
               </div>
             ))

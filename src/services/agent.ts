@@ -1,7 +1,7 @@
 import { loadModelRuntimeConfig, type ModelRuntimeConfig } from "@/src/settings/service";
 import type { AgentContext } from "@/src/services/agentContext";
 
-export type AgentIntent = "recovery_check" | "calendar_confirmation" | "menu_advice" | "replan" | "general";
+export type AgentIntent = "recovery_check" | "calendar_confirmation" | "menu_advice" | "replan" | "training_analysis" | "general";
 
 export type AgentResponse = {
   intent: AgentIntent;
@@ -52,6 +52,14 @@ export function createAgentResponse(message: string): AgentResponse {
     };
   }
 
+  if (/运动|训练|跑步|跑量|workout|exercise|activity|running/i.test(message)) {
+    return {
+      intent: "training_analysis",
+      source: "rules",
+      message: "I will analyze your recent training load, activity mix, distance, duration, and heart-rate signals."
+    };
+  }
+
   return {
     intent: "general",
     source: "rules",
@@ -81,6 +89,42 @@ function formatAgentContext(context?: AgentContext) {
   return [freshSync, ...context.sections.map((item) => `## ${item.title}\n${item.content}`)].join("\n\n");
 }
 
+function intentInstructions(intent: AgentIntent) {
+  const instructions: Record<AgentIntent, string[]> = {
+    recovery_check: [
+      "Recovery check instructions:",
+      "prioritize sleep quality, recovery score, HRV, resting heart rate, and recent hard sessions.",
+      "If recovery signals are weak, recommend lower intensity, shorter duration, or rest before hard training."
+    ],
+    training_analysis: [
+      "Training analysis instructions:",
+      "Summarize patterns across recent activities instead of only listing workouts.",
+      "Call out load, intensity mix, distance, duration, and heart-rate signals when the context provides them."
+    ],
+    calendar_confirmation: [
+      "Calendar confirmation instructions:",
+      "Explain proposed calendar drafts and the confirmation step.",
+      "Never say a calendar event was written unless the app context explicitly reports a completed write."
+    ],
+    menu_advice: [
+      "Menu advice instructions:",
+      "Connect meal advice to training intensity, recovery state, and nutrition targets when those are available.",
+      "Avoid medical claims or weight-loss promises."
+    ],
+    replan: [
+      "Replanning instructions:",
+      "Use schedule, recovery, completion, and plan context to suggest conservative plan adjustments.",
+      "Describe what should change and why; do not claim the plan changed unless the app provides that result."
+    ],
+    general: [
+      "General instructions:",
+      "Answer the immediate question, then guide the user toward syncing data or asking about training, recovery, meals, or calendar confirmation if useful."
+    ]
+  };
+
+  return instructions[intent].join("\n");
+}
+
 function systemPrompt(intent: AgentIntent, context?: AgentContext) {
   return [
     "You are a personal health management agent inside Healthy Body Manager.",
@@ -88,19 +132,31 @@ function systemPrompt(intent: AgentIntent, context?: AgentContext) {
     "Use the user's training, recovery, schedule, and meal context when it is available in the conversation.",
     "Use the app context below when it is available. Do not invent missing data.",
     "Do not claim latest COROS data unless the context says fresh COROS sync succeeded during this request.",
+    "If fresh sync failed but cached app records are present, analyze the cached records and clearly mention that the live refresh failed.",
     "Do not claim that you wrote to calendars, changed plans, or fetched external data unless the app explicitly provides that result.",
+    "If you use a table, include at least one data row; otherwise use a short bullet list instead of an empty table.",
     `Current routed intent: ${intent}.`,
+    intentInstructions(intent),
     `App context:\n${formatAgentContext(context)}`
   ].join("\n");
 }
 
-function extractOpenAiCompatibleMessage(body: unknown) {
-  const content = (body as { choices?: Array<{ message?: { content?: unknown } }> })?.choices?.[0]?.message?.content;
+function extractOpenAiCompatibleMessage(body: unknown, providerLabel: string) {
+  const choice = (body as { choices?: Array<{ finish_reason?: unknown; message?: { content?: unknown } }> })?.choices?.[0];
+  if (choice?.finish_reason === "length") {
+    throw new Error(`${providerLabel} response was cut off before completion.`);
+  }
+
+  const content = choice?.message?.content;
   if (typeof content === "string" && content.trim()) return content.trim();
   throw new Error("Model response did not include a message.");
 }
 
-function extractAnthropicMessage(body: unknown) {
+function extractAnthropicMessage(body: unknown, providerLabel: string) {
+  if ((body as { stop_reason?: unknown })?.stop_reason === "max_tokens") {
+    throw new Error(`${providerLabel} response was cut off before completion.`);
+  }
+
   const parts = (body as { content?: Array<{ type?: string; text?: unknown }> })?.content ?? [];
   const text = parts
     .map((part) => (part.type === "text" && typeof part.text === "string" ? part.text : ""))
@@ -140,13 +196,13 @@ async function callAnthropicModel(
     },
     body: JSON.stringify({
       model: config.modelName,
-      max_tokens: 700,
+      max_tokens: 1400,
       system: systemPrompt(intent, context),
       messages: [...compactHistory(history), { role: "user", content: message }]
     })
   });
 
-  return extractAnthropicMessage(await readModelResponse(response, config.providerLabel));
+  return extractAnthropicMessage(await readModelResponse(response, config.providerLabel), config.providerLabel);
 }
 
 async function callOpenAiCompatibleModel(
@@ -165,7 +221,7 @@ async function callOpenAiCompatibleModel(
     body: JSON.stringify({
       model: config.modelName,
       temperature: 0.3,
-      max_tokens: 700,
+      max_tokens: 1400,
       messages: [
         { role: "system", content: systemPrompt(intent, context) },
         ...compactHistory(history),
@@ -174,7 +230,7 @@ async function callOpenAiCompatibleModel(
     })
   });
 
-  return extractOpenAiCompatibleMessage(await readModelResponse(response, config.providerLabel));
+  return extractOpenAiCompatibleMessage(await readModelResponse(response, config.providerLabel), config.providerLabel);
 }
 
 async function callConfiguredModel(

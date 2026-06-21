@@ -17,12 +17,35 @@ export function shouldRefreshCoros(message: string) {
 }
 
 function formatDate(value: Date | null | undefined) {
-  return value ? value.toISOString().slice(0, 10) : "unknown date";
+  if (!value) return "unknown date";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(value);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  return year && month && day ? `${year}-${month}-${day}` : "unknown date";
 }
 
 function section(title: string, lines: string[]) {
   const content = lines.filter(Boolean).join("\n");
   return { title, content: content || "No synced data available." };
+}
+
+function formatActivityLine(item: {
+  startedAt: Date;
+  sportType: string;
+  durationMinutes: number;
+  distanceKm: number | null;
+  averageHeartRateBpm: number | null;
+  intensity: string;
+}) {
+  const distance = item.distanceKm == null ? "" : `${Number(item.distanceKm.toFixed(2))} km, `;
+  const heartRate = item.averageHeartRateBpm == null ? "HR unknown" : `HR ${item.averageHeartRateBpm}`;
+  return `${formatDate(item.startedAt)}: ${item.sportType}, ${item.durationMinutes} min, ${distance}${heartRate}, intensity ${item.intensity}.`;
 }
 
 async function loadCommonContext(userId: string) {
@@ -65,6 +88,24 @@ async function loadRecoveryContext(userId: string) {
       activities.map((item) => `${formatDate(item.startedAt)}: ${item.sportType}, ${item.durationMinutes} min, intensity ${item.intensity}.`)
     )
   ];
+}
+
+async function loadTrainingAnalysisContext(userId: string) {
+  const activities = await prisma.activityRecord.findMany({
+    where: { userId },
+    orderBy: { startedAt: "desc" },
+    take: 14,
+    select: {
+      startedAt: true,
+      sportType: true,
+      durationMinutes: true,
+      distanceKm: true,
+      averageHeartRateBpm: true,
+      intensity: true
+    }
+  });
+
+  return [section("Recent activities", activities.map(formatActivityLine))];
 }
 
 async function loadPlanContext(userId: string) {
@@ -124,7 +165,9 @@ export async function buildAgentContext(userId: string, intent: AgentIntent, mes
         ? await loadPlanContext(userId)
         : intent === "menu_advice"
           ? await loadMenuContext(userId)
-          : [];
+          : intent === "training_analysis"
+            ? await loadTrainingAnalysisContext(userId)
+            : [];
 
   return { intent, freshSync, sections: [...common, ...specific] };
 }

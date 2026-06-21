@@ -84,6 +84,22 @@ export async function getAgentConversationSummaryForUser(
   return conversation ? serializeSummary(conversation) : null;
 }
 
+export async function deleteAgentConversationForUser(userId: string, conversationId: string) {
+  const conversation = await prisma.agentConversation.findFirst({
+    where: { id: conversationId, userId },
+    select: { id: true }
+  });
+
+  if (!conversation) return false;
+
+  await prisma.agentConversation.delete({
+    where: { id_userId: { id: conversationId, userId } },
+    select: { id: true }
+  });
+
+  return true;
+}
+
 export async function touchAgentConversationAfterMessage(
   userId: string,
   conversationId: string,

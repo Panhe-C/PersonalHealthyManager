@@ -5,7 +5,6 @@ import { FlaskConical, Save } from "lucide-react";
 import {
   corosMcpRegionOptions,
   modelProviders,
-  type CorosMcpRegion,
   type DataMcpAuthConfig,
   type DataMcpConnection,
   type SettingsView
@@ -69,22 +68,6 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
       )
     );
     setTestResults([]);
-  }
-
-  function selectedCorosRegion(connection: DataMcpConnection) {
-    return connection.corosRegion ?? corosMcpRegionOptions.find((option) => option.url === connection.endpoint)?.value ?? "";
-  }
-
-  function updateCorosRegion(region: CorosMcpRegion) {
-    const option = corosMcpRegionOptions.find((item) => item.value === region);
-    if (!option) return;
-
-    updateConnection("coros", {
-      corosRegion: option.value,
-      endpoint: option.url,
-      serverName: "coros",
-      capabilityName: "daily-health"
-    });
   }
 
   function updateModelProvider(value: SettingsView["modelProvider"]) {
@@ -353,17 +336,21 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
 
   async function connectCoros() {
     const coros = connections.find((item) => item.id === "coros");
-    if (!coros?.endpoint || coros.endpoint === "") {
-      setError("Select a COROS region first.");
+    if (!coros) {
+      setError("COROS connection is missing.");
       return;
     }
+
+    const fallbackOption = corosMcpRegionOptions[0];
+    const endpoint = coros.endpoint || fallbackOption.url;
+    const corosRegion = coros.corosRegion ?? fallbackOption.value;
 
     const response = await fetch("/api/settings/mcp/coros/prep", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        endpoint: coros.endpoint,
-        ...(coros.corosRegion ? { corosRegion: coros.corosRegion } : {})
+        endpoint,
+        corosRegion
       })
     });
 
@@ -401,70 +388,21 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
   function renderCorosConnectionAssistant(connection: DataMcpConnection) {
     if (connection.id !== "coros") return null;
 
-    const region = selectedCorosRegion(connection);
-    const selectedOption = corosMcpRegionOptions.find((option) => option.value === region);
+    const expiresAt = connection.auth?.type === "oauth2" ? connection.auth.expiresAt : null;
 
     return (
-      <div className="connection-auth coros-mcp-assistant">
-        <div>
-          <strong>COROS remote MCP</strong>
-          <p>
-            Select the region that matches your COROS account. This applies COROS&apos;s official regional MCP URLs (China,
-            North America or other regions, Europe), the same endpoints COROS documents for MCP clients.
-          </p>
-          <p>
-            Click <strong>Connect COROS</strong> to confirm your region on the server, then your browser opens COROS&apos;s login
-            page. After you sign in, COROS redirects back here and we store OAuth tokens (never your COROS password).
-          </p>
-          <p>
-            Official COROS MCP hosts register an OAuth client for this app automatically. Use the advanced <strong>OAuth2</strong>{" "}
-            fields only for custom endpoints or troubleshooting (for example pasting authorize and token URLs manually).
-          </p>
-          <p className="page-subtitle">
-            Use the same site URL each time (for example always <code>http://localhost:3000</code> or always{" "}
-            <code>http://127.0.0.1:3000</code>). Changing host or port re-registers the OAuth client so COROS can validate{" "}
-            <code>redirect_uri</code>.
-          </p>
-          <p className="page-subtitle">
-            If COROS shows a generic Spring &quot;Bad Request&quot; on the authorize page, their server expects PKCE (S256); this
-            app includes <code>code_challenge</code> on that request. Still keep one fixed origin (always{" "}
-            <code>localhost</code> or always <code>127.0.0.1</code>). If the login form itself fails, try allowing cookies
-            for <code>coros.com</code>.
-          </p>
-        </div>
-        <label className="field">
-          COROS MCP region
-          <select
-            aria-label="COROS MCP region"
-            value={region}
-            onChange={(event) => updateCorosRegion(event.target.value as CorosMcpRegion)}
-          >
-            <option value="">Choose region</option>
-            {corosMcpRegionOptions.map((option) => (
-              <option value={option.value} key={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <p className="page-subtitle">
-          {selectedOption ? `Official MCP URL: ${selectedOption.url}` : "Select a region to fill the official COROS MCP URL."}
-        </p>
-        <button
-          className="button"
-          type="button"
-          disabled={!connection.endpoint || connection.endpoint === ""}
-          onClick={connectCoros}
-        >
-          {connection.endpoint ? "Connect COROS" : "Connect COROS (select a region first)"}
+      <div className="connection-auth coros-mcp-minimal">
+        <button className="button" type="button" onClick={connectCoros}>
+          Connect COROS
         </button>
+        {expiresAt ? <span className="status">Expires {new Date(expiresAt).toLocaleString()}</span> : null}
       </div>
     );
   }
 
   return (
     <form className="settings-grid" onSubmit={save}>
-      <section className="surface panel settings-panel">
+      <section className="surface panel settings-panel settings-panel-runtime">
         <div className="panel-heading">
           <div>
             <h2>Model runtime</h2>
@@ -476,7 +414,7 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
           </button>
         </div>
 
-        <div className="grid form-grid">
+        <div className="grid form-grid settings-form-grid">
           <label className="field">
             Provider
             <select
@@ -523,7 +461,7 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
           </label>
         </div>
 
-        <div className="settings-status-line">
+        <div className="settings-status-line settings-action-row">
           <span className={hasApiKey ? "status status-positive" : "status status-warn"}>
             {hasApiKey ? `Configured · ${apiKeyHint}` : "API key not configured"}
           </span>
@@ -591,7 +529,7 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
         </div>
       ) : null}
 
-      <section className="surface panel settings-panel">
+      <section className="surface panel settings-panel settings-panel-mcp">
         <div className="panel-heading">
           <div>
             <h2>Data MCP connections</h2>
@@ -601,65 +539,76 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
 
         <div className="connection-grid">
           {connections.map((connection) => (
-            <article className="connection-card" key={connection.id}>
+            <article className={connection.id === "coros" ? "connection-card connection-card-coros" : "connection-card"} key={connection.id}>
               <div className="connection-card-heading">
-                <label className="toggle-field">
-                  <input
-                    type="checkbox"
-                    checked={connection.enabled}
-                    onChange={(event) => updateConnection(connection.id, { enabled: event.target.checked })}
-                  />
-                  <span>{connection.label}</span>
-                </label>
-                <button className="button" type="button" onClick={() => runTest(connection.id)} disabled={testingTarget !== null}>
-                  <FlaskConical aria-hidden="true" size={16} />
-                  {testingTarget === connection.id ? "Testing..." : "Test"}
-                </button>
+                {connection.id === "coros" ? (
+                  <strong>{connection.label}</strong>
+                ) : (
+                  <>
+                    <label className="toggle-field">
+                      <input
+                        type="checkbox"
+                        checked={connection.enabled}
+                        onChange={(event) => updateConnection(connection.id, { enabled: event.target.checked })}
+                      />
+                      <span>{connection.label}</span>
+                    </label>
+                    <button className="button" type="button" onClick={() => runTest(connection.id)} disabled={testingTarget !== null}>
+                      <FlaskConical aria-hidden="true" size={16} />
+                      {testingTarget === connection.id ? "Testing..." : "Test"}
+                    </button>
+                  </>
+                )}
               </div>
-              <label className="field">
-                MCP server
-                <input
-                  aria-label={`MCP server for ${connection.label}`}
-                  value={connection.serverName}
-                  onChange={(event) => updateConnection(connection.id, { serverName: event.target.value })}
-                />
-              </label>
-              <label className="field">
-                Capability
-                <input
-                  aria-label={`Capability for ${connection.label}`}
-                  value={connection.capabilityName}
-                  onChange={(event) => updateConnection(connection.id, { capabilityName: event.target.value })}
-                />
-              </label>
-              <label className="field">
-                Endpoint
-                <input
-                  aria-label={`Endpoint for ${connection.label}`}
-                  value={connection.endpoint}
-                  onChange={(event) => updateConnection(connection.id, { endpoint: event.target.value })}
-                />
-              </label>
-              <label className="field">
-                Login URL
-                <input
-                  aria-label={`Login URL for ${connection.label}`}
-                  value={connection.loginUrl ?? ""}
-                  onChange={(event) => updateConnection(connection.id, { loginUrl: event.target.value })}
-                  placeholder="https://provider.example/login"
-                />
-              </label>
-              {renderCorosConnectionAssistant(connection)}
-              {renderAuthFields(connection)}
-              <label className="field">
-                Notes
-                <textarea
-                  aria-label={`Notes for ${connection.label}`}
-                  rows={3}
-                  value={connection.notes}
-                  onChange={(event) => updateConnection(connection.id, { notes: event.target.value })}
-                />
-              </label>
+              {connection.id === "coros" ? (
+                renderCorosConnectionAssistant(connection)
+              ) : (
+                <>
+                  <label className="field">
+                    MCP server
+                    <input
+                      aria-label={`MCP server for ${connection.label}`}
+                      value={connection.serverName}
+                      onChange={(event) => updateConnection(connection.id, { serverName: event.target.value })}
+                    />
+                  </label>
+                  <label className="field">
+                    Capability
+                    <input
+                      aria-label={`Capability for ${connection.label}`}
+                      value={connection.capabilityName}
+                      onChange={(event) => updateConnection(connection.id, { capabilityName: event.target.value })}
+                    />
+                  </label>
+                  <label className="field">
+                    Endpoint
+                    <input
+                      aria-label={`Endpoint for ${connection.label}`}
+                      value={connection.endpoint}
+                      onChange={(event) => updateConnection(connection.id, { endpoint: event.target.value })}
+                    />
+                  </label>
+                  <label className="field">
+                    Login URL
+                    <input
+                      aria-label={`Login URL for ${connection.label}`}
+                      value={connection.loginUrl ?? ""}
+                      onChange={(event) => updateConnection(connection.id, { loginUrl: event.target.value })}
+                      placeholder="https://provider.example/login"
+                    />
+                  </label>
+                  {renderAuthFields(connection)}
+                  <label className="field">
+                    Notes
+                    <textarea
+                      aria-label={`Notes for ${connection.label}`}
+                      rows={3}
+                      value={connection.notes}
+                      onChange={(event) => updateConnection(connection.id, { notes: event.target.value })}
+                    />
+                  </label>
+                </>
+              )}
             </article>
           ))}
         </div>
