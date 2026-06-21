@@ -1505,6 +1505,56 @@ h3 {
   border: 0;
 }
 
+.agent-workspace {
+  display: grid;
+  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.agent-conversation-rail {
+  min-height: 560px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  padding: 12px;
+  box-shadow: var(--shadow-soft);
+}
+
+.agent-new-chat,
+.agent-conversation-item {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--ink);
+  text-align: left;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.agent-new-chat {
+  margin-bottom: 12px;
+  font-weight: 700;
+}
+
+.agent-conversation-list {
+  display: grid;
+  gap: 8px;
+}
+
+.agent-conversation-item span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-conversation-item.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
 .agent-panel {
   min-height: min(760px, calc(100dvh - 132px));
   max-height: calc(100dvh - 132px);
@@ -1961,6 +2011,14 @@ summary:focus-visible {
 
   .brand {
     min-width: max-content;
+  }
+
+  .agent-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-conversation-rail {
+    min-height: auto;
   }
 
   .app-nav > .icon-button {

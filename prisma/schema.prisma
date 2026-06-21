@@ -25,6 +25,7 @@ model User {
   mealMenus         MealMenu[]
   plans             Plan[]
   calendarDrafts    CalendarEventDraft[]
+  agentConversations AgentConversation[]
   agentMessages     AgentMessage[]
   settings          UserSettings?
 }
@@ -291,17 +292,34 @@ model CalendarEventDraft {
   @@unique([trainingTaskId, userId])
 }
 
-model AgentMessage {
-  id           String   @id @default(cuid())
-  userId       String
-  role         String
-  content      String
-  metadataJson String
-  createdAt    DateTime @default(now())
+model AgentConversation {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages AgentMessage[]
+
+  @@index([userId, updatedAt])
+  @@unique([id, userId])
+}
+
+model AgentMessage {
+  id             String   @id @default(cuid())
+  userId         String
+  conversationId String
+  role           String
+  content        String
+  metadataJson   String
+  createdAt      DateTime @default(now())
+
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation AgentConversation @relation(fields: [conversationId, userId], references: [id, userId], onDelete: Cascade)
 
   @@index([userId, createdAt])
+  @@index([conversationId, createdAt])
 }
 
 model UserSettings {

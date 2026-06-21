@@ -79,6 +79,30 @@ describe("agent response shell", () => {
     );
   });
 
+  it("includes app context in configured model prompts", async () => {
+    vi.mocked(loadModelRuntimeConfig).mockResolvedValue({
+      provider: "deepseek",
+      providerLabel: "DeepSeek",
+      modelName: "deepseek-v4-flash",
+      baseUrl: "https://api.deepseek.com",
+      apiKey: "sk-configured"
+    });
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: "建议今天降强度。" } }] })
+    } as never);
+
+    await createAgentResponseForUser("user-1", "今天能跑吗？", [], {
+      intent: "recovery_check",
+      freshSync: { attempted: true, succeeded: false, error: "COROS MCP endpoint is not configured." },
+      sections: [{ title: "Recent recovery", content: "2026-06-20: recovery 64%, HRV 45." }]
+    });
+
+    const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body));
+    expect(payload.messages[0].content).toContain("Recent recovery");
+    expect(payload.messages[0].content).toContain("COROS MCP endpoint is not configured");
+  });
+
   it("shows the provider error when the configured model call fails", async () => {
     vi.mocked(loadModelRuntimeConfig).mockResolvedValue({
       provider: "custom",

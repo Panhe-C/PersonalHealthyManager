@@ -1,4 +1,5 @@
 import { loadModelRuntimeConfig, type ModelRuntimeConfig } from "@/src/settings/service";
+import type { AgentContext } from "@/src/services/agentContext";
 
 export type AgentIntent = "recovery_check" | "calendar_confirmation" | "menu_advice" | "replan" | "general";
 
@@ -69,13 +70,27 @@ function compactHistory(history: AgentConversationMessage[]) {
     .map((item) => ({ role: item.role as "user" | "assistant", content: item.content.trim() }));
 }
 
-function systemPrompt(intent: AgentIntent) {
+function formatAgentContext(context?: AgentContext) {
+  if (!context) return "No app context was loaded for this response.";
+  const freshSync = context.freshSync.attempted
+    ? context.freshSync.succeeded
+      ? "Fresh COROS sync succeeded during this request."
+      : `Fresh COROS sync failed during this request: ${context.freshSync.error ?? "Unknown error."}`
+    : "No live COROS sync was requested during this response.";
+
+  return [freshSync, ...context.sections.map((item) => `## ${item.title}\n${item.content}`)].join("\n\n");
+}
+
+function systemPrompt(intent: AgentIntent, context?: AgentContext) {
   return [
     "You are a personal health management agent inside Healthy Body Manager.",
     "Answer in the user's language. Be practical, concise, and safety-conscious.",
     "Use the user's training, recovery, schedule, and meal context when it is available in the conversation.",
+    "Use the app context below when it is available. Do not invent missing data.",
+    "Do not claim latest COROS data unless the context says fresh COROS sync succeeded during this request.",
     "Do not claim that you wrote to calendars, changed plans, or fetched external data unless the app explicitly provides that result.",
-    `Current routed intent: ${intent}.`
+    `Current routed intent: ${intent}.`,
+    `App context:\n${formatAgentContext(context)}`
   ].join("\n");
 }
 
@@ -109,7 +124,13 @@ async function readModelResponse(response: Response, providerLabel: string) {
   return body;
 }
 
-async function callAnthropicModel(config: ModelRuntimeConfig, message: string, history: AgentConversationMessage[], intent: AgentIntent) {
+async function callAnthropicModel(
+  config: ModelRuntimeConfig,
+  message: string,
+  history: AgentConversationMessage[],
+  intent: AgentIntent,
+  context?: AgentContext
+) {
   const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}/messages`, {
     method: "POST",
     headers: {
@@ -120,7 +141,7 @@ async function callAnthropicModel(config: ModelRuntimeConfig, message: string, h
     body: JSON.stringify({
       model: config.modelName,
       max_tokens: 700,
-      system: systemPrompt(intent),
+      system: systemPrompt(intent, context),
       messages: [...compactHistory(history), { role: "user", content: message }]
     })
   });
@@ -128,7 +149,13 @@ async function callAnthropicModel(config: ModelRuntimeConfig, message: string, h
   return extractAnthropicMessage(await readModelResponse(response, config.providerLabel));
 }
 
-async function callOpenAiCompatibleModel(config: ModelRuntimeConfig, message: string, history: AgentConversationMessage[], intent: AgentIntent) {
+async function callOpenAiCompatibleModel(
+  config: ModelRuntimeConfig,
+  message: string,
+  history: AgentConversationMessage[],
+  intent: AgentIntent,
+  context?: AgentContext
+) {
   const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}/chat/completions`, {
     method: "POST",
     headers: {
@@ -140,7 +167,7 @@ async function callOpenAiCompatibleModel(config: ModelRuntimeConfig, message: st
       temperature: 0.3,
       max_tokens: 700,
       messages: [
-        { role: "system", content: systemPrompt(intent) },
+        { role: "system", content: systemPrompt(intent, context) },
         ...compactHistory(history),
         { role: "user", content: message }
       ]
@@ -150,28 +177,36 @@ async function callOpenAiCompatibleModel(config: ModelRuntimeConfig, message: st
   return extractOpenAiCompatibleMessage(await readModelResponse(response, config.providerLabel));
 }
 
-async function callConfiguredModel(config: ModelRuntimeConfig, message: string, history: AgentConversationMessage[], intent: AgentIntent) {
-  if (config.provider === "anthropic") return callAnthropicModel(config, message, history, intent);
-  return callOpenAiCompatibleModel(config, message, history, intent);
+async function callConfiguredModel(
+  config: ModelRuntimeConfig,
+  message: string,
+  history: AgentConversationMessage[],
+  intent: AgentIntent,
+  context?: AgentContext
+) {
+  if (config.provider === "anthropic") return callAnthropicModel(config, message, history, intent, context);
+  return callOpenAiCompatibleModel(config, message, history, intent, context);
 }
 
 export async function createAgentResponseForUser(
   userId: string,
   message: string,
-  history: AgentConversationMessage[] = []
+  history: AgentConversationMessage[] = [],
+  context?: AgentContext
 ): Promise<AgentResponse> {
   const fallback = createAgentResponse(message);
   const config = await loadModelRuntimeConfig(userId);
+  const intent = context?.intent ?? fallback.intent;
 
   if (!config) return fallback;
 
   try {
     return {
-      intent: fallback.intent,
+      intent,
       source: "model",
       modelProvider: config.providerLabel,
       modelName: config.modelName,
-      message: await callConfiguredModel(config, message, history, fallback.intent)
+      message: await callConfiguredModel(config, message, history, intent, context)
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Model call failed.";
