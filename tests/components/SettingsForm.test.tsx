@@ -249,9 +249,30 @@ describe("SettingsForm", () => {
     expect(screen.getByRole("option", { name: "China" })).toHaveValue("china");
     expect(screen.getByRole("option", { name: "North America or other regions" })).toHaveValue("us");
     expect(screen.getByRole("option", { name: "Europe" })).toHaveValue("eu");
-    expect(screen.getByText("Choose the region that matches your COROS account.")).toBeInTheDocument();
-    expect(screen.getByText("After opening COROS, sign in with your phone number or email and password.")).toBeInTheDocument();
-    expect(screen.getByText("COROS remote MCP login needs MCP OAuth discovery support before this website can open the COROS login page.")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Select the region that matches your COROS account\. This applies COROS's official regional MCP URLs \(China,/i
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) =>
+        Boolean(
+          element?.tagName === "P" &&
+            element.textContent?.includes(
+              "Click Connect COROS to confirm your region on the server, then your browser opens COROS's login page. After you sign in, COROS redirects back here"
+            )
+        )
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Official COROS MCP hosts register an OAuth client for this app automatically\./i)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Changing host or port re-registers the OAuth client/i)).toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) =>
+        Boolean(element?.tagName === "P" && element.textContent?.includes("try allowing cookies for coros.com"))
+      )
+    ).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Connect COROS" })).not.toBeInTheDocument();
   });
 

@@ -8,6 +8,14 @@ type CorosImportPayload = {
   activities?: unknown[];
   sleep?: unknown[];
   recovery?: unknown[];
+  profile?: unknown[];
+};
+
+type CorosProfilePayload = {
+  heightCm?: number;
+  weightKg?: number;
+  birthday?: string;
+  sex?: string;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -27,42 +35,107 @@ function parseJsonText(value: unknown): unknown {
 function normalizeCorosMcpPayload(payload: unknown): CorosImportPayload {
   if (!isRecord(payload)) return {};
 
-  if (Array.isArray(payload.activities) || Array.isArray(payload.sleep) || Array.isArray(payload.recovery)) {
+  if (Array.isArray(payload.activities) || Array.isArray(payload.sleep) || Array.isArray(payload.recovery) || Array.isArray(payload.profile)) {
     return {
       activities: Array.isArray(payload.activities) ? payload.activities : undefined,
       sleep: Array.isArray(payload.sleep) ? payload.sleep : undefined,
-      recovery: Array.isArray(payload.recovery) ? payload.recovery : undefined
+      recovery: Array.isArray(payload.recovery) ? payload.recovery : undefined,
+      profile: Array.isArray(payload.profile) ? payload.profile : undefined
     };
   }
 
   for (const key of ["data", "result", "payload"] as const) {
     const nested = normalizeCorosMcpPayload(payload[key]);
-    if (nested.activities || nested.sleep || nested.recovery) return nested;
+    if (nested.activities || nested.sleep || nested.recovery || nested.profile) return nested;
   }
 
   if (Array.isArray(payload.content)) {
     for (const item of payload.content) {
       if (!isRecord(item)) continue;
       const nested = normalizeCorosMcpPayload(item);
-      if (nested.activities || nested.sleep || nested.recovery) return nested;
+      if (nested.activities || nested.sleep || nested.recovery || nested.profile) return nested;
 
       const parsed = normalizeCorosMcpPayload(parseJsonText(item.text));
-      if (parsed.activities || parsed.sleep || parsed.recovery) return parsed;
+      if (parsed.activities || parsed.sleep || parsed.recovery || parsed.profile) return parsed;
     }
   }
 
   return {};
 }
 
+/**
+ * Normalize each record independently so a single malformed item (e.g. an unparseable timestamp)
+ * is skipped and logged rather than failing the entire sync.
+ */
+function normalizeAll<T>(items: unknown[] | undefined, normalize: (item: never) => T, kind: string): T[] {
+  const normalized: T[] = [];
+  for (const item of items ?? []) {
+    try {
+      normalized.push(normalize(item as never));
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      console.warn(`Skipping invalid COROS ${kind} record: ${reason} Raw: ${JSON.stringify(item).slice(0, 300)}`);
+    }
+  }
+  return normalized;
+}
+
+function normalizeCorosProfile(item: unknown): CorosProfilePayload | null {
+  if (!isRecord(item)) return null;
+
+  const heightCm = typeof item.heightCm === "number" ? item.heightCm : undefined;
+  const weightKg = typeof item.weightKg === "number" ? item.weightKg : undefined;
+  const birthday = typeof item.birthday === "string" ? item.birthday : undefined;
+  const sex = typeof item.sex === "string" ? item.sex.toLowerCase() : undefined;
+
+  if (heightCm == null && weightKg == null && !birthday && !sex) return null;
+  return {
+    ...(heightCm != null ? { heightCm } : {}),
+    ...(weightKg != null ? { weightKg } : {}),
+    ...(birthday ? { birthday } : {}),
+    ...(sex === "male" || sex === "female" ? { sex } : {})
+  };
+}
+
+function definedEntries<T extends Record<string, unknown>>(value: T) {
+  return Object.fromEntries(Object.entries(value).filter(([, entryValue]) => entryValue !== undefined));
+}
+
 export async function importCorosPayload(
   userId: string,
   payload: CorosImportPayload
 ) {
-  const activities = (payload.activities ?? []).map((item) => normalizeCorosActivity(item as never));
-  const sleepRecords = (payload.sleep ?? []).map((item) => normalizeCorosSleep(item as never));
-  const recoveryRecords = (payload.recovery ?? []).map((item) => normalizeCorosRecovery(item as never));
+  const activities = normalizeAll(payload.activities, normalizeCorosActivity, "activity");
+  const sleepRecords = normalizeAll(payload.sleep, normalizeCorosSleep, "sleep");
+  const recoveryRecords = normalizeAll(payload.recovery, normalizeCorosRecovery, "recovery");
+  const profile = normalizeCorosProfile(payload.profile?.[0]);
 
   await prisma.$transaction(async (tx) => {
+    if (profile?.heightCm != null && profile.weightKg != null && profile.sex) {
+      const data = definedEntries({
+        heightCm: profile.heightCm,
+        weightKg: profile.weightKg,
+        birthday: profile.birthday ? new Date(`${profile.birthday}T00:00:00+08:00`) : undefined,
+        sex: profile.sex
+      });
+
+      await tx.bodyProfile.upsert({
+        where: { userId },
+        update: data,
+        create: {
+          userId,
+          heightCm: profile.heightCm,
+          weightKg: profile.weightKg,
+          birthday: profile.birthday ? new Date(`${profile.birthday}T00:00:00+08:00`) : undefined,
+          sex: profile.sex,
+          trainingExperience: "beginner",
+          injuriesJson: "[]",
+          dietaryPreferencesJson: "[]",
+          trainingPreferencesJson: "[]"
+        }
+      });
+    }
+
     for (const activity of activities) {
       const data = {
         userId,

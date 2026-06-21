@@ -11,7 +11,7 @@ export type TimeWindow = {
 export type NormalizedActivityRecord = {
   source: "coros";
   sourceId: string;
-  sportType: "run" | "ride" | "strength" | "other";
+  sportType: "run" | "ride" | "strength" | "boxing" | "elliptical" | "jump_rope" | "walk" | "other";
   startedAt: Date;
   endedAt: Date;
   durationMinutes: number;

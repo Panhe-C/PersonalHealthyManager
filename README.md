@@ -54,6 +54,8 @@ npm run seed
 npm run dev
 ```
 
+`npm run dev` starts the Next.js dev server with built-in Fast Refresh, which hot-reloads changes under `app/`, `src/`, and `components/` (including route handlers and server modules) without a manual restart.
+
 Open the local URL printed by Next.js and log in with:
 
 - Email: `demo@example.com`

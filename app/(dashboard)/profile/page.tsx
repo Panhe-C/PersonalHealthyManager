@@ -11,17 +11,51 @@ function parseStringList(value: string | undefined) {
   return JSON.parse(value) as string[];
 }
 
+const demoDataMarkers = ["demo", "fixture", "smoke", "codex-e2e", "review-smoke"];
+
+function hasDemoMarker(value: string | null | undefined) {
+  if (!value) return false;
+  const normalized = value.toLowerCase();
+  return demoDataMarkers.some((marker) => normalized.includes(marker));
+}
+
+function isDemoRecord(record: { sourceId?: string | null; metadataJson?: string | null }) {
+  return hasDemoMarker(record.sourceId) || hasDemoMarker(record.metadataJson);
+}
+
+function preferLiveRecords<T extends { sourceId?: string | null; metadataJson?: string | null }>(records: T[]) {
+  const liveRecords = records.filter((record) => !isDemoRecord(record));
+  return liveRecords.length > 0 ? liveRecords : records;
+}
+
+function hasDateOnlyMetadata(record: { metadataJson?: string | null }) {
+  if (!record.metadataJson) return false;
+
+  try {
+    const metadata = JSON.parse(record.metadataJson) as { dateOnly?: unknown };
+    return metadata.dateOnly === true;
+  } catch {
+    return false;
+  }
+}
+
+function formatActivityHint(record: { startedAt: Date; metadataJson?: string | null }) {
+  return hasDateOnlyMetadata(record) ? record.startedAt.toLocaleDateString() : record.startedAt.toLocaleString();
+}
+
 export default async function ProfilePage() {
   const user = await requireUser();
-  const [profile, activities, sleepRecords, recoveryRecords] = await Promise.all([
+  const [profile, allActivities, sleepRecords, recoveryRecords] = await Promise.all([
     prisma.bodyProfile.findUnique({ where: { userId: user.id } }),
     prisma.activityRecord.findMany({ where: { userId: user.id }, orderBy: { startedAt: "desc" }, take: 7 }),
     prisma.sleepRecord.findMany({ where: { userId: user.id }, orderBy: { date: "desc" }, take: 7 }),
     prisma.recoveryRecord.findMany({ where: { userId: user.id }, orderBy: { date: "desc" }, take: 7 })
   ]);
+  const activities = preferLiveRecords(allActivities);
   const latestActivity = activities[0];
   const latestSleep = sleepRecords[0];
   const latestRecovery = recoveryRecords[0];
+  const hasDemoData = [...activities, ...sleepRecords, ...recoveryRecords].some(isDemoRecord);
   const initialProfile = profile
     ? {
         heightCm: profile.heightCm,
@@ -52,7 +86,7 @@ export default async function ProfilePage() {
           icon={Activity}
           label="Latest workout"
           value={latestActivity ? latestActivity.sportType : "No data"}
-          hint={latestActivity ? latestActivity.startedAt.toLocaleString() : "Sync COROS data"}
+          hint={latestActivity ? formatActivityHint(latestActivity) : "Sync COROS data"}
           tone="clay"
         />
         <MetricCard
@@ -71,7 +105,12 @@ export default async function ProfilePage() {
         />
       </section>
 
-      <ProfileInsights activities={activities} sleepRecords={sleepRecords} recoveryRecords={recoveryRecords} />
+      <ProfileInsights
+        activities={activities}
+        sleepRecords={sleepRecords}
+        recoveryRecords={recoveryRecords}
+        dataMode={hasDemoData ? "demo" : "live"}
+      />
 
       <section>
         <div className="panel-heading">

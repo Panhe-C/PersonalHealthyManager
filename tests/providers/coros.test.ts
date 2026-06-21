@@ -36,7 +36,8 @@ describe("COROS provider normalization", () => {
     { sportType: 200, expected: "ride" },
     { sportType: 204, expected: "ride" },
     { sportType: 402, expected: "strength" },
-    { sportType: 900, expected: "other" }
+    { sportType: 900, expected: "walk" },
+    { sportType: 906, expected: "boxing" }
   ] as const)("maps sport type $sportType to $expected", ({ sportType, expected }) => {
     const result = normalizeCorosActivity({
       labelId: `activity-${sportType}`,
@@ -80,6 +81,39 @@ describe("COROS provider normalization", () => {
     expect(first.sourceId).toBeTruthy();
     expect(first.sourceId).toBe(second.sourceId);
     expect(first.sourceId).toContain("fallback");
+  });
+
+  it("parses epoch-second and compact yyyyMMdd timestamps", () => {
+    const epoch = normalizeCorosActivity({
+      labelId: "epoch-1",
+      sportType: 100,
+      startTime: 1_780_000_000 as unknown as string,
+      endTime: 1_780_001_800 as unknown as string
+    });
+    expect(epoch.startedAt.getTime()).toBe(1_780_000_000 * 1000);
+    expect(epoch.durationMinutes).toBe(30);
+
+    const compact = normalizeCorosRecovery({ date: "20260602" as unknown as string, recoveryPercent: 50 });
+    expect(compact.date.toISOString()).toBe("2026-06-01T16:00:00.000Z");
+  });
+
+  it("tolerates a missing endTime by falling back to the start", () => {
+    const result = normalizeCorosActivity({
+      labelId: "no-end",
+      sportType: 100,
+      startTime: "2026-06-01T10:00:00+08:00"
+    } as never);
+
+    expect(result.durationMinutes).toBe(0);
+    expect(result.endedAt.toISOString()).toBe(result.startedAt.toISOString());
+  });
+
+  it("throws a descriptive error (not 'Invalid time value') for an unparseable date", () => {
+    expect(() =>
+      normalizeCorosActivity({ labelId: "bad", sportType: 100, startTime: "not-a-date", endTime: "also-bad" })
+    ).toThrow(/activity startTime is missing or not a valid date/);
+
+    expect(() => normalizeCorosRecovery({ date: "" as unknown as string })).toThrow(/date is missing or not a valid date/);
   });
 
   it("normalizes sleep payloads", () => {

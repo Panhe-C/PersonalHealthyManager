@@ -65,4 +65,68 @@ describe("ProfileInsights", () => {
     expect(screen.getByRole("heading", { name: "Health trends" })).toBeInTheDocument();
     expect(screen.getByText("Sync COROS data to unlock trend charts.")).toBeInTheDocument();
   });
+
+  it("labels the trends panel when the displayed data is demo data", () => {
+    render(<ProfileInsights activities={[]} sleepRecords={[]} recoveryRecords={[]} dataMode="demo" />);
+
+    expect(screen.getByText("Demo data")).toBeInTheDocument();
+  });
+
+  it("shows date-only activity records without a fabricated time", () => {
+    render(
+      <ProfileInsights
+        activities={[
+          {
+            id: "activity-1",
+            sportType: "boxing",
+            startedAt: new Date("2026-06-20T06:00:00+08:00"),
+            metadataJson: JSON.stringify({ dateOnly: true }),
+            durationMinutes: 60,
+            averageHeartRateBpm: 130,
+            intensity: "easy"
+          }
+        ]}
+        sleepRecords={[]}
+        recoveryRecords={[]}
+      />
+    );
+
+    expect(screen.getByText("Jun 20, 2026")).toBeInTheDocument();
+    expect(screen.queryByText(/6:00/)).not.toBeInTheDocument();
+  });
+
+  it("keeps load mosaic tiles on a consistent card rhythm", () => {
+    render(
+      <ProfileInsights
+        activities={[
+          {
+            id: "activity-1",
+            sportType: "run",
+            startedAt: new Date(2026, 5, 16, 7),
+            durationMinutes: 30,
+            trainingLoad: 24,
+            intensity: "easy"
+          },
+          {
+            id: "activity-2",
+            sportType: "cycling",
+            startedAt: new Date(2026, 5, 17, 7),
+            durationMinutes: 80,
+            trainingLoad: 168,
+            intensity: "hard"
+          }
+        ]}
+        sleepRecords={[]}
+        recoveryRecords={[]}
+      />
+    );
+
+    const loadMosaic = screen.getByLabelText("Recent training load mosaic");
+    const tiles = within(loadMosaic).getAllByRole("listitem");
+
+    expect(tiles).toHaveLength(2);
+    for (const tile of tiles) {
+      expect(tile).not.toHaveAttribute("style", expect.stringContaining("--tile-size"));
+    }
+  });
 });

@@ -352,15 +352,24 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
   }
 
   async function connectCoros() {
-    const response = await fetch("/api/settings", {
+    const coros = connections.find((item) => item.id === "coros");
+    if (!coros?.endpoint || coros.endpoint === "") {
+      setError("Select a COROS region first.");
+      return;
+    }
+
+    const response = await fetch("/api/settings/mcp/coros/prep", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(buildSettingsDraft())
+      body: JSON.stringify({
+        endpoint: coros.endpoint,
+        ...(coros.corosRegion ? { corosRegion: coros.corosRegion } : {})
+      })
     });
 
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      setError(body.error ?? "Could not save settings before connecting COROS.");
+      setError(body.error ?? "Could not prepare COROS connection before login.");
       return;
     }
 
@@ -399,9 +408,29 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
       <div className="connection-auth coros-mcp-assistant">
         <div>
           <strong>COROS remote MCP</strong>
-          <p>Choose the region that matches your COROS account.</p>
-          <p>After opening COROS, sign in with your phone number or email and password.</p>
-          <p>COROS remote MCP login needs MCP OAuth discovery support before this website can open the COROS login page.</p>
+          <p>
+            Select the region that matches your COROS account. This applies COROS&apos;s official regional MCP URLs (China,
+            North America or other regions, Europe), the same endpoints COROS documents for MCP clients.
+          </p>
+          <p>
+            Click <strong>Connect COROS</strong> to confirm your region on the server, then your browser opens COROS&apos;s login
+            page. After you sign in, COROS redirects back here and we store OAuth tokens (never your COROS password).
+          </p>
+          <p>
+            Official COROS MCP hosts register an OAuth client for this app automatically. Use the advanced <strong>OAuth2</strong>{" "}
+            fields only for custom endpoints or troubleshooting (for example pasting authorize and token URLs manually).
+          </p>
+          <p className="page-subtitle">
+            Use the same site URL each time (for example always <code>http://localhost:3000</code> or always{" "}
+            <code>http://127.0.0.1:3000</code>). Changing host or port re-registers the OAuth client so COROS can validate{" "}
+            <code>redirect_uri</code>.
+          </p>
+          <p className="page-subtitle">
+            If COROS shows a generic Spring &quot;Bad Request&quot; on the authorize page, their server expects PKCE (S256); this
+            app includes <code>code_challenge</code> on that request. Still keep one fixed origin (always{" "}
+            <code>localhost</code> or always <code>127.0.0.1</code>). If the login form itself fails, try allowing cookies
+            for <code>coros.com</code>.
+          </p>
         </div>
         <label className="field">
           COROS MCP region

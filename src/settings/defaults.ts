@@ -45,6 +45,18 @@ export type DataMcpAuthConfig = {
   refreshTokenTag?: string;
   expiresAt?: string;
   oauthState?: string;
+  /** PKCE verifier (COROS OAuth); server-only, cleared after token exchange */
+  oauthCodeVerifier?: string;
+  /**
+   * App origin the user started the OAuth flow from (e.g. http://localhost:3000); server-only.
+   * The callback runs on the loopback IP origin (127.0.0.1) that COROS accepts as a redirect host,
+   * so we redirect the browser back here afterwards to preserve the user's session.
+   */
+  oauthReturnOrigin?: string;
+  /** Redirect URI used when the OAuth client was dynamically registered (must match each authorize/token redirect_uri) */
+  oauthRegisteredRedirectUri?: string;
+  /** Bumped when COROS registration shape changes; stale values force re-registration */
+  corosOAuthRegistrationVersion?: number;
 };
 
 export type DataMcpConnection = {

@@ -1,6 +1,11 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { prisma } from "@/src/db/client";
-import { discoverCorosMcpOAuthEndpoints } from "@/src/providers/coros-mcp";
+import {
+  COROS_OAUTH_DEFAULT_SCOPES,
+  COROS_OAUTH_REGISTRATION_VERSION,
+  discoverCorosMcpOAuthEndpoints,
+  registerCorosOAuthClient
+} from "@/src/providers/coros-mcp";
 import { decryptApiKey, decryptSecret, encryptApiKey, encryptSecret } from "@/src/settings/crypto";
 import {
   corosMcpRegionOptions,
@@ -15,6 +20,21 @@ import {
   type ModelProvider,
   type SettingsView
 } from "@/src/settings/defaults";
+
+function base64UrlNoPad(data: Buffer): string {
+  return data
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+/** RFC 7636 PKCE for COROS (authorization server advertises S256). */
+function createOAuthPkceS256Pair(): { verifier: string; challenge: string } {
+  const verifier = base64UrlNoPad(randomBytes(32));
+  const challenge = base64UrlNoPad(createHash("sha256").update(verifier).digest());
+  return { verifier, challenge };
+}
 
 type SettingsRecord = {
   modelProvider: string;
@@ -145,6 +165,23 @@ function stringValue(value: unknown) {
   return String(value ?? "").trim();
 }
 
+/**
+ * Spring Authorization Server (used by COROS) rejects `localhost` as a redirect_uri host and
+ * requires the loopback IP literal `127.0.0.1` instead. Rewrite the host so the OAuth redirect_uri
+ * is accepted on the post-login authorize leg; other hosts are returned unchanged.
+ */
+function toLoopbackOrigin(origin: string): string {
+  try {
+    const url = new URL(origin);
+    if (url.hostname === "localhost") {
+      url.hostname = "127.0.0.1";
+    }
+    return url.origin;
+  } catch {
+    return origin;
+  }
+}
+
 function authType(value: unknown): DataMcpAuthType {
   return typeof value === "string" && knownAuthTypes.has(value as DataMcpAuthType) ? (value as DataMcpAuthType) : "none";
 }
@@ -255,6 +292,16 @@ function normalizeAuth(input: DataMcpAuthConfig | undefined, existing?: DataMcpA
       scopes: stringValue(input?.scopes ?? existing?.scopes),
       expiresAt: stringValue(input?.expiresAt ?? existing?.expiresAt) || undefined,
       oauthState: stringValue(input?.oauthState ?? existing?.oauthState) || undefined,
+      oauthCodeVerifier: stringValue(input?.oauthCodeVerifier ?? existing?.oauthCodeVerifier) || undefined,
+      oauthReturnOrigin: stringValue(input?.oauthReturnOrigin ?? existing?.oauthReturnOrigin) || undefined,
+      oauthRegisteredRedirectUri:
+        stringValue(input?.oauthRegisteredRedirectUri ?? existing?.oauthRegisteredRedirectUri) || undefined,
+      corosOAuthRegistrationVersion:
+        typeof input?.corosOAuthRegistrationVersion === "number"
+          ? input.corosOAuthRegistrationVersion
+          : typeof existing?.corosOAuthRegistrationVersion === "number"
+            ? existing.corosOAuthRegistrationVersion
+            : undefined,
       ...encryptedSecretPatch(input, existing, clientSecretFields),
       ...encryptedSecretPatch(input, existing, accessTokenFields),
       ...encryptedSecretPatch(input, existing, refreshTokenFields)
@@ -298,6 +345,9 @@ function sanitizeAuth(auth: DataMcpAuthConfig | undefined): DataMcpAuthConfig {
       clientId: stringValue(auth?.clientId),
       scopes: stringValue(auth?.scopes),
       expiresAt: stringValue(auth?.expiresAt) || undefined,
+      oauthRegisteredRedirectUri: stringValue(auth?.oauthRegisteredRedirectUri) || undefined,
+      corosOAuthRegistrationVersion:
+        typeof auth?.corosOAuthRegistrationVersion === "number" ? auth.corosOAuthRegistrationVersion : undefined,
       ...sanitizeSecret(auth ?? { type }, clientSecretFields),
       ...sanitizeSecret(auth ?? { type }, accessTokenFields),
       ...sanitizeSecret(auth ?? { type }, refreshTokenFields)
@@ -630,6 +680,26 @@ function mcpLoginRequiredResult(connection: DataMcpConnection): SettingsTestResu
   };
 }
 
+function parseMcpTestResponse(contentType: string, text: string): { error?: { code?: number; message?: string }; result?: unknown } | null {
+  if (!text) return null;
+
+  if (contentType.includes("text/event-stream")) {
+    for (const line of text.split(/\r?\n/)) {
+      const trimmed = line.startsWith("data:") ? line.slice(5).trim() : "";
+      if (!trimmed) continue;
+      try {
+        const parsed = JSON.parse(trimmed) as { error?: { code?: number; message?: string }; result?: unknown };
+        if ("result" in parsed || "error" in parsed) return parsed;
+      } catch {
+        // Ignore keepalives and non-JSON SSE comments.
+      }
+    }
+    return null;
+  }
+
+  return JSON.parse(text) as { error?: { code?: number; message?: string }; result?: unknown };
+}
+
 async function testMcpConnection(connection: DataMcpConnection): Promise<SettingsTestResult> {
   if (!connection.enabled) {
     return {
@@ -668,9 +738,38 @@ async function testMcpConnection(connection: DataMcpConnection): Promise<Setting
 
   return withLatency(async () => {
     try {
-      const response = await fetch(connection.endpoint, { method: "GET", headers });
+      const response = await fetch(connection.endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+          ...headers
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: {
+            protocolVersion: "2025-06-18",
+            capabilities: {},
+            clientInfo: {
+              name: "healthy-body-manager",
+              version: "0.1.0"
+            }
+          }
+        })
+      });
       if (response.ok) {
-        return { id: connection.id, label: connection.label, status: "connected", message: `Endpoint responded with HTTP ${response.status}.` };
+        const result = parseMcpTestResponse(response.headers.get("content-type") ?? "", await response.text());
+        if (result?.error) {
+          return {
+            id: connection.id,
+            label: connection.label,
+            status: "failed",
+            message: `MCP error${result.error.code ? ` ${result.error.code}` : ""}: ${result.error.message ?? "Unknown error"}`
+          };
+        }
+        return { id: connection.id, label: connection.label, status: "connected", message: `MCP endpoint initialized with HTTP ${response.status}.` };
       }
       if (response.status === 401 || response.status === 403) {
         return mcpLoginRequiredResult(connection);
@@ -737,6 +836,60 @@ async function persistConnections(userId: string, record: SettingsRecord, connec
   });
 }
 
+const officialCorosMcpBaseUrls = new Set(corosMcpRegionOptions.map((option) => option.url.replace(/\/$/, "")));
+
+/**
+ * Persist COROS MCP endpoint/region before OAuth redirect without touching `auth`.
+ * Full `saveUserSettings` from the Settings form often sends `auth: { type: "none" }`, which would
+ * wipe an in-progress OAuth2 registration and break COROS "state" validation on the login page.
+ */
+export async function prepareCorosMcpConnectionForOAuth(
+  userId: string,
+  input: { endpoint: string; corosRegion?: CorosMcpRegion }
+): Promise<void> {
+  const endpointRaw = stringValue(input.endpoint);
+  const normalizedEndpoint = endpointRaw.replace(/\/$/, "");
+  if (!officialCorosMcpBaseUrls.has(normalizedEndpoint)) {
+    throw new Error("COROS endpoint must be one of the official regional MCP URLs.");
+  }
+
+  let record = await prisma.userSettings.findUnique({ where: { userId } });
+  if (!record) {
+    await prisma.userSettings.create({
+      data: {
+        userId,
+        modelProvider: defaultSettingsView.modelProvider,
+        modelName: defaultSettingsView.modelName,
+        modelBaseUrl: defaultSettingsView.modelBaseUrl || null,
+        encryptedApiKey: null,
+        apiKeyIv: null,
+        apiKeyTag: null,
+        apiKeyHint: null,
+        dataMcpConnectionsJson: JSON.stringify(cloneDefaultConnections())
+      }
+    });
+    record = await prisma.userSettings.findUnique({ where: { userId } });
+  }
+  if (!record) throw new Error("Could not prepare user settings.");
+
+  const connections = parseStoredConnections(record.dataMcpConnectionsJson);
+  const connection = connections.find((item) => item.id === "coros");
+  if (!connection) throw new Error("COROS MCP connection is missing.");
+
+  const region = input.corosRegion !== undefined ? corosRegionValue(input.corosRegion) : connection.corosRegion;
+
+  const updated: DataMcpConnection = {
+    ...connection,
+    endpoint: normalizedEndpoint,
+    ...(region ? { corosRegion: region } : {}),
+    serverName: "coros",
+    capabilityName: "daily-health"
+  };
+
+  const next = connections.map((item) => (item.id === "coros" ? updated : item));
+  await persistConnections(userId, record, next);
+}
+
 export async function createMcpOAuthAuthorizationUrl(userId: string, connectionId: DataMcpConnectionId, origin: string): Promise<URL> {
   const record = await prisma.userSettings.findUnique({ where: { userId } });
   if (!record) throw new Error("Save MCP settings before starting OAuth login.");
@@ -745,16 +898,23 @@ export async function createMcpOAuthAuthorizationUrl(userId: string, connectionI
   const connection = connections.find((item) => item.id === connectionId);
   if (!connection) throw new Error("Invalid MCP connection");
 
-  // For COROS, try MCP OAuth discovery before requiring pre-configured OAuth2 URLs
-  if (connectionId === "coros") {
-    const discovered = await discoverCorosMcpOAuthEndpoints(connection);
+  const appOrigin = new URL(origin).origin;
+  // The browser must land the callback on a host COROS accepts as a redirect (not `localhost`).
+  const callbackOrigin = toLoopbackOrigin(appOrigin);
+  const redirectUri = `${callbackOrigin}/api/settings/mcp/oauth/callback`;
 
-    if (discovered) {
+  let corosDiscovery: Awaited<ReturnType<typeof discoverCorosMcpOAuthEndpoints>> = null;
+
+  // For COROS, try MCP / OAuth metadata discovery before requiring pre-configured OAuth2 URLs
+  if (connectionId === "coros") {
+    corosDiscovery = await discoverCorosMcpOAuthEndpoints(connection);
+
+    if (corosDiscovery) {
       connection.auth = {
         ...connection.auth,
         type: "oauth2",
-        authorizeUrl: discovered.authorizeUrl,
-        tokenUrl: discovered.tokenUrl
+        authorizeUrl: corosDiscovery.authorizeUrl,
+        tokenUrl: corosDiscovery.tokenUrl
       };
       await persistConnections(userId, record, connections);
     } else if (connection.auth.type !== "oauth2" || !connection.auth.authorizeUrl || !connection.auth.tokenUrl) {
@@ -768,28 +928,75 @@ export async function createMcpOAuthAuthorizationUrl(userId: string, connectionI
 
   if (connection.auth.type !== "oauth2") throw new Error("MCP connection is not configured for OAuth2.");
 
-  const { authorizeUrl, tokenUrl, clientId, scopes } = connection.auth;
+  const { authorizeUrl, tokenUrl } = connection.auth;
+  let clientId = stringValue(connection.auth.clientId);
+  let scopes = stringValue(connection.auth.scopes);
 
   if (!authorizeUrl || !tokenUrl) {
     throw new Error("OAuth authorize URL and token URL are required. Set Auth type to OAuth2 and fill in the fields.");
   }
 
-  if (!clientId) {
-    throw new Error("OAuth client ID is required. Add it in the connection settings.");
+  if (connectionId === "coros") {
+    const registrationEndpoint = corosDiscovery?.registrationEndpoint;
+    const registeredFor = stringValue(connection.auth.oauthRegisteredRedirectUri);
+    const regVer = connection.auth.corosOAuthRegistrationVersion;
+    // The client must be (re)registered for the exact redirect_uri and current registration shape.
+    // A stored client without these markers (or registered for a different host, e.g. an old
+    // `localhost` redirect) makes COROS reject the post-login authorize leg with a 400, so register
+    // a fresh one whenever dynamic registration is available and the existing client is unverified.
+    const registeredForCurrent = registeredFor === redirectUri && regVer === COROS_OAUTH_REGISTRATION_VERSION;
+    if (registrationEndpoint && (!stringValue(clientId) || !registeredForCurrent)) {
+      const registered = await registerCorosOAuthClient(registrationEndpoint, redirectUri);
+      clientId = registered.clientId;
+      connection.auth.clientId = clientId;
+      connection.auth.oauthRegisteredRedirectUri = redirectUri;
+      connection.auth.corosOAuthRegistrationVersion = COROS_OAUTH_REGISTRATION_VERSION;
+      await persistConnections(userId, record, connections);
+    }
+  }
+
+  if (!stringValue(clientId)) {
+    throw new Error(
+      "OAuth client ID is required. For official COROS MCP endpoints this should register automatically; otherwise add Client ID in the connection settings."
+    );
+  }
+
+  if (connectionId === "coros" && !stringValue(scopes)) {
+    scopes = COROS_OAUTH_DEFAULT_SCOPES;
+    connection.auth.scopes = scopes;
   }
 
   const state = randomBytes(18).toString("hex");
   connection.auth.oauthState = state;
+  // Remember where the user started so the callback (which lands on the loopback origin) can send
+  // them back to their original session origin.
+  connection.auth.oauthReturnOrigin = appOrigin;
+
+  let corosPkce: { verifier: string; challenge: string } | null = null;
+  if (connectionId === "coros") {
+    corosPkce = createOAuthPkceS256Pair();
+    connection.auth.oauthCodeVerifier = corosPkce.verifier;
+  } else {
+    connection.auth.oauthCodeVerifier = undefined;
+  }
+
   await persistConnections(userId, record, connections);
 
-  const appOrigin = new URL(origin).origin;
-  const redirectUri = `${appOrigin}/api/settings/mcp/oauth/callback`;
   const url = new URL(authorizeUrl);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("client_id", clientId);
+  url.searchParams.set("client_id", stringValue(clientId));
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("state", state);
   if (scopes) url.searchParams.set("scope", scopes);
+  if (corosPkce) {
+    url.searchParams.set("code_challenge", corosPkce.challenge);
+    url.searchParams.set("code_challenge_method", "S256");
+  }
+  // RFC 8707 Resource Indicators: MCP authorization requires the canonical MCP server URI so the
+  // authorization server can bind the issued token's audience. Omitting it makes COROS reject the
+  // post-login `login_ticket` authorize leg with a 400 Bad Request.
+  const resource = stringValue(connection.endpoint).replace(/\/$/, "");
+  if (resource) url.searchParams.set("resource", resource);
   return url;
 }
 
@@ -807,16 +1014,22 @@ export async function handleMcpOAuthCallback(
   const { tokenUrl, clientId } = connection.auth;
   if (!tokenUrl || !clientId) throw new Error("OAuth token URL and client ID are required.");
 
-  const appOrigin = new URL(input.origin).origin;
-  const redirectUri = `${appOrigin}/api/settings/mcp/oauth/callback`;
+  // Must match the redirect_uri used at authorize time (loopback IP, not localhost).
+  const callbackOrigin = toLoopbackOrigin(new URL(input.origin).origin);
+  const redirectUri = `${callbackOrigin}/api/settings/mcp/oauth/callback`;
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code: input.code,
     redirect_uri: redirectUri,
-    client_id: clientId
+    client_id: stringValue(clientId)
   });
+  const codeVerifier = stringValue(connection.auth.oauthCodeVerifier);
+  if (codeVerifier) body.set("code_verifier", codeVerifier);
   const clientSecret = decryptStoredSecret(connection.auth, clientSecretFields);
   if (clientSecret) body.set("client_secret", clientSecret);
+  // RFC 8707: the token request must carry the same resource indicator used at authorize time.
+  const resource = stringValue(connection.endpoint).replace(/\/$/, "");
+  if (resource) body.set("resource", resource);
 
   const response = await fetch(tokenUrl, {
     method: "POST",
@@ -839,6 +1052,7 @@ export async function handleMcpOAuthCallback(
   connection.auth = {
     ...connection.auth,
     oauthState: undefined,
+    oauthCodeVerifier: undefined,
     expiresAt:
       typeof tokenBody.expires_in === "number" && Number.isFinite(tokenBody.expires_in)
         ? new Date(Date.now() + tokenBody.expires_in * 1000).toISOString()
@@ -851,4 +1065,32 @@ export async function handleMcpOAuthCallback(
 
   await persistConnections(userId, record, connections);
   return connection.id;
+}
+
+/**
+ * Resolve the user and original app origin for an in-progress OAuth flow from its `state` token.
+ *
+ * The OAuth callback lands on the loopback IP origin (127.0.0.1) that COROS accepts as a redirect
+ * host, which does not share the session cookie set on the user's browsing origin (localhost). The
+ * random `state` is the standard correlation token for the pending authorization, so it is used to
+ * identify the user instead of the session.
+ */
+export async function resolveMcpOAuthState(
+  state: string
+): Promise<{ userId: string; returnOrigin: string | null } | null> {
+  const candidate = stringValue(state);
+  if (!candidate) return null;
+
+  const records = await prisma.userSettings.findMany();
+  for (const record of records) {
+    const connections = parseStoredConnections(record.dataMcpConnectionsJson);
+    const connection = connections.find(
+      (item) => item.auth.type === "oauth2" && item.auth.oauthState === candidate
+    );
+    if (connection) {
+      return { userId: record.userId, returnOrigin: stringValue(connection.auth.oauthReturnOrigin) || null };
+    }
+  }
+
+  return null;
 }

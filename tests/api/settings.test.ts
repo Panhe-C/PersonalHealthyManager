@@ -7,6 +7,7 @@ import {
   createMcpOAuthAuthorizationUrl,
   handleMcpOAuthCallback,
   loadUserSettings,
+  resolveMcpOAuthState,
   saveUserSettings,
   testUserSettings
 } from "@/src/settings/service";
@@ -21,6 +22,7 @@ vi.mock("@/src/auth/api", () => ({
 vi.mock("@/src/settings/service", () => ({
   createMcpOAuthAuthorizationUrl: vi.fn(),
   handleMcpOAuthCallback: vi.fn(),
+  resolveMcpOAuthState: vi.fn(),
   loadUserSettings: vi.fn(),
   saveUserSettings: vi.fn(),
   testUserSettings: vi.fn()
@@ -41,7 +43,7 @@ describe("settings API", () => {
       dataMcpConnections: []
     });
 
-    const response = await GET(new Request("http://localhost/api/settings"));
+    const response = await GET();
 
     expect(await response.json()).toEqual(expect.objectContaining({ modelProvider: "openai" }));
     expect(loadUserSettings).toHaveBeenCalledWith("user-1");
@@ -98,19 +100,35 @@ describe("settings API", () => {
     );
   });
 
-  it("handles MCP OAuth callback and redirects back to Settings", async () => {
+  it("handles MCP OAuth callback and redirects back to the original origin", async () => {
+    vi.mocked(resolveMcpOAuthState).mockResolvedValue({ userId: "user-1", returnOrigin: "http://localhost:3000" });
     vi.mocked(handleMcpOAuthCallback).mockResolvedValue("coros");
 
     const response = await OAUTH_CALLBACK_GET(
-      new Request("http://localhost/api/settings/mcp/oauth/callback?code=code-1&state=state-1")
+      new Request("http://127.0.0.1/api/settings/mcp/oauth/callback?code=code-1&state=state-1")
     );
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("http://localhost/settings?mcp=coros&auth=connected");
+    expect(response.headers.get("location")).toBe("http://localhost:3000/settings?mcp=coros&auth=connected");
+    expect(resolveMcpOAuthState).toHaveBeenCalledWith("state-1");
     expect(handleMcpOAuthCallback).toHaveBeenCalledWith("user-1", {
       code: "code-1",
       state: "state-1",
-      origin: "http://localhost"
+      origin: "http://127.0.0.1"
     });
+  });
+
+  it("redirects to Settings with an error when the OAuth state cannot be resolved", async () => {
+    vi.mocked(resolveMcpOAuthState).mockResolvedValue(null);
+
+    const response = await OAUTH_CALLBACK_GET(
+      new Request("http://127.0.0.1/api/settings/mcp/oauth/callback?code=code-1&state=unknown")
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      "http://127.0.0.1/settings?auth=failed&error=Invalid+or+expired+OAuth+state"
+    );
+    expect(handleMcpOAuthCallback).not.toHaveBeenCalled();
   });
 });

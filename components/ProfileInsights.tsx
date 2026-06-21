@@ -5,6 +5,7 @@ type ProfileInsightActivity = {
   id: string;
   sportType: string;
   startedAt: Date;
+  metadataJson?: string | null;
   durationMinutes: number;
   distanceKm?: number | null;
   averageHeartRateBpm?: number | null;
@@ -40,6 +41,7 @@ type ProfileInsightsProps = {
   activities: ProfileInsightActivity[];
   sleepRecords: ProfileInsightSleep[];
   recoveryRecords: ProfileInsightRecovery[];
+  dataMode?: "live" | "demo";
 };
 
 const dateFormatter = new Intl.DateTimeFormat("en", { month: "short", day: "numeric" });
@@ -54,6 +56,25 @@ function formatHours(minutes: number) {
 
 function compactNumber(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function hasDateOnlyMetadata(activity: ProfileInsightActivity) {
+  if (!activity.metadataJson) return false;
+
+  try {
+    const metadata = JSON.parse(activity.metadataJson) as { dateOnly?: unknown };
+    return metadata.dateOnly === true;
+  } catch {
+    return false;
+  }
+}
+
+function formatActivityTimestamp(activity: ProfileInsightActivity) {
+  if (hasDateOnlyMetadata(activity)) {
+    return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(activity.startedAt);
+  }
+
+  return activity.startedAt.toLocaleString();
 }
 
 function sortByDate<T>(items: T[], getDate: (item: T) => Date) {
@@ -181,7 +202,6 @@ function SleepRunway({ sleepRecords }: { sleepRecords: ProfileInsightSleep[] }) 
 
 function LoadMosaic({ activities }: { activities: ProfileInsightActivity[] }) {
   const sorted = sortByDate(activities, (activity) => activity.startedAt);
-  const scale = Math.max(...sorted.map((activity) => activity.trainingLoad ?? 1), 1);
 
   return (
     <article className="load-mosaic-card">
@@ -193,9 +213,8 @@ function LoadMosaic({ activities }: { activities: ProfileInsightActivity[] }) {
         <ul className="load-mosaic" aria-label="Recent training load mosaic">
           {sorted.map((activity) => {
             const load = activity.trainingLoad ?? 0;
-            const size = Math.max(34, Math.min(88, Math.round((load / scale) * 88)));
             return (
-              <li className={`load-tile load-tile-${activity.intensity}`} key={activity.id} style={{ "--tile-size": `${size}px` } as React.CSSProperties}>
+              <li className={`load-tile load-tile-${activity.intensity}`} key={activity.id}>
                 <span>{formatDay(activity.startedAt)}</span>
                 <strong>{load > 0 ? compactNumber(load) : "—"}</strong>
                 <em>{activity.sportType}</em>
@@ -275,7 +294,7 @@ function LatestWorkout({ activity }: { activity?: ProfileInsightActivity }) {
             <strong>
               {activity.sportType} · {activity.intensity}
             </strong>
-            <p className="page-subtitle">{activity.startedAt.toLocaleString()}</p>
+            <p className="page-subtitle">{formatActivityTimestamp(activity)}</p>
             <dl className="session-stat-list">
               {stats.map((stat) => (
                 <div key={stat.label}>
@@ -296,9 +315,10 @@ function LatestWorkout({ activity }: { activity?: ProfileInsightActivity }) {
   );
 }
 
-export function ProfileInsights({ activities, sleepRecords, recoveryRecords }: ProfileInsightsProps) {
+export function ProfileInsights({ activities, sleepRecords, recoveryRecords, dataMode = "live" }: ProfileInsightsProps) {
   const hasAnyData =
     recoveryRecords.some((record) => record.recoveryPercent != null) || sleepRecords.length > 0 || activities.length > 0;
+  const isDemoData = dataMode === "demo";
 
   return (
     <section className="surface panel profile-insights">
@@ -308,9 +328,15 @@ export function ProfileInsights({ activities, sleepRecords, recoveryRecords }: P
           <h2>Health trends</h2>
           <p className="page-subtitle">A less tidy, more useful read on readiness, sleep rhythm, and training strain.</p>
         </div>
-        <div className="insight-badge">
+        <div className={isDemoData ? "insight-badge insight-badge-demo" : "insight-badge"}>
           <TrendingUp aria-hidden="true" size={16} />
-          7-day window
+          {isDemoData ? (
+            <>
+              <span>Demo data</span>
+              <span aria-hidden="true">·</span>
+            </>
+          ) : null}
+          <span>7-day window</span>
         </div>
       </div>
 

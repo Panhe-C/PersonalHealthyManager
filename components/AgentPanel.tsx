@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Send } from "lucide-react";
 import { ActionButton } from "@/components/ActionButton";
 
@@ -21,6 +21,18 @@ export function AgentPanel({ initialMessages }: { initialMessages: ChatMessage[]
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState(initialMessages);
   const [sending, setSending] = useState(false);
+  const messagesRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const messagesElement = messagesRef.current;
+    if (!messagesElement) return;
+
+    if (typeof messagesElement.scrollTo === "function") {
+      messagesElement.scrollTo({ top: messagesElement.scrollHeight });
+    } else {
+      messagesElement.scrollTop = messagesElement.scrollHeight;
+    }
+  }, [messages.length]);
 
   async function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -49,7 +61,7 @@ export function AgentPanel({ initialMessages }: { initialMessages: ChatMessage[]
 
   return (
     <section className="surface agent-panel">
-      <div className="agent-messages" aria-live="polite">
+      <div className="agent-messages agent-messages-scroll" aria-label="Conversation messages" aria-live="polite" ref={messagesRef}>
         {messages.length === 0 ? (
           <div className="empty-state">Ask about today&apos;s training, recovery, schedule, or meal choices.</div>
         ) : (
@@ -81,7 +93,7 @@ export function AgentPanel({ initialMessages }: { initialMessages: ChatMessage[]
         ))}
       </div>
 
-      <form className="agent-composer" onSubmit={send}>
+      <form className="agent-composer agent-composer-dock" aria-label="Message composer" onSubmit={send}>
         <label className="field agent-composer-field">
           <span className="sr-only">Message</span>
           <input
