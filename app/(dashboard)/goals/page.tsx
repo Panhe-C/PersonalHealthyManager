@@ -1,10 +1,7 @@
 import { GoalForm } from "@/components/GoalForm";
+import { GoalList } from "@/components/GoalList";
 import { requireUser } from "@/src/auth/session";
 import { prisma } from "@/src/db/client";
-
-function typeLabel(type: string) {
-  return type.replaceAll("_", " ");
-}
 
 export default async function GoalsPage() {
   const user = await requireUser();
@@ -31,24 +28,16 @@ export default async function GoalsPage() {
               <p className="page-subtitle">Primary and event goals can outrank longer-term goals.</p>
             </div>
           </div>
-          {goals.length === 0 ? (
-            <div className="empty-state">No active goals yet.</div>
-          ) : (
-            <div className="list goal-list">
-              {goals.map((goal, index) => (
-                <div className={index === 0 ? "list-row goal-row-primary" : "list-row"} key={goal.id}>
-                  <div>
-                    <strong>{goal.title}</strong>
-                    <div className="task-meta">
-                      {typeLabel(goal.type)}
-                      {goal.targetDate ? ` · ${goal.targetDate.toLocaleDateString()}` : ""}
-                    </div>
-                  </div>
-                  <span className={index === 0 ? "status status-positive" : "status"}>Priority {goal.priority}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          <GoalList
+            goals={goals.map((goal) => ({
+              id: goal.id,
+              title: goal.title,
+              type: goal.type,
+              priority: goal.priority,
+              targetDate: goal.targetDate ? goal.targetDate.toISOString().slice(0, 10) : null,
+              targetDateLabel: goal.targetDate ? goal.targetDate.toLocaleDateString() : null
+            }))}
+          />
         </div>
 
         <div>

@@ -40,6 +40,38 @@ export async function createGoal(userId: string, input: unknown) {
   });
 }
 
+export async function updateGoal(userId: string, goalId: string, input: unknown) {
+  const goal = parseGoalInput(input);
+
+  return prisma.$transaction(async (tx) => {
+    if (goal.type === "primary" && goal.status === "active") {
+      await tx.goal.updateMany({
+        where: { userId, type: "primary", status: "active", NOT: { id: goalId } },
+        data: { type: "secondary" }
+      });
+    }
+
+    return tx.goal.update({
+      where: { id_userId: { id: goalId, userId } },
+      data: {
+        title: goal.title,
+        type: goal.type,
+        priority: goal.priority,
+        status: goal.status,
+        targetDate: goal.targetDate ? new Date(goal.targetDate) : null,
+        metricsJson: JSON.stringify(goal.metrics)
+      }
+    });
+  });
+}
+
+export async function removeGoal(userId: string, goalId: string) {
+  return prisma.goal.update({
+    where: { id_userId: { id: goalId, userId } },
+    data: { status: "paused" }
+  });
+}
+
 export async function listGoals(userId: string) {
   const goals = await prisma.goal.findMany({
     where: { userId, status: "active" }
