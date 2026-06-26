@@ -9,6 +9,10 @@ vi.mock("@/components/ActionButton", () => ({
   )
 }));
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() })
+}));
+
 const conversations = [
   { id: "conv-1", title: "Recovery", updatedAt: "2026-06-21T01:00:00.000Z" },
   { id: "conv-2", title: "Calendar", updatedAt: "2026-06-20T01:00:00.000Z" }
@@ -272,6 +276,35 @@ describe("AgentPanel", () => {
     await waitFor(() => expect(screen.queryByRole("button", { name: "Recovery" })).not.toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Calendar" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("Calendar answer")).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  it("renders an undo affordance for executed adjustments and undoes on click", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        expect(String(input)).toBe("/api/agent/adjustments/adj-1/undo");
+        return { ok: true, json: async () => ({ id: "adj-1", undoneAt: "2026-06-26T14:00:00.000Z" }) };
+      })
+    );
+
+    render(
+      <AgentPanel
+        initialConversations={conversations}
+        initialConversationId="conv-1"
+        initialMessages={[
+          {
+            id: "m1",
+            role: "assistant",
+            content: "已把周三降为 easy",
+            adjustments: [{ id: "adj-1", label: "已把周三降为 easy", undoneAt: null }]
+          }
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "撤销" }));
+    await waitFor(() => expect(screen.getByText("已撤销")).toBeInTheDocument());
     vi.unstubAllGlobals();
   });
 

@@ -1745,6 +1745,40 @@ h3 {
   background: linear-gradient(135deg, var(--sage), var(--sage-strong));
 }
 
+.agent-adjustment-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in oklch, var(--line) 60%, transparent);
+  font-size: 0.85em;
+}
+
+.agent-adjustment-label {
+  color: var(--ink-soft, var(--ink));
+}
+
+.agent-undo-button {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+.agent-undo-button:hover,
+.agent-undo-button:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.agent-adjustment-undone {
+  color: var(--ink-faint, #999);
+  font-style: italic;
+}
+
 .rich-message-content {
   display: grid;
   gap: 12px;
@@ -2041,6 +2075,11 @@ h3 {
     linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(247, 251, 247, 0.76));
 }
 
+.connection-card > .field,
+.connection-card > .connection-auth {
+  align-self: start;
+}
+
 .connection-auth,
 .oauth-fields {
   display: grid;
@@ -2106,7 +2145,7 @@ h3 {
 }
 
 .coros-mcp-minimal {
-  min-height: 128px;
+  min-height: 204px;
   align-content: center;
   justify-items: start;
   gap: 12px;

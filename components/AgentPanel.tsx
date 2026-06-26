@@ -3,12 +3,16 @@
 import React from "react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Send, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { ActionButton } from "@/components/ActionButton";
+
+type AdjustmentRef = { id: string; label: string; undoneAt: string | null };
 
 type ChatMessage = {
   id: string;
   role: string;
   content: string;
+  adjustments?: AdjustmentRef[];
 };
 
 type AgentConversationSummary = {
@@ -261,6 +265,7 @@ function RichMessageContent({ content }: { content: string }) {
 }
 
 export function AgentPanel({ initialConversations, initialConversationId, initialMessages }: AgentPanelProps) {
+  const router = useRouter();
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState(initialMessages);
   const [conversations, setConversations] = useState(initialConversations);
@@ -272,6 +277,29 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
   const [sending, setSending] = useState(false);
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const suggestions = useMemo(() => buildSuggestions(messages), [messages]);
+
+  async function undoAdjustment(messageId: string, adjustmentId: string) {
+    const response = await fetch(`/api/agent/adjustments/${adjustmentId}/undo`, { method: "POST" });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      setError(body.error ?? "撤销失败");
+      return;
+    }
+    const body = await response.json();
+    setMessages((items) =>
+      items.map((item) =>
+        item.id === messageId
+          ? {
+              ...item,
+              adjustments: item.adjustments?.map((adjustment) =>
+                adjustment.id === adjustmentId ? { ...adjustment, undoneAt: body.undoneAt } : adjustment
+              )
+            }
+          : item
+      )
+    );
+    router.refresh();
+  }
 
   useEffect(() => {
     const messagesElement = messagesRef.current;
@@ -374,7 +402,12 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
     if (response.ok) {
       setMessages((items) => [
         ...items,
-        { id: `${optimisticId}-assistant`, role: "assistant", content: body.message }
+        {
+          id: `${optimisticId}-assistant`,
+          role: "assistant",
+          content: body.message,
+          adjustments: Array.isArray(body.adjustments) ? body.adjustments : undefined
+        }
       ]);
       if (body.conversation) {
         setConversations((items) => [body.conversation, ...items.filter((item) => item.id !== body.conversation.id)]);
@@ -457,6 +490,25 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
                 </span>
                 <div className={item.role === "user" ? "chat-bubble chat-bubble-user" : "chat-bubble chat-bubble-assistant"}>
                   {item.role === "assistant" ? <RichMessageContent content={item.content} /> : item.content}
+                  {item.role === "assistant" && item.adjustments?.length
+                    ? item.adjustments.map((adjustment) => (
+                        <div className="agent-adjustment-row" key={adjustment.id}>
+                          <span className="agent-adjustment-label">{adjustment.label}</span>
+                          {adjustment.undoneAt ? (
+                            <span className="agent-adjustment-undone">已撤销</span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="agent-undo-button"
+                              aria-label="撤销"
+                              onClick={() => undoAdjustment(item.id, adjustment.id)}
+                            >
+                              撤销
+                            </button>
+                          )}
+                        </div>
+                      ))
+                    : null}
                 </div>
               </div>
             ))
