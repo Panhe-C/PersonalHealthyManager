@@ -1,5 +1,6 @@
 import { loadModelRuntimeConfig, type ModelRuntimeConfig } from "@/src/settings/service";
 import type { AgentContext } from "@/src/services/agentContext";
+import { actionIdList } from "@/src/services/agentActions/registry";
 
 export type AgentIntent = "recovery_check" | "calendar_confirmation" | "menu_advice" | "replan" | "training_analysis" | "general";
 
@@ -135,6 +136,11 @@ function systemPrompt(intent: AgentIntent, context?: AgentContext) {
     "If fresh sync failed but cached app records are present, analyze the cached records and clearly mention that the live refresh failed.",
     "Do not claim that you wrote to calendars, changed plans, or fetched external data unless the app explicitly provides that result.",
     "If you use a table, include at least one data row; otherwise use a short bullet list instead of an empty table.",
+    `You may propose actions only from this list: ${actionIdList().join(", ")}.`,
+    "Do not invent action ids or arguments.",
+    "Put any actions in a single <actions> JSON array block; put user-facing text in <explanation>.",
+    "All listed actions execute immediately and are undoable by the user; never claim an irreversible external write unless the app reports it.",
+    "If a safety rule overrides your proposal, tell the user truthfully what was changed and why.",
     `Current routed intent: ${intent}.`,
     intentInstructions(intent),
     `App context:\n${formatAgentContext(context)}`

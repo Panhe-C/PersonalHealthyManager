@@ -18,9 +18,16 @@ vi.mock("@/src/db/client", () => ({
       update: vi.fn()
     },
     agentMessage: {
+      create: vi.fn(),
       createMany: vi.fn(),
+      update: vi.fn(),
       findMany: vi.fn()
-    }
+    },
+    trainingTask: { findFirst: vi.fn() },
+    sleepRecord: { findFirst: vi.fn() },
+    recoveryRecord: { findFirst: vi.fn() },
+    calendarSnapshot: { findFirst: vi.fn() },
+    bodyProfile: { findUnique: vi.fn() }
   }
 }));
 
@@ -81,7 +88,12 @@ describe("agent API", () => {
       updatedAt: new Date("2026-06-21T09:00:00+08:00")
     } as never);
     vi.mocked(prisma.agentMessage.findMany).mockResolvedValue([{ role: "assistant", content: "上一次回复" }] as never);
-    vi.mocked(prisma.agentMessage.createMany).mockResolvedValue({ count: 2 } as never);
+    vi.mocked(prisma.agentMessage.create).mockResolvedValue({
+      id: "msg-assistant",
+      role: "assistant",
+      content: "模型回复"
+    } as never);
+    vi.mocked(prisma.agentMessage.update).mockResolvedValue({ id: "msg-assistant" } as never);
     vi.mocked(prisma.agentConversation.update).mockResolvedValue({
       id: "conv-1",
       title: "New conversation",
@@ -114,22 +126,18 @@ describe("agent API", () => {
       freshSync: { attempted: false, succeeded: false },
       sections: [{ title: "Body profile", content: "No body profile saved." }]
     });
-    expect(prisma.agentMessage.createMany).toHaveBeenCalledWith(
+    expect(prisma.agentMessage.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.arrayContaining([
-          expect.objectContaining({ userId: "user-1", conversationId: "conv-1", role: "user" }),
-          expect.objectContaining({
-            userId: "user-1",
-            conversationId: "conv-1",
-            role: "assistant",
-            content: "模型回复",
-            metadataJson: expect.stringContaining("Body profile")
-          })
-        ])
+        data: expect.objectContaining({ userId: "user-1", conversationId: "conv-1", role: "assistant", content: "模型回复" })
       })
     );
     expect(await response.json()).toEqual(
-      expect.objectContaining({ message: "模型回复", source: "model", conversation: expect.objectContaining({ id: "conv-1" }) })
+      expect.objectContaining({
+        message: "模型回复",
+        source: "model",
+        adjustments: [],
+        conversation: expect.objectContaining({ id: "conv-1" })
+      })
     );
   });
 });
