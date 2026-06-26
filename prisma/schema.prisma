@@ -261,6 +261,10 @@ model PlanAdjustment {
   newStateJson      String
   reason            String
   explanation       String
+  actionId          String?
+  messageId         String?
+  undoable          Boolean  @default(false)
+  undoneAt          DateTime?
   createdAt         DateTime @default(now())
 
   plan Plan @relation(fields: [planId, userId], references: [id, userId], onDelete: Cascade)
