@@ -1,6 +1,8 @@
 import type { AgentIntent } from "@/src/services/agent";
+import type { MealMenu } from "@/src/domain/models";
 import { prisma } from "@/src/db/client";
 import { syncCorosFromSettings } from "@/src/services/syncService";
+import { getMealMenusForDate } from "@/src/services/mealMenuService";
 
 export type AgentContext = {
   intent: AgentIntent;
@@ -131,18 +133,29 @@ async function loadPlanContext(userId: string) {
 }
 
 async function loadMenuContext(userId: string) {
-  const plan = await prisma.plan.findFirst({
-    where: { userId, status: { not: "superseded" } },
-    orderBy: { weekStart: "desc" },
-    select: { nutritionTargetsJson: true, menuRecommendationsJson: true, summary: true }
-  });
+  const [plan, todaysMenus] = await Promise.all([
+    prisma.plan.findFirst({
+      where: { userId, status: { not: "superseded" } },
+      orderBy: { weekStart: "desc" },
+      select: { nutritionTargetsJson: true, menuRecommendationsJson: true, summary: true }
+    }),
+    getMealMenusForDate(userId, new Date()).catch(() => [] as MealMenu[])
+  ]);
+
+  const menuLines = todaysMenus.flatMap((menu) =>
+    menu.items.map((item) => `${menu.meal}: ${item.name} (${item.calories} kcal, protein ${item.proteinGrams}g, tags ${item.tags.join("/") || "none"})`)
+  );
 
   return [
     section("Nutrition plan", [
       plan
         ? `Plan summary: ${plan.summary}\nNutrition targets: ${plan.nutritionTargetsJson}\nMenu recommendations: ${plan.menuRecommendationsJson}`
         : "No nutrition plan generated."
-    ])
+    ]),
+    section(
+      "Today's menu",
+      todaysMenus.length > 0 ? menuLines : ["No live menu available for today; falling back to cached recommendations."]
+    )
   ];
 }
 
