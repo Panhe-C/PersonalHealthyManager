@@ -202,7 +202,7 @@ async function callAnthropicModel(
     },
     body: JSON.stringify({
       model: config.modelName,
-      max_tokens: 1400,
+      max_tokens: 3000,
       system: systemPrompt(intent, context),
       messages: [...compactHistory(history), { role: "user", content: message }]
     })
@@ -227,7 +227,7 @@ async function callOpenAiCompatibleModel(
     body: JSON.stringify({
       model: config.modelName,
       temperature: 0.3,
-      max_tokens: 1400,
+      max_tokens: 3000,
       messages: [
         { role: "system", content: systemPrompt(intent, context) },
         ...compactHistory(history),
