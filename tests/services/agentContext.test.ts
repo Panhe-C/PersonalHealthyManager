@@ -14,7 +14,9 @@ vi.mock("@/src/db/client", () => ({
     recoveryRecord: { findMany: vi.fn() },
     plan: { findFirst: vi.fn() },
     calendarSnapshot: { findFirst: vi.fn() },
-    calendarEventDraft: { findMany: vi.fn() }
+    calendarEventDraft: { findMany: vi.fn() },
+    agentMemory: { findMany: vi.fn() },
+    agentConversation: { findFirst: vi.fn(), findMany: vi.fn() }
   }
 }));
 
@@ -29,6 +31,9 @@ describe("agent context", () => {
     vi.mocked(prisma.plan.findFirst).mockResolvedValue(null);
     vi.mocked(prisma.calendarSnapshot.findFirst).mockResolvedValue(null);
     vi.mocked(prisma.calendarEventDraft.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.agentMemory.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.agentConversation.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.agentConversation.findMany).mockResolvedValue([]);
   });
 
   it("detects explicit fresh-data phrases", () => {

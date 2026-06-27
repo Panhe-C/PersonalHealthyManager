@@ -13,6 +13,10 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() })
 }));
 
+vi.mock("@/components/AgentMemoryPanel", () => ({
+  AgentMemoryPanel: () => null
+}));
+
 const conversations = [
   { id: "conv-1", title: "Recovery", updatedAt: "2026-06-21T01:00:00.000Z" },
   { id: "conv-2", title: "Calendar", updatedAt: "2026-06-20T01:00:00.000Z" }
@@ -98,6 +102,23 @@ describe("AgentPanel", () => {
     expect(assistantMessage).not.toHaveTextContent("| --- | --- | --- |");
   });
 
+  it("renders fenced code blocks as <pre> without showing the backtick fences", () => {
+    const markdown = ["先看这段配置：", "```json", '{"intensity":"easy"}', "```", "再继续说明。"].join("\n");
+
+    render(
+      <AgentPanel
+        initialConversations={conversations}
+        initialConversationId="conv-1"
+        initialMessages={[{ id: "assistant-1", role: "assistant", content: markdown }]}
+      />
+    );
+
+    const assistantMessage = screen.getByLabelText("AI message");
+    const codeBlock = within(assistantMessage).getByText('{"intensity":"easy"}');
+    expect(codeBlock.closest(".rich-code-block")).toBeInTheDocument();
+    expect(within(assistantMessage).queryByText(/```/)).not.toBeInTheDocument();
+  });
+
   it("renders an explanatory fallback instead of an empty markdown table", () => {
     const markdown = ["### 改进建议", "| 当前问题 | 建议调整 |", "| --- | --- |"].join("\n");
 
@@ -159,7 +180,20 @@ describe("AgentPanel", () => {
     vi.unstubAllGlobals();
   });
 
-  it("tailors suggested prompts to the current conversation content", () => {
+  it("tailors suggested prompts to the current conversation content", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe("/api/agent");
+      expect(JSON.parse(String(init?.body))).toEqual({ conversationId: "conv-1", message: "给我下周跑步安排" });
+      return {
+        ok: true,
+        json: async () => ({
+          message: "好的，下周安排已基于恢复状态调整。",
+          conversation: { id: "conv-1", title: "训练分析", updatedAt: "2026-06-21T02:00:00.000Z" }
+        })
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
     render(
       <AgentPanel
         initialConversations={conversations}
@@ -176,7 +210,11 @@ describe("AgentPanel", () => {
     expect(screen.queryByRole("button", { name: "今天午餐这些菜怎么选？" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "给我下周跑步安排" }));
-    expect(screen.getByPlaceholderText("Ask about training, recovery, calendar, or meals")).toHaveValue("给我下周跑步安排");
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(screen.getByPlaceholderText("Ask about training, recovery, calendar, or meals")).toHaveValue("");
+    await waitFor(() => expect(screen.getByText("好的，下周安排已基于恢复状态调整。")).toBeInTheDocument());
+    vi.unstubAllGlobals();
   });
 
   it("refreshes suggested prompts after switching conversations", async () => {
@@ -331,6 +369,34 @@ describe("AgentPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
     await waitFor(() => expect(screen.getByText("Assistant reply")).toBeInTheDocument());
+    vi.unstubAllGlobals();
+  });
+
+  it("refreshes suggestion chips after a send based on the new conversation topic", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          message: "本周跑步训练量偏高，建议降低强度并关注恢复。",
+          conversation: { id: "conv-1", title: "训练分析", updatedAt: "2026-06-21T02:00:00.000Z" }
+        })
+      }))
+    );
+
+    render(<AgentPanel initialConversations={conversations} initialConversationId="conv-1" initialMessages={[]} />);
+
+    expect(screen.getByRole("button", { name: "今天午餐这些菜怎么选？" })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("Ask about training, recovery, calendar, or meals"), {
+      target: { value: "分析我这周的运动数据" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "拉取最新 COROS 数据后再分析" })).toBeInTheDocument()
+    );
+    expect(screen.queryByRole("button", { name: "今天午餐这些菜怎么选？" })).not.toBeInTheDocument();
     vi.unstubAllGlobals();
   });
 

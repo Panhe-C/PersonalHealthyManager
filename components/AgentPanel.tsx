@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Send, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ActionButton } from "@/components/ActionButton";
+import { AgentMemoryPanel } from "@/components/AgentMemoryPanel";
 
 type AdjustmentRef = { id: string; label: string; undoneAt: string | null };
 
@@ -189,6 +190,22 @@ function RichMessageContent({ content }: { content: string }) {
         <HeadingTag className="rich-heading" key={`h-${blocks.length}`}>
           {renderInline(headingMatch[2].trim())}
         </HeadingTag>
+      );
+      continue;
+    }
+
+    if (/^```/.test(line)) {
+      flushParagraph();
+      const fenceLines: string[] = [];
+      index += 1;
+      while (index < lines.length && !/^```/.test(lines[index].trim())) {
+        fenceLines.push(lines[index]);
+        index += 1;
+      }
+      blocks.push(
+        <pre className="rich-code-block" key={`code-${blocks.length}`}>
+          <code>{fenceLines.join("\n")}</code>
+        </pre>
       );
       continue;
     }
@@ -382,9 +399,8 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
     await createConversation();
   }
 
-  async function send(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const content = message.trim();
+  async function sendMessage(text: string) {
+    const content = text.trim();
     if (!content || sending || !selectedConversationId) return;
 
     setSending(true);
@@ -416,6 +432,11 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
       setError(body.error ?? "Message could not be sent.");
     }
     setSending(false);
+  }
+
+  async function send(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await sendMessage(message);
   }
 
   return (
@@ -468,6 +489,7 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
             </div>
           ))}
         </div>
+        <AgentMemoryPanel />
       </aside>
 
       <section className="surface agent-panel">
@@ -517,7 +539,13 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
 
         <div className="agent-suggestions" aria-label="Suggested prompts">
           {suggestions.map((suggestion) => (
-            <button className="suggestion-button" type="button" key={suggestion} onClick={() => setMessage(suggestion)}>
+            <button
+              className="suggestion-button"
+              type="button"
+              key={suggestion}
+              onClick={() => sendMessage(suggestion)}
+              disabled={sending || !selectedConversationId}
+            >
               {suggestion}
             </button>
           ))}

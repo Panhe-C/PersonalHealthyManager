@@ -4,6 +4,8 @@ import { prisma } from "@/src/db/client";
 import { createAgentResponse, createAgentResponseForUser } from "@/src/services/agent";
 import { buildAgentContext } from "@/src/services/agentContext";
 import { executeAgentAction } from "@/src/services/agentActions/executor";
+import { applyMemories } from "@/src/services/agentMemory/memoryService";
+import { maybeRefreshSummary } from "@/src/services/agentMemory/summaryService";
 
 vi.mock("@/src/auth/api", () => ({
   withUser:
@@ -31,6 +33,8 @@ vi.mock("@/src/services/agent", () => ({
 
 vi.mock("@/src/services/agentContext", () => ({ buildAgentContext: vi.fn() }));
 vi.mock("@/src/services/agentActions/executor", () => ({ executeAgentAction: vi.fn() }));
+vi.mock("@/src/services/agentMemory/memoryService", () => ({ applyMemories: vi.fn() }));
+vi.mock("@/src/services/agentMemory/summaryService", () => ({ maybeRefreshSummary: vi.fn() }));
 
 const replyWithActions = [
   "<explanation>已为你把周三降为 easy</explanation>",
@@ -69,6 +73,8 @@ describe("agent action execution", () => {
       title: "New conversation",
       updatedAt: new Date("2026-06-26T09:30:00+08:00")
     } as never);
+    vi.mocked(applyMemories).mockResolvedValue({ applied: [], warnings: [] });
+    vi.mocked(maybeRefreshSummary).mockResolvedValue({ refreshed: false });
   });
 
   it("executes reversible actions and returns adjustments", async () => {
@@ -148,5 +154,65 @@ describe("agent action execution", () => {
     );
     const body = await response.json();
     expect(body.message).toContain("Recovery/sleep/injury signals block");
+  });
+
+  it("applies memories with explicit source when the user asks to remember something", async () => {
+    vi.mocked(createAgentResponseForUser).mockResolvedValue({
+      intent: "general",
+      message: [
+        "<explanation>好的，我记住了你喜欢晨跑</explanation>",
+        "<memories>",
+        '[{"op":"add","kind":"preference","category":"training","content":"喜欢晨跑","confidence":0.9}]',
+        "</memories>"
+      ].join("\n"),
+      source: "model"
+    });
+    vi.mocked(applyMemories).mockResolvedValue({
+      applied: [{ op: "add", id: "mem-1", content: "喜欢晨跑", status: "created" }],
+      warnings: []
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/agent", {
+        method: "POST",
+        body: JSON.stringify({ conversationId: "conv-1", message: "记住我喜欢晨跑" })
+      })
+    );
+
+    expect(applyMemories).toHaveBeenCalledWith(
+      "user-1",
+      [{ op: "add", kind: "preference", category: "training", content: "喜欢晨跑", confidence: 0.9, targetContent: undefined }],
+      expect.objectContaining({ source: "explicit", conversationId: "conv-1" })
+    );
+    const body = await response.json();
+    expect(body.message).toContain("已记住：喜欢晨跑");
+    expect(body.message).not.toContain("<memories>");
+  });
+
+  it("applies memories with auto source for ordinary messages", async () => {
+    vi.mocked(createAgentResponseForUser).mockResolvedValue({
+      intent: "general",
+      message: [
+        "<explanation>了解了</explanation>",
+        "<memories>",
+        '[{"op":"add","kind":"fact","category":"nutrition","content":"对麸质过敏","confidence":0.8}]',
+        "</memories>"
+      ].join("\n"),
+      source: "model"
+    });
+    vi.mocked(applyMemories).mockResolvedValue({ applied: [], warnings: [] });
+
+    await POST(
+      new Request("http://localhost/api/agent", {
+        method: "POST",
+        body: JSON.stringify({ conversationId: "conv-1", message: "我对麸质过敏" })
+      })
+    );
+
+    expect(applyMemories).toHaveBeenCalledWith(
+      "user-1",
+      expect.any(Array),
+      expect.objectContaining({ source: "auto" })
+    );
   });
 });

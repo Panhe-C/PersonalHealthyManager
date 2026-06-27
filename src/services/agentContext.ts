@@ -3,6 +3,14 @@ import type { MealMenu } from "@/src/domain/models";
 import { prisma } from "@/src/db/client";
 import { syncCorosFromSettings } from "@/src/services/syncService";
 import { getMealMenusForDate } from "@/src/services/mealMenuService";
+import {
+  formatMemoryLines,
+  loadActiveMemoriesForContext
+} from "@/src/services/agentMemory/memoryService";
+import {
+  loadConversationSummaryForContext,
+  loadRecentConversationSummaries
+} from "@/src/services/agentMemory/summaryService";
 
 export type AgentContext = {
   intent: AgentIntent;
@@ -50,10 +58,11 @@ function formatActivityLine(item: {
   return `${formatDate(item.startedAt)}: ${item.sportType}, ${item.durationMinutes} min, ${distance}${heartRate}, intensity ${item.intensity}.`;
 }
 
-async function loadCommonContext(userId: string) {
-  const [profile, goals] = await Promise.all([
+async function loadCommonContext(userId: string, intent: AgentIntent) {
+  const [profile, goals, memories] = await Promise.all([
     prisma.bodyProfile.findUnique({ where: { userId } }),
-    prisma.goal.findMany({ where: { userId, status: "active" }, orderBy: { priority: "desc" }, take: 5 })
+    prisma.goal.findMany({ where: { userId, status: "active" }, orderBy: { priority: "desc" }, take: 5 }),
+    loadActiveMemoriesForContext(userId, intent)
   ]);
 
   return [
@@ -62,8 +71,36 @@ async function loadCommonContext(userId: string) {
         ? `Height ${profile.heightCm} cm, weight ${profile.weightKg} kg, experience ${profile.trainingExperience}, resting HR ${profile.restingHeartRateBpm ?? "unknown"}.`
         : "No body profile saved.",
       goals.length > 0 ? `Active goals: ${goals.map((goal) => `${goal.title} priority ${goal.priority}`).join("; ")}.` : "No active goals saved."
-    ])
+    ]),
+    section(
+      "User memory",
+      memories.length > 0
+        ? formatMemoryLines(memories)
+        : ["No long-term memories saved yet."]
+    )
   ];
+}
+
+async function loadMemorySummaryContext(userId: string, conversationId: string | undefined) {
+  if (!conversationId) return [];
+  const [currentSummary, recentSummaries] = await Promise.all([
+    loadConversationSummaryForContext(userId, conversationId),
+    loadRecentConversationSummaries(userId, conversationId)
+  ]);
+
+  const sections: Array<{ title: string; content: string }> = [];
+  if (currentSummary) {
+    sections.push(section("Earlier in this conversation", [currentSummary]));
+  }
+  if (recentSummaries.length > 0) {
+    sections.push(
+      section(
+        "Recent past conversations",
+        recentSummaries.map((item) => `${item.title}: ${item.summary}`)
+      )
+    );
+  }
+  return sections;
 }
 
 async function loadRecoveryContext(userId: string) {
@@ -159,7 +196,12 @@ async function loadMenuContext(userId: string) {
   ];
 }
 
-export async function buildAgentContext(userId: string, intent: AgentIntent, message: string): Promise<AgentContext> {
+export async function buildAgentContext(
+  userId: string,
+  intent: AgentIntent,
+  message: string,
+  conversationId?: string
+): Promise<AgentContext> {
   const freshSync = shouldRefreshCoros(message)
     ? await syncCorosFromSettings(userId)
         .then(() => ({ attempted: true, succeeded: true }))
@@ -170,17 +212,19 @@ export async function buildAgentContext(userId: string, intent: AgentIntent, mes
         }))
     : { attempted: false, succeeded: false };
 
-  const common = await loadCommonContext(userId);
-  const specific =
+  const [common, summarySections, specific] = await Promise.all([
+    loadCommonContext(userId, intent),
+    loadMemorySummaryContext(userId, conversationId),
     intent === "recovery_check"
-      ? await loadRecoveryContext(userId)
+      ? loadRecoveryContext(userId)
       : intent === "calendar_confirmation" || intent === "replan"
-        ? await loadPlanContext(userId)
+        ? loadPlanContext(userId)
         : intent === "menu_advice"
-          ? await loadMenuContext(userId)
+          ? loadMenuContext(userId)
           : intent === "training_analysis"
-            ? await loadTrainingAnalysisContext(userId)
-            : [];
+            ? loadTrainingAnalysisContext(userId)
+            : Promise.resolve([])
+  ]);
 
-  return { intent, freshSync, sections: [...common, ...specific] };
+  return { intent, freshSync, sections: [...common, ...summarySections, ...specific] };
 }

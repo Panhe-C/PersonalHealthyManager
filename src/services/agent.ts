@@ -141,6 +141,13 @@ function systemPrompt(intent: AgentIntent, context?: AgentContext) {
     "Put any actions in a single <actions> JSON array block; put user-facing text in <explanation>.",
     "All listed actions execute immediately and are undoable by the user; never claim an irreversible external write unless the app reports it.",
     "If a safety rule overrides your proposal, tell the user truthfully what was changed and why.",
+    "You have long-term memory. The 'User memory' section lists facts/preferences you have already saved about this user.",
+    "When the user explicitly asks you to remember something (e.g. 记住/记下/别忘了/remember), you MUST emit a memory add entry.",
+    "When the user reveals a durable fact, preference, routine, or constraint, you MAY emit a memory add entry with confidence >= 0.6.",
+    "When the user corrects a previously remembered fact, emit a memory update entry with targetContent naming the old fact.",
+    "Do not memorize transient state (today's mood, one-off status). Only memorize durable facts/preferences/constraints.",
+    "Put memory proposals in a single <memories> JSON array block, separate from <actions>. Each item has: op (add|update|delete), kind (fact|preference|routine|constraint), category (training|nutrition|recovery|schedule|general), content, confidence (0..1), and targetContent for update/delete.",
+    "If there is nothing worth remembering, omit the <memories> block entirely.",
     `Current routed intent: ${intent}.`,
     intentInstructions(intent),
     `App context:\n${formatAgentContext(context)}`
@@ -248,6 +255,52 @@ async function callConfiguredModel(
 ) {
   if (config.provider === "anthropic") return callAnthropicModel(config, message, history, intent, context);
   return callOpenAiCompatibleModel(config, message, history, intent, context);
+}
+
+export type ModelChatMessage = { role: "user" | "assistant"; content: string };
+
+export async function runModelCompletion(
+  config: ModelRuntimeConfig,
+  system: string,
+  messages: ModelChatMessage[],
+  options: { maxTokens?: number } = {}
+): Promise<string> {
+  const maxTokens = options.maxTokens ?? 1200;
+  if (config.provider === "anthropic") {
+    const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": config.apiKey,
+        "anthropic-version": "2023-06-01"
+      },
+      body: JSON.stringify({
+        model: config.modelName,
+        max_tokens: maxTokens,
+        system,
+        messages: messages.map((item) => ({ role: item.role, content: item.content }))
+      })
+    });
+    return extractAnthropicMessage(await readModelResponse(response, config.providerLabel), config.providerLabel);
+  }
+
+  const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: config.modelName,
+      temperature: 0.3,
+      max_tokens: maxTokens,
+      messages: [
+        { role: "system", content: system },
+        ...messages.map((item) => ({ role: item.role, content: item.content }))
+      ]
+    })
+  });
+  return extractOpenAiCompatibleMessage(await readModelResponse(response, config.providerLabel), config.providerLabel);
 }
 
 export async function createAgentResponseForUser(

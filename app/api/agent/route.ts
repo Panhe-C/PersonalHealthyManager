@@ -12,7 +12,12 @@ import { parseActionProposals } from "@/src/services/agentActions/proposals";
 import { agentActionRegistry } from "@/src/services/agentActions/registry";
 import { guardAction, type GuardSignals } from "@/src/services/agentActions/safetyGuard";
 import { executeAgentAction, type ExecutedAdjustment } from "@/src/services/agentActions/executor";
+import { parseMemoryProposals, stripMemoryBlock } from "@/src/services/agentMemory/memories";
+import { applyMemories } from "@/src/services/agentMemory/memoryService";
+import { maybeRefreshSummary } from "@/src/services/agentMemory/summaryService";
 import type { TimeWindow } from "@/src/domain/models";
+
+const EXPLICIT_MEMORY_PATTERN = /记住|记下|别忘了|记一下|帮我记|remember(?:\s+to)?/i;
 
 async function loadGuardSignals(userId: string, actionId: string, args: Record<string, unknown>): Promise<GuardSignals | null> {
   if (actionId !== "adjust_task_intensity" && actionId !== "reschedule_task") return null;
@@ -78,7 +83,7 @@ export const POST = withUser(async (user, request: Request) => {
     take: 8
   });
   const routed = createAgentResponse(content);
-  const agentContext = await buildAgentContext(user.id, routed.intent, content);
+  const agentContext = await buildAgentContext(user.id, routed.intent, content, conversationId);
   const response = await createAgentResponseForUser(
     user.id,
     content,
@@ -87,6 +92,8 @@ export const POST = withUser(async (user, request: Request) => {
   );
 
   const parsed = parseActionProposals(response.message);
+  const memoryParsed = parseMemoryProposals(response.message);
+  const explanation = stripMemoryBlock(parsed.explanation || response.message);
   const executed: ExecutedAdjustment[] = [];
   const notes: string[] = [];
 
@@ -98,7 +105,7 @@ export const POST = withUser(async (user, request: Request) => {
       userId: user.id,
       conversationId,
       role: "assistant",
-      content: parsed.explanation || response.message,
+      content: explanation,
       metadataJson: JSON.stringify({
         intent: response.intent,
         source: response.source,
@@ -108,7 +115,8 @@ export const POST = withUser(async (user, request: Request) => {
         freshSync: agentContext.freshSync,
         contextSections: agentContext.sections.map((section) => section.title),
         proposedActions: parsed.actions.map((action) => action.id),
-        warnings: parsed.warnings
+        proposedMemories: memoryParsed.memories.map((memory) => `${memory.op}:${memory.content}`),
+        warnings: [...parsed.warnings, ...memoryParsed.warnings]
       })
     }
   });
@@ -141,12 +149,54 @@ export const POST = withUser(async (user, request: Request) => {
     }
   }
 
-  const finalMessage = [parsed.explanation || response.message, ...notes].filter(Boolean).join("\n");
-  if (notes.length > 0) {
-    await prisma.agentMessage.update({
-      where: { id: assistantMessage.id },
-      data: { content: finalMessage }
-    });
+  const memorySource = EXPLICIT_MEMORY_PATTERN.test(content) ? "explicit" : "auto";
+  let appliedMemories: Awaited<ReturnType<typeof applyMemories>>["applied"] = [];
+  let memoryWarnings: string[] = [];
+  if (memoryParsed.memories.length > 0) {
+    try {
+      const outcome = await applyMemories(user.id, memoryParsed.memories, {
+        messageId: assistantMessage.id,
+        conversationId,
+        source: memorySource
+      });
+      appliedMemories = outcome.applied;
+      memoryWarnings = outcome.warnings;
+      for (const applied of appliedMemories) {
+        if (memorySource === "explicit" && (applied.status === "created" || applied.status === "superseded")) {
+          notes.push(`已记住：${applied.content}`);
+        }
+      }
+    } catch (error) {
+      memoryWarnings.push(`memory apply failed: ${error instanceof Error ? error.message : "未知错误"}`);
+    }
+  }
+
+  const finalMessage = [explanation, ...notes].filter(Boolean).join("\n");
+  await prisma.agentMessage.update({
+    where: { id: assistantMessage.id },
+    data: {
+      content: finalMessage,
+      metadataJson: JSON.stringify({
+        intent: response.intent,
+        source: response.source,
+        modelProvider: response.modelProvider,
+        modelName: response.modelName,
+        error: response.error,
+        freshSync: agentContext.freshSync,
+        contextSections: agentContext.sections.map((section) => section.title),
+        proposedActions: parsed.actions.map((action) => action.id),
+        proposedMemories: memoryParsed.memories.map((memory) => `${memory.op}:${memory.content}`),
+        appliedMemories: appliedMemories.map((applied) => `${applied.op}:${applied.status}:${applied.content}`),
+        warnings: [...parsed.warnings, ...memoryParsed.warnings, ...memoryWarnings]
+      })
+    }
+  });
+
+  // Rolling summary refresh is best-effort and must never block the reply.
+  try {
+    await maybeRefreshSummary(user.id, conversationId);
+  } catch {
+    // ignore summary failures
   }
 
   const nextTitle = conversation.title === "New conversation" && history.length === 0 ? titleFromFirstMessage(content) : undefined;
@@ -156,6 +206,7 @@ export const POST = withUser(async (user, request: Request) => {
     ...response,
     message: finalMessage,
     conversation: updatedConversation,
-    adjustments: executed
+    adjustments: executed,
+    appliedMemories
   });
 });

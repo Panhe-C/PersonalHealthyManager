@@ -27,6 +27,7 @@ model User {
   calendarDrafts    CalendarEventDraft[]
   agentConversations AgentConversation[]
   agentMessages     AgentMessage[]
+  agentMemories     AgentMemory[]
   settings          UserSettings?
 }
 
@@ -297,11 +298,14 @@ model CalendarEventDraft {
 }
 
 model AgentConversation {
-  id        String   @id @default(cuid())
-  userId    String
-  title     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  userId              String
+  title               String
+  summary             String?
+  summaryUpdatedAt    DateTime?
+  summaryMessageCount Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages AgentMessage[]
@@ -324,6 +328,26 @@ model AgentMessage {
 
   @@index([userId, createdAt])
   @@index([conversationId, createdAt])
+}
+
+model AgentMemory {
+  id                   String   @id @default(cuid())
+  userId               String
+  kind                 String
+  category             String
+  content              String
+  source               String
+  confidence           Float    @default(1.0)
+  status               String   @default("active")
+  originMessageId      String?
+  originConversationId String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@unique([id, userId])
 }
 
 model UserSettings {
