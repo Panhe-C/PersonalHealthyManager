@@ -43,4 +43,31 @@ describe("action proposal parsing", () => {
     expect(result.actions).toEqual([]);
     expect(result.warnings.length).toBe(1);
   });
+
+  it("recognizes a ```json fenced action block when the model omits <actions> tags", () => {
+    const reply = [
+      "已为你把周三降为 easy",
+      "```json",
+      '[{"id":"adjust_task_intensity","args":{"taskId":"t1","intensity":"easy"}}]',
+      "```"
+    ].join("\n");
+
+    const result = parseActionProposals(reply);
+
+    expect(result.actions).toEqual([
+      { id: "adjust_task_intensity", args: { taskId: "t1", intensity: "easy" } }
+    ]);
+    expect(result.explanation).toBe("已为你把周三降为 easy");
+    expect(result.explanation).not.toContain("```");
+  });
+
+  it("strips a fenced action block from the explanation even when no actions parse", () => {
+    const reply = ["好的，以下是建议。", "```json", '[{"id":"bogus","args":{}}]', "```"].join("\n");
+
+    const result = parseActionProposals(reply);
+
+    expect(result.actions).toEqual([]);
+    expect(result.explanation).toBe("好的，以下是建议。");
+    expect(result.explanation).not.toContain("```");
+  });
 });

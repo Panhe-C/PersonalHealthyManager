@@ -12,22 +12,36 @@ function extractBlock(reply: string, tag: string): string | null {
   return match ? match[1].trim() : null;
 }
 
-export function parseActionProposals(reply: string): ParsedAgentReply {
-  const explanationBlock = extractBlock(reply, "explanation");
-  const actionsBlock = extractBlock(reply, "actions");
-  const warnings: string[] = [];
+// Strip a leading/trailing ```json or ``` fence from a block body.
+function stripCodeFence(body: string): string {
+  return body
+    .replace(/^\s*```[a-zA-Z]*\s*\n?/i, "")
+    .replace(/\n?```\s*$/i, "")
+    .trim();
+}
 
-  const explanation =
-    explanationBlock ?? reply.replace(/<actions>[\s\S]*?<\/actions>/i, "").trim();
+// Find a fenced (```...```) block anywhere in the reply and return its inner content.
+function extractFencedBlock(reply: string): string | null {
+  const match = /```[a-zA-Z]*\s*\n([\s\S]*?)\n?```/i.exec(reply);
+  return match ? match[1].trim() : null;
+}
 
-  if (!actionsBlock) return { explanation, actions: [], warnings };
+// Remove <actions>...</actions> and any fenced code block from user-facing text.
+function stripActionArtifacts(reply: string): string {
+  return reply
+    .replace(/<actions>[\s\S]*?<\/actions>/gi, "")
+    .replace(/```[a-zA-Z]*\s*\n[\s\S]*?\n?```/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
 
+function parseActionsJson(rawText: string, warnings: string[]): AgentActionProposal[] {
   let raw: unknown;
   try {
-    raw = JSON.parse(actionsBlock);
+    raw = JSON.parse(rawText);
   } catch {
     warnings.push("actions block was not valid JSON");
-    return { explanation, actions: [], warnings };
+    return [];
   }
 
   const items = Array.isArray(raw) ? raw : [];
@@ -49,5 +63,25 @@ export function parseActionProposals(reply: string): ParsedAgentReply {
     actions.push({ id, args });
   }
 
-  return { explanation, actions, warnings };
+  return actions;
+}
+
+export function parseActionProposals(reply: string): ParsedAgentReply {
+  const explanationBlock = extractBlock(reply, "explanation");
+  const actionsBlock = extractBlock(reply, "actions");
+  const warnings: string[] = [];
+
+  const explanation = explanationBlock ?? stripActionArtifacts(reply);
+
+  let actionsRaw: string | null = null;
+  if (actionsBlock) {
+    actionsRaw = stripCodeFence(actionsBlock);
+  } else {
+    const fenced = extractFencedBlock(reply);
+    if (fenced) actionsRaw = fenced;
+  }
+
+  if (!actionsRaw) return { explanation, actions: [], warnings };
+
+  return { explanation, actions: parseActionsJson(actionsRaw, warnings), warnings };
 }
