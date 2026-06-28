@@ -5,6 +5,7 @@ import { prisma } from "@/src/db/client";
 import { defaultDataMcpConnections } from "@/src/settings/defaults";
 import { encryptApiKey } from "@/src/settings/crypto";
 import {
+  buildDataMcpStdioEnv,
   createMcpOAuthAuthorizationUrl,
   handleMcpOAuthCallback,
   loadUserSettings,
@@ -289,6 +290,94 @@ describe("settings service", () => {
     const savedConnections = JSON.parse(String(upsertArg?.create?.dataMcpConnectionsJson ?? upsertArg?.update?.dataMcpConnectionsJson));
     expect(savedConnections[0].loginUrl).toBe("https://coros.example.test/login");
     expect(settings.dataMcpConnections[0].loginUrl).toBe("https://coros.example.test/login");
+  });
+
+  it("saves Meal Menu local command settings and masks the LARK session", async () => {
+    vi.mocked(prisma.userSettings.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.userSettings.upsert).mockImplementation(async (input) => {
+      const data = "create" in input ? input.create : input.update;
+      return {
+        modelProvider: "openai",
+        modelName: "gpt-4o-mini",
+        modelBaseUrl: "https://api.openai.com/v1",
+        encryptedApiKey: null,
+        apiKeyIv: null,
+        apiKeyTag: null,
+        apiKeyHint: null,
+        dataMcpConnectionsJson: data.dataMcpConnectionsJson
+      } as never;
+    });
+
+    const settings = await saveUserSettings("user-1", {
+      modelProvider: "openai",
+      modelName: "gpt-4o-mini",
+      modelBaseUrl: "https://api.openai.com/v1",
+      apiKey: "",
+      dataMcpConnections: [
+        defaultDataMcpConnections[0],
+        defaultDataMcpConnections[1],
+        {
+          ...defaultDataMcpConnections[2],
+          transport: "stdio",
+          command: "npx",
+          args: "-y @byted/mcp-bytecanteen@latest",
+          larkSession: "session-cookie-123456",
+          canteenName: "北京融中心"
+        }
+      ]
+    });
+
+    const savedConnections = JSON.parse(String(vi.mocked(prisma.userSettings.upsert).mock.calls[0][0].create.dataMcpConnectionsJson));
+    expect(savedConnections[2]).toEqual(
+      expect.objectContaining({
+        transport: "stdio",
+        command: "npx",
+        args: "-y @byted/mcp-bytecanteen@latest",
+        canteenName: "北京融中心",
+        larkSessionHint: "...3456"
+      })
+    );
+    expect(savedConnections[2].larkSession).toBeUndefined();
+    expect(savedConnections[2].encryptedLarkSession).toEqual(expect.any(String));
+    expect(settings.dataMcpConnections[2]).toEqual(
+      expect.objectContaining({
+        transport: "stdio",
+        command: "npx",
+        args: "-y @byted/mcp-bytecanteen@latest",
+        canteenName: "北京融中心",
+        larkSessionHint: "...3456"
+      })
+    );
+    expect(settings.dataMcpConnections[2].larkSession).toBeUndefined();
+    expect(settings.dataMcpConnections[2].encryptedLarkSession).toBeUndefined();
+    expect(buildDataMcpStdioEnv(savedConnections[2])).toEqual({
+      LARK_SESSION: "session-cookie-123456"
+    });
+  });
+
+  it("requires LARK_SESSION before testing a local Meal Menu MCP command", async () => {
+    vi.mocked(prisma.userSettings.findUnique).mockResolvedValue({
+      dataMcpConnectionsJson: JSON.stringify([
+        defaultDataMcpConnections[0],
+        defaultDataMcpConnections[1],
+        {
+          ...defaultDataMcpConnections[2],
+          transport: "stdio",
+          command: "npx",
+          args: "-y @byted/mcp-bytecanteen@latest"
+        }
+      ])
+    } as never);
+
+    const results = await testUserSettings("user-1", "meal_menu");
+
+    expect(results).toEqual([
+      expect.objectContaining({
+        id: "meal_menu",
+        status: "auth_required",
+        message: "Meal Menu LARK_SESSION is required before the local MCP command can be tested."
+      })
+    ]);
   });
 
   it("saves and loads the selected COROS MCP region", async () => {

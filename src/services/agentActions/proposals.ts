@@ -21,16 +21,19 @@ function stripCodeFence(body: string): string {
 }
 
 // Find a fenced (```...```) block anywhere in the reply and return its inner content.
+// Also recovers an unclosed fence (model emitted the opening ```json but never closed it),
+// treating the rest of the reply as the block body so the raw backticks do not leak.
 function extractFencedBlock(reply: string): string | null {
-  const match = /```[a-zA-Z]*\s*\n([\s\S]*?)\n?```/i.exec(reply);
+  const match = /```[a-zA-Z]*[ \t]*\n([\s\S]*?)(?:\n?```|$)/i.exec(reply);
   return match ? match[1].trim() : null;
 }
 
 // Remove <actions>...</actions> and any fenced code block from user-facing text.
+// A trailing unclosed fence is stripped too so ```json markers never reach the user.
 function stripActionArtifacts(reply: string): string {
   return reply
     .replace(/<actions>[\s\S]*?<\/actions>/gi, "")
-    .replace(/```[a-zA-Z]*\s*\n[\s\S]*?\n?```/gi, "")
+    .replace(/```[a-zA-Z]*[ \t]*\n[\s\S]*?(?:\n?```|$)/gi, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }

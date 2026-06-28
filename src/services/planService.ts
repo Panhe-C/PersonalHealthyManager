@@ -9,6 +9,8 @@ import { prisma } from "@/src/db/client";
 import { createCalendarDraftsFromTasks, reconcileCalendarDrafts } from "@/src/planning/calendarDrafts";
 import { generateWeeklyPlan } from "@/src/planning/engine";
 import { getMockMealMenu } from "@/src/providers/meal-menu";
+import { fetchMealMenusFromStdioMcp } from "@/src/providers/meal-menu-mcp";
+import { loadDataMcpConnection } from "@/src/settings/service";
 
 function parseJson<T>(value: string): T {
   return JSON.parse(value) as T;
@@ -48,6 +50,20 @@ export async function supersedePreviousPlansAndReadExternalEvents(
   });
 
   return previousExternalEvents;
+}
+
+export async function resolveMealMenusForPlan(userId: string, weekStart: Date) {
+  const connection = await loadDataMcpConnection(userId, "meal_menu");
+  if (connection?.enabled && connection.transport === "stdio") {
+    try {
+      const menus = await fetchMealMenusFromStdioMcp(connection, weekStart);
+      if (menus.length > 0) return menus;
+    } catch {
+      return getMockMealMenu(weekStart);
+    }
+  }
+
+  return getMockMealMenu(weekStart);
 }
 
 export async function generatePlanForUser(userId: string, weekStart: Date) {
@@ -112,6 +128,7 @@ export async function generatePlanForUser(userId: string, weekStart: Date) {
     trainingLoadLongTerm: recovery.trainingLoadLongTerm ?? undefined,
     metadata: {}
   }));
+  const mealMenus = await resolveMealMenusForPlan(userId, weekStart);
   const generated = generateWeeklyPlan({
     weekStart,
     profile: {
@@ -137,7 +154,7 @@ export async function generatePlanForUser(userId: string, weekStart: Date) {
       freeWindows: parseJson<TimeWindow[]>(calendar.freeWindowsJson),
       importantEvents: parseJson<TimeWindow[]>(calendar.importantEventsJson)
     },
-    mealMenus: getMockMealMenu(weekStart)
+    mealMenus
   });
   return prisma.$transaction(async (tx) => {
     const previousPlans = await tx.plan.findMany({

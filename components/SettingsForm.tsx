@@ -7,6 +7,7 @@ import {
   modelProviders,
   type DataMcpAuthConfig,
   type DataMcpConnection,
+  type DataMcpTransport,
   type SettingsView
 } from "@/src/settings/defaults";
 
@@ -68,6 +69,19 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
       )
     );
     setTestResults([]);
+  }
+
+  function updateConnectionTransport(connection: DataMcpConnection, transport: DataMcpTransport) {
+    updateConnection(connection.id, {
+      transport,
+      ...(connection.id === "meal_menu" && transport === "stdio"
+        ? {
+            command: connection.command || "npx",
+            args: connection.args || "-y @byted/mcp-bytecanteen@latest",
+            auth: { type: "none" as const }
+          }
+        : {})
+    });
   }
 
   function updateModelProvider(value: SettingsView["modelProvider"]) {
@@ -400,6 +414,80 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
     );
   }
 
+  function renderMealMenuConnectionFields(connection: DataMcpConnection) {
+    const transport = connection.transport ?? "http";
+
+    return (
+      <>
+        <label className="field">
+          Transport
+          <select
+            aria-label={`Transport for ${connection.label}`}
+            value={transport}
+            onChange={(event) => updateConnectionTransport(connection, event.target.value as DataMcpTransport)}
+          >
+            <option value="http">HTTP endpoint</option>
+            <option value="stdio">Local command</option>
+          </select>
+        </label>
+
+        {transport === "stdio" ? (
+          <>
+            <label className="field">
+              Command
+              <input
+                aria-label={`Command for ${connection.label}`}
+                value={connection.command ?? "npx"}
+                onChange={(event) => updateConnection(connection.id, { command: event.target.value })}
+              />
+            </label>
+            <label className="field">
+              Arguments
+              <input
+                aria-label={`Arguments for ${connection.label}`}
+                value={connection.args ?? "-y @byted/mcp-bytecanteen@latest"}
+                onChange={(event) => updateConnection(connection.id, { args: event.target.value })}
+              />
+            </label>
+            <label className="field">
+              LARK_SESSION
+              <input
+                aria-label={`LARK_SESSION for ${connection.label}`}
+                autoComplete="new-password"
+                type="password"
+                value={connection.larkSession ?? ""}
+                onChange={(event) => updateConnection(connection.id, { larkSession: event.target.value })}
+                placeholder={connection.larkSessionHint ? "Leave blank to keep existing session" : "Paste Feishu session cookie"}
+              />
+            </label>
+            {connection.larkSessionHint ? <span className="status status-positive secret-status">Session · {connection.larkSessionHint}</span> : null}
+            <label className="field">
+              Canteen
+              <input
+                aria-label={`Canteen for ${connection.label}`}
+                value={connection.canteenName ?? ""}
+                onChange={(event) => updateConnection(connection.id, { canteenName: event.target.value })}
+                placeholder="北京融中心"
+              />
+            </label>
+          </>
+        ) : (
+          <>
+            <label className="field">
+              Endpoint
+              <input
+                aria-label={`Endpoint for ${connection.label}`}
+                value={connection.endpoint}
+                onChange={(event) => updateConnection(connection.id, { endpoint: event.target.value })}
+              />
+            </label>
+            {renderAuthFields(connection)}
+          </>
+        )}
+      </>
+    );
+  }
+
   return (
     <form className="settings-grid" onSubmit={save}>
       <section className="surface panel settings-panel settings-panel-runtime">
@@ -562,24 +650,10 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
               </div>
               {connection.id === "coros" ? (
                 renderCorosConnectionAssistant(connection)
+              ) : connection.id === "meal_menu" ? (
+                renderMealMenuConnectionFields(connection)
               ) : (
                 <>
-                  <label className="field">
-                    MCP server
-                    <input
-                      aria-label={`MCP server for ${connection.label}`}
-                      value={connection.serverName}
-                      onChange={(event) => updateConnection(connection.id, { serverName: event.target.value })}
-                    />
-                  </label>
-                  <label className="field">
-                    Capability
-                    <input
-                      aria-label={`Capability for ${connection.label}`}
-                      value={connection.capabilityName}
-                      onChange={(event) => updateConnection(connection.id, { capabilityName: event.target.value })}
-                    />
-                  </label>
                   <label className="field">
                     Endpoint
                     <input
@@ -588,25 +662,7 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
                       onChange={(event) => updateConnection(connection.id, { endpoint: event.target.value })}
                     />
                   </label>
-                  <label className="field">
-                    Login URL
-                    <input
-                      aria-label={`Login URL for ${connection.label}`}
-                      value={connection.loginUrl ?? ""}
-                      onChange={(event) => updateConnection(connection.id, { loginUrl: event.target.value })}
-                      placeholder="https://provider.example/login"
-                    />
-                  </label>
                   {renderAuthFields(connection)}
-                  <label className="field">
-                    Notes
-                    <textarea
-                      aria-label={`Notes for ${connection.label}`}
-                      rows={3}
-                      value={connection.notes}
-                      onChange={(event) => updateConnection(connection.id, { notes: event.target.value })}
-                    />
-                  </label>
                 </>
               )}
             </article>

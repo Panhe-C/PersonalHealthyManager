@@ -3,6 +3,7 @@ export type ModelProvider = "openai" | "anthropic" | "deepseek" | "minimax" | "k
 export type DataMcpConnectionId = "coros" | "calendar" | "meal_menu";
 
 export type DataMcpAuthType = "none" | "bearer" | "api_key" | "basic" | "oauth2";
+export type DataMcpTransport = "http" | "stdio";
 export type CorosMcpRegion = "china" | "us" | "eu";
 
 export type DataMcpAuthConfig = {
@@ -65,7 +66,16 @@ export type DataMcpConnection = {
   enabled: boolean;
   serverName: string;
   capabilityName: string;
+  transport?: DataMcpTransport;
   endpoint: string;
+  command?: string;
+  args?: string;
+  canteenName?: string;
+  larkSession?: string;
+  larkSessionHint?: string;
+  encryptedLarkSession?: string;
+  larkSessionIv?: string;
+  larkSessionTag?: string;
   auth: DataMcpAuthConfig;
   loginUrl?: string;
   corosRegion?: CorosMcpRegion;
@@ -124,6 +134,7 @@ export const defaultDataMcpConnections: DataMcpConnection[] = [
     enabled: true,
     serverName: "coros",
     capabilityName: "daily-health",
+    transport: "http",
     endpoint: "",
     loginUrl: "",
     auth: { type: "none" },
@@ -135,6 +146,7 @@ export const defaultDataMcpConnections: DataMcpConnection[] = [
     enabled: true,
     serverName: "calendar",
     capabilityName: "agenda",
+    transport: "http",
     endpoint: "",
     loginUrl: "",
     auth: { type: "none" },
@@ -146,7 +158,11 @@ export const defaultDataMcpConnections: DataMcpConnection[] = [
     enabled: true,
     serverName: "meal-menu",
     capabilityName: "today-menu",
+    transport: "http",
     endpoint: "",
+    command: "npx",
+    args: "-y @byted/mcp-bytecanteen@latest",
+    canteenName: "",
     loginUrl: "",
     auth: { type: "none" },
     notes: "Daily breakfast, lunch, dinner, and nutrition choices."

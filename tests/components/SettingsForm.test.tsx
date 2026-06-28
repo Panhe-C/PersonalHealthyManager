@@ -231,6 +231,104 @@ describe("SettingsForm", () => {
     });
   });
 
+  it("renders non-COROS MCP cards with only user-facing connection fields", () => {
+    render(
+      <SettingsForm
+        initialSettings={{
+          modelProvider: "openai",
+          modelName: "gpt-4o-mini",
+          modelBaseUrl: "https://api.openai.com/v1",
+          hasApiKey: false,
+          apiKeyHint: null,
+          dataMcpConnections: defaultDataMcpConnections
+        }}
+      />
+    );
+
+    const calendarCard = screen.getByText("Calendar").closest("article");
+    const mealMenuCard = screen.getByText("Meal Menu").closest("article");
+    expect(calendarCard).not.toBeNull();
+    expect(mealMenuCard).not.toBeNull();
+
+    const calendarScope = within(calendarCard as HTMLElement);
+    const mealMenuScope = within(mealMenuCard as HTMLElement);
+
+    expect(calendarScope.getByLabelText("Endpoint for Calendar")).toBeInTheDocument();
+    expect(calendarScope.getByLabelText("Auth type for Calendar")).toBeInTheDocument();
+    expect(calendarScope.queryByLabelText("MCP server for Calendar")).not.toBeInTheDocument();
+    expect(calendarScope.queryByLabelText("Capability for Calendar")).not.toBeInTheDocument();
+    expect(calendarScope.queryByLabelText("Login URL for Calendar")).not.toBeInTheDocument();
+    expect(calendarScope.queryByLabelText("Notes for Calendar")).not.toBeInTheDocument();
+
+    expect(mealMenuScope.getByLabelText("Endpoint for Meal Menu")).toBeInTheDocument();
+    expect(mealMenuScope.getByLabelText("Auth type for Meal Menu")).toBeInTheDocument();
+    expect(mealMenuScope.queryByLabelText("MCP server for Meal Menu")).not.toBeInTheDocument();
+    expect(mealMenuScope.queryByLabelText("Capability for Meal Menu")).not.toBeInTheDocument();
+    expect(mealMenuScope.queryByLabelText("Login URL for Meal Menu")).not.toBeInTheDocument();
+    expect(mealMenuScope.queryByLabelText("Notes for Meal Menu")).not.toBeInTheDocument();
+  });
+
+  it("saves Meal Menu as a local bytecanteen MCP command", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        modelProvider: "openai",
+        modelName: "gpt-4o-mini",
+        modelBaseUrl: "https://api.openai.com/v1",
+        hasApiKey: false,
+        apiKeyHint: null,
+        dataMcpConnections: defaultDataMcpConnections
+      })
+    } as never);
+
+    render(
+      <SettingsForm
+        initialSettings={{
+          modelProvider: "openai",
+          modelName: "gpt-4o-mini",
+          modelBaseUrl: "https://api.openai.com/v1",
+          hasApiKey: false,
+          apiKeyHint: null,
+          dataMcpConnections: defaultDataMcpConnections
+        }}
+      />
+    );
+
+    const mealMenuCard = screen.getByText("Meal Menu").closest("article");
+    expect(mealMenuCard).not.toBeNull();
+    const mealMenuScope = within(mealMenuCard as HTMLElement);
+
+    fireEvent.change(mealMenuScope.getByLabelText("Transport for Meal Menu"), { target: { value: "stdio" } });
+    expect(mealMenuScope.getByLabelText("Command for Meal Menu")).toHaveValue("npx");
+    expect(mealMenuScope.getByLabelText("Arguments for Meal Menu")).toHaveValue("-y @byted/mcp-bytecanteen@latest");
+
+    fireEvent.change(mealMenuScope.getByLabelText("LARK_SESSION for Meal Menu"), { target: { value: "session-cookie-123456" } });
+    fireEvent.change(mealMenuScope.getByLabelText("Canteen for Meal Menu"), { target: { value: "北京融中心" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/settings",
+        expect.objectContaining({
+          method: "POST"
+        })
+      );
+    });
+
+    const [, requestInit] = vi.mocked(fetch).mock.calls.at(-1) ?? [];
+    const body = JSON.parse(String(requestInit?.body));
+    expect(body.dataMcpConnections[2]).toEqual(
+      expect.objectContaining({
+        id: "meal_menu",
+        transport: "stdio",
+        command: "npx",
+        args: "-y @byted/mcp-bytecanteen@latest",
+        larkSession: "session-cookie-123456",
+        canteenName: "北京融中心"
+      })
+    );
+  });
+
   it("renders COROS MCP as a connect-only card with expiry status", () => {
     render(
       <SettingsForm

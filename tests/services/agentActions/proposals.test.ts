@@ -70,4 +70,14 @@ describe("action proposal parsing", () => {
     expect(result.explanation).toBe("好的，以下是建议。");
     expect(result.explanation).not.toContain("```");
   });
+
+  it("strips an unclosed ```json fence so raw backticks never reach the user", () => {
+    const reply = ["好的，以下是建议。", "```json", '[{"id":"bogus","args":{}}]'].join("\n");
+
+    const result = parseActionProposals(reply);
+
+    expect(result.actions).toEqual([]);
+    expect(result.explanation).toBe("好的，以下是建议。");
+    expect(result.explanation).not.toContain("```");
+  });
 });

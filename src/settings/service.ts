@@ -17,6 +17,7 @@ import {
   type DataMcpAuthType,
   type DataMcpConnection,
   type DataMcpConnectionId,
+  type DataMcpTransport,
   type ModelProvider,
   type SettingsView
 } from "@/src/settings/defaults";
@@ -92,6 +93,7 @@ export type SettingsTestResult = {
 const knownProviderValues = new Set(modelProviders.map((provider) => provider.value));
 const knownConnectionIds = new Set(defaultDataMcpConnections.map((connection) => connection.id));
 const knownAuthTypes = new Set<DataMcpAuthType>(["none", "bearer", "api_key", "basic", "oauth2"]);
+const knownDataMcpTransports = new Set<DataMcpTransport>(["http", "stdio"]);
 const knownCorosRegions = new Set(corosMcpRegionOptions.map((region) => region.value));
 
 const tokenFields: SecretFieldNames = {
@@ -186,6 +188,12 @@ function authType(value: unknown): DataMcpAuthType {
   return typeof value === "string" && knownAuthTypes.has(value as DataMcpAuthType) ? (value as DataMcpAuthType) : "none";
 }
 
+function dataMcpTransport(value: unknown, fallback: DataMcpTransport = "http"): DataMcpTransport {
+  return typeof value === "string" && knownDataMcpTransports.has(value as DataMcpTransport)
+    ? (value as DataMcpTransport)
+    : fallback;
+}
+
 function corosRegionValue(value: unknown): CorosMcpRegion | undefined {
   return typeof value === "string" && knownCorosRegions.has(value as CorosMcpRegion) ? (value as CorosMcpRegion) : undefined;
 }
@@ -249,6 +257,48 @@ function decryptStoredSecret(auth: DataMcpAuthConfig, names: SecretFieldNames): 
     encryptedApiKey: encrypted,
     apiKeyIv: iv,
     apiKeyTag: tag
+  });
+}
+
+function encryptedLarkSessionPatch(input: DataMcpConnection, existing?: DataMcpConnection): Partial<DataMcpConnection> {
+  const plaintext = stringValue(input.larkSession);
+  if (plaintext) {
+    const encrypted = encryptSecret(plaintext);
+    return {
+      encryptedLarkSession: encrypted.encryptedApiKey,
+      larkSessionIv: encrypted.apiKeyIv,
+      larkSessionTag: encrypted.apiKeyTag,
+      larkSessionHint: encrypted.apiKeyHint
+    };
+  }
+
+  if (existing?.encryptedLarkSession && existing.larkSessionIv && existing.larkSessionTag) {
+    return {
+      encryptedLarkSession: existing.encryptedLarkSession,
+      larkSessionIv: existing.larkSessionIv,
+      larkSessionTag: existing.larkSessionTag,
+      larkSessionHint: existing.larkSessionHint
+    };
+  }
+
+  if (input.encryptedLarkSession && input.larkSessionIv && input.larkSessionTag) {
+    return {
+      encryptedLarkSession: input.encryptedLarkSession,
+      larkSessionIv: input.larkSessionIv,
+      larkSessionTag: input.larkSessionTag,
+      larkSessionHint: input.larkSessionHint
+    };
+  }
+
+  return {};
+}
+
+function decryptLarkSession(connection: DataMcpConnection): string | null {
+  if (!connection.encryptedLarkSession || !connection.larkSessionIv || !connection.larkSessionTag) return null;
+  return decryptSecret({
+    encryptedApiKey: connection.encryptedLarkSession,
+    apiKeyIv: connection.larkSessionIv,
+    apiKeyTag: connection.larkSessionTag
   });
 }
 
@@ -370,6 +420,7 @@ function normalizeConnection(input: DataMcpConnection, existing?: DataMcpConnect
   const loginUrl = stringValue(input.loginUrl);
   assertUrl(loginUrl, `${base.label} login URL`);
   const corosRegion = base.id === "coros" ? corosRegionValue(input.corosRegion) : undefined;
+  const transport = base.id === "meal_menu" ? dataMcpTransport(input.transport, base.transport ?? "http") : "http";
 
   return {
     id: base.id,
@@ -377,17 +428,23 @@ function normalizeConnection(input: DataMcpConnection, existing?: DataMcpConnect
     enabled: Boolean(input.enabled),
     serverName: stringValue(input.serverName),
     capabilityName: stringValue(input.capabilityName),
+    transport,
     endpoint,
+    command: stringValue(input.command ?? base.command),
+    args: stringValue(input.args ?? base.args),
+    canteenName: stringValue(input.canteenName),
+    ...encryptedLarkSessionPatch(input, existing),
     auth: normalizeAuth(input.auth, existing?.auth),
     loginUrl,
     ...(corosRegion ? { corosRegion } : {}),
     notes: stringValue(input.notes)
-  };
+};
 }
 
 function sanitizeConnection(connection: DataMcpConnection): DataMcpConnection {
+  const { encryptedLarkSession, larkSessionIv, larkSessionTag, larkSession, ...safeConnection } = connection;
   return {
-    ...connection,
+    ...safeConnection,
     auth: sanitizeAuth(connection.auth)
   };
 }
@@ -670,6 +727,12 @@ export function buildDataMcpAuthHeaders(connection: DataMcpConnection): Record<s
   return buildMcpAuthHeaders(connection.auth);
 }
 
+export function buildDataMcpStdioEnv(connection: DataMcpConnection): Record<string, string> | null {
+  const larkSession = stringValue(connection.larkSession) || decryptLarkSession(connection);
+  if (!larkSession) return null;
+  return { LARK_SESSION: larkSession };
+}
+
 function mcpLoginRequiredResult(connection: DataMcpConnection): SettingsTestResult {
   return {
     id: connection.id,
@@ -717,6 +780,36 @@ async function testMcpConnection(connection: DataMcpConnection): Promise<Setting
       label: connection.label,
       status: "not_configured",
       message: "Server name and capability are required.",
+      latencyMs: null
+    };
+  }
+
+  if (connection.transport === "stdio") {
+    if (!connection.command) {
+      return {
+        id: connection.id,
+        label: connection.label,
+        status: "not_configured",
+        message: "Local MCP command is required.",
+        latencyMs: null
+      };
+    }
+
+    if (!buildDataMcpStdioEnv(connection)) {
+      return {
+        id: connection.id,
+        label: connection.label,
+        status: "auth_required",
+        message: `${connection.label} LARK_SESSION is required before the local MCP command can be tested.`,
+        latencyMs: null
+      };
+    }
+
+    return {
+      id: connection.id,
+      label: connection.label,
+      status: "connected",
+      message: `${connection.command} ${connection.args ?? ""}`.trim() + " is configured.",
       latencyMs: null
     };
   }
