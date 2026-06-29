@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Activity, Bot, CalendarDays, SlidersHorizontal, Target, UserRound } from "lucide-react";
 import { LogoutButton } from "@/components/LogoutButton";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const links = [
   { href: "/plan", label: "Plan", icon: CalendarDays },
@@ -42,6 +43,7 @@ export function AppNavigation() {
           );
         })}
       </div>
+      <ThemeToggle />
       <LogoutButton />
     </nav>
   );
