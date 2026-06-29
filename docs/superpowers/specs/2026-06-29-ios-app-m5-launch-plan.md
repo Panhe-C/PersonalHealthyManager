@@ -45,16 +45,19 @@ M5 目标：**补齐 P2 功能（设置/MCP）、做发布质量打磨、备齐�
 
 1. **发起授权**：客户端用 `expo-web-browser` 的 `openAuthSessionAsync(startUrl, redirectUrl)` 打开 `/api/v1/settings/mcp/oauth/start?connection=...`（带 Bearer，或后端用 state 关联用户——见下）。
 2. **回跳处理**：
-   - 因现有 callback 走 `state` 解析用户并重定向到 web `/settings`，原生需新增/调整：让 OAuth 流程支持回跳到 App 的 Deep Link（如 `hbm://oauth/callback`）而非 web `/settings`。
-   - 方案：`start` 端点接受一个 `returnTo`（App deep link），落进 OAuth `state`；`callback` 成功后按 `state.returnOrigin/returnTo` 重定向到 App scheme。需小心校验 `returnTo` 白名单防开放重定向。
+   - 现有代码已把 `appOrigin` 存进 `oauthReturnOrigin`（state 里），扩展成「存 `returnTo` App deep link + callback 重定向到该 scheme」是顺势改造。ASWebAuthenticationSession（`openAuthSessionAsync`）能拦截自定义 scheme 回跳，方案明确：
+     - `start` 端点接受 `returnTo`（App deep link，如 `hbm://oauth/callback`），落进 OAuth `state`。
+     - `callback` 成功后按 `state.returnTo` 重定向到 App scheme（而非 web `/settings`）。
+     - **必须校验 `returnTo` 白名单**（只允许已注册的 App scheme），防开放重定向。
+   - COROS 的 `127.0.0.1` redirect_uri 约束只在 API server 跑 localhost 时触发（`toLoopbackOrigin` 仅改写 `localhost`→`127.0.0.1`）；生产部署 API server 用真实域名，dynamic registration 注册该域名的 callback，App 走 ASWebAuthenticationSession 拿到 scheme 回跳即可，不受 127.0.0.1 约束影响。
 3. **回到 App 后**：刷新设置页连接状态（invalidate `["settings"]`）。
-4. **回环地址限制**：COROS 要求 `127.0.0.1` redirect_uri 的约束在移动端如何满足，需实测（可能需后端中转 callback 再跳 App scheme）。
+4. **回环地址限制**：若某些 MCP 仍要求 `127.0.0.1` redirect_uri，需后端中转 callback 再跳 App scheme（实测确认）。
 
 ### 验收（T2）
 
 - 真机上完成一次 MCP（如 COROS）OAuth 连接：跳系统授权 → 回到 App → 设置页显示已连接。
 
-> 注：本项涉及后端 OAuth 流程对「App 回跳」的小幅改造，是 M5 唯一的后端改动点，需在 spec 风险项 #1 基础上落实方案。
+> 注：本项涉及后端 OAuth 流程对「App 回跳」的小幅改造。M5 的后端改动集中在两处：本项的 OAuth `returnTo` 适配，以及 T4 的账号删除端点 `DELETE /api/v1/account`。需在 spec 风险项 #1 基础上落实方案。
 
 ---
 
@@ -66,7 +69,7 @@ M5 目标：**补齐 P2 功能（设置/MCP）、做发布质量打磨、备齐�
 2. **空态/错误/弱网**：全 App 三态覆盖审查；离线只读体验确认。
 3. **可访问性**：动态字体、VoiceOver 标签、点击区域 ≥44pt、对比度。
 4. **性能**：列表虚拟化、图表渲染、冷启动时间。
-5. **崩溃/日志**：接入 Sentry 或等价，捕获线上崩溃。
+5. **崩溃/日志**：接入 Sentry 或等价，捕获线上崩溃。**建议把最小崩溃上报提前到 M3/M4 就接入**（dev/staging 期间就能收集真机问题），M5 只做发布前配置收敛与线上环境切换；否则内测前的问题定位全靠用户复述。
 6. **设置内 API base 切换**：dev/staging/prod，便于内测。
 
 ### 验收（T3）
@@ -129,7 +132,7 @@ M5 目标：**补齐 P2 功能（设置/MCP）、做发布质量打磨、备齐�
 
 ## 开放问题（执行前需定）
 
-1. **OAuth App 回跳方案**：后端中转 callback 再跳 App scheme vs 直接让 callback 支持 App deep link（涉及 `state.returnTo` 白名单）。需结合 COROS 的 `127.0.0.1` 约束实测确定。
+1. **OAuth App 回跳方案**：已确定走「callback 支持 App deep link（`state.returnTo` + 白名单）」；待落实的是 `returnTo` 白名单的具体注册形式 + 是否需要后端中转兜底（仅当某些 MCP 强制 `127.0.0.1` redirect_uri 时）。
 2. **崩溃监控选型**：Sentry vs 其他。默认 Sentry。
 3. **账号删除范围**：软删 vs 物理删 + 数据导出。默认提供物理删除入口（满足 Apple 要求），保留导出为可选。
 4. **发布节奏**：先 TestFlight 长期内测稳定后再上架 vs 尽快上架小步迭代。默认先内测 1–2 周再提审。

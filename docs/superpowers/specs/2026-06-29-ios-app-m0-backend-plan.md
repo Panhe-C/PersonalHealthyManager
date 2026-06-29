@@ -38,6 +38,7 @@
    - 加 `kind String @default("refresh")`（取值 `access` / `refresh`）。
    - 加 `parentId String?`（access token 关联其 refresh token，便于级联失效）。
    - 生成 migration（见 T2，统一在 Postgres 上跑）。
+   - **存量影响说明**：加字段后存量 Web session 行自动成为 `kind="refresh"`——它们本就是当前 Web cookie 用的长效 token，行为不变（Web 不走 refresh 流），在 migration 注记里写明，避免后人疑惑。
 
 2. **重构 `src/auth/session.ts`**：
    - 抽出底层 `createToken(userId, kind, ttlMs, parentId?)` → 返回明文 token + 落 hash。
@@ -85,6 +86,7 @@
    - B：若必须迁移现有 dev 数据，导出 SQLite → 转换脚本 → 导入 PG（成本高，自用一般不需要）。
 4. **回归校验 JSON 字段**：现存 `*Json` 仍以 `String` 存（保持不变，避免大改），确认 PG 下读写一致；后续可选改 `Json` 原生类型（非 M0 范围）。
 5. **校验约束差异**：复合 `@@unique`、`onDelete` 行为在 PG 下重跑 `prisma generate` + 全量 vitest（`src/test` 体系）确认无回归。
+   - **重点回归 `onDelete: NoAction`**：`TrainingTask.goal` 与 `TrainingCompletion.linkedActivity` 显式用了 `NoAction`。SQLite 对 NoAction 强制较松，Postgres 严格——删 Goal / ActivityRecord 时会直接抛 FK 错而非级联。需确认这些删除路径的预期行为（是否应改 `Cascade`/`SetNull`，或保持 NoAction 并在 service 层先清引用）。
 6. **`src/db/client.ts`**：无需改（PrismaClient 通用）；确认连接池在 serverless/常驻两种部署下的配置（如用 PgBouncer/`connection_limit`）。
 7. **seed**：`scripts/seed.ts` 在 PG 上跑通（`npm run seed`）。
 
@@ -107,11 +109,15 @@
 #### 步骤
 
 1. **建版本层**：新增 `app/api/v1/**`，以**薄转发**复用现有 handler（import 现有 route 的逻辑函数，或把核心逻辑下沉到 `src/services` 后两个版本共用）。优先不复制业务逻辑。
+   - **前置：inline 逻辑下沉清单**。部分 route 的编排逻辑全在 route 内联、未下沉到 service，薄转发不可行。需先把这些逻辑下沉为 service 函数，再让 v1 与原 route 共用。已识别：
+     - `app/api/agent/route.ts`（200+ 行：动作解析、安全 guard、执行、记忆应用、消息落库、summary 刷新）——下沉到 `src/services/agent` 的 orchestration 函数。
+     - 其余 route（profile/goals/plan/training/sync/settings/agentConversations 等）逻辑多已在 `src/services/**`，可直接薄转发。
+   - 下沉时保留原 `/api/*` handler 行为不变，仅做提取重构。
 2. **定义契约 schema**：新建 `src/contracts/`（或 `src/domain/contracts.ts`），用 zod 写每个端点的 `requestSchema` / `responseSchema`。客户端将来 import 同一份。
    - 先覆盖 P0/P1 端点：auth、profile、goals、plan、training/tasks/completion、agent、agent/conversations。
 3. **统一错误格式**：约定 `{ error: string, code?: string }`，封装一个 `jsonError(code, message, status)` helper，逐步替换现有零散 `NextResponse.json({ error })`。
 4. **补缺失的 GET 端点**：盘点看板/Insights 页面在 RSC 内直接算的聚合，抽成 `GET /api/v1/insights/...`，返回结构化 JSON（供 App 图表用）。**先盘点列清单，再逐个补**。
-5. **增量参数**：列表端点（activity/sleep/recovery）加 `?since=<ISO>` 支持，基于 `updatedAt`/`startedAt` 过滤。
+5. **增量参数**：列表端点（activity/sleep/recovery）加 `?since=<ISO>` 支持。**注意这些表无 `updatedAt`**——activity 用 `startedAt`、sleep/recovery 用 `date` 过滤，createdAt 作为兜底；不要假设 updatedAt 存在。
 6. **OpenAPI（可选）**：用 zod-to-openapi 从 contracts 生成 `openapi.json`，便于客户端核对（非阻塞）。
 
 #### 验收标准（T3）

@@ -87,8 +87,9 @@ M2 目标：**在 M1 骨架上填出第一条日常可用闭环 —— 今日训
 1. **任务详情屏**：展示 task 全量（targetJson 解析后的目标、checklist 项）。
 2. **Checklist 交互**：勾选 `checklistItems`（必做/选做），对应打卡 body 的 `items`。
 3. **打卡表单**：`perceivedEffort`（主观强度）、`notes`、可选 `actualLoad`、可选 `linkedActivityId`（关联已同步的活动记录，M2 可先留空/简化）。字段严格对齐 `trainingCompletionSchema`。
+   - **`items.min(1)` 约束**：schema 要求 `items` 至少 1 条，空 checklist 提交会被后端 400。UI 需在无 checklist 项时禁用提交，或默认带一项（如「完成训练」），避免空数组被打回。
 4. **提交**：调 `useCompleteTaskMutation` → 成功后乐观更新任务状态为 completed + invalidate `["today"]`/`["plan","active"]`。
-5. **失败处理**：mutation 失败回滚乐观更新 + 错误提示（用 M1 的 ApiError 映射）。
+5. **失败处理**：mutation 失败回滚乐观更新 + 错误提示（用 M1 的 ApiError 映射）。常见错误码到文案的映射需在 UI 落地：任务不存在/已 completed（404/409，按后端实际返回）、`items` 校验失败（400，提示「至少完成一项」）、网络/断网（提示重试）。
 
 ### 验收（T4）
 

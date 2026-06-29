@@ -35,7 +35,9 @@ M3 目标：**功能对齐 Web 主路径 —— 数据看板(Insights)、教练�
 2. **既有端点纳入 v1（薄转发，逻辑不复制）**：
    - 目标：`/api/v1/goals`、`/api/v1/goals/[goalId]`
    - Agent：`/api/v1/agent`、`/api/v1/agent/conversations`(+`[id]`)、`/api/v1/agent/adjustments/[id]/undo`、`/api/v1/agent/memories`(+`[id]`)
+   - **前置依赖 M0-T3 的 inline 下沉清单**：`/api/v1/agent` 的薄转发依赖 `app/api/agent/route.ts` 的编排逻辑已下沉到 `src/services/agent`。若 M0 未完成下沉，M3 必须先做（否则只能复制 200+ 行逻辑，不可接受）。
 3. **契约**：`packages/contracts` 补 `goalSchema`、`agentMessageSchema`、`agentResponseSchema`、`conversationSchema`、`activitySchema/recoverySchema/sleepSchema`，前后端共享。
+4. **insights 增量字段**：三个 record 表无 `updatedAt`——activities 按 `startedAt`、recovery/sleep 按 `date` 过滤，`?since=` 不要假设 updatedAt 存在（同 M0-T3）。
 
 ### 验收（T1）
 
@@ -87,10 +89,11 @@ M3 目标：**功能对齐 Web 主路径 —— 数据看板(Insights)、教练�
 1. **会话列表**：`useConversationsQuery` → 展示历史会话（title/updatedAt），可新建（`POST conversations`）、删除（`DELETE`）。
 2. **会话详情**：`useConversationQuery(id)` 拉消息历史，按时间渲染气泡（user/assistant）。
 3. **发消息**：`useSendMessageMutation` → `POST /api/v1/agent { message, conversationId }`：
+   - **前置：必须先有 `conversationId`**。后端 `POST /api/agent` 强制要求 `conversationId`，缺则 400。新建会话流程：先 `POST /api/v1/agent/conversations` 拿到 id → 才能发消息。Web `AgentPanel` 也是先建会话。UI 需保证「新建会话」按钮先调创建端点、拿到 id 后再打开输入框。
    - 乐观插入用户气泡 → 请求中显示「思考中」→ 返回后渲染 assistant 气泡（`response.message`）。
    - 一次性响应（非流式），按 spec §8 首期不做 SSE。
    - 返回的 `conversation`（含可能的新 title）更新列表。
-4. **富文本**：assistant 内容复刻 Web `AgentPanel` 的 `RichMessageContent` 渲染（markdown/分段），按 RN 适配。
+4. **富文本**：assistant 内容复刻 Web `AgentPanel` 的 `RichMessageContent` 渲染（markdown/分段），按 RN 适配。**需引入 RN markdown 渲染库**（如 `react-native-markdown-display`），列入 T4 依赖。
 5. 发完消息后 invalidate 受影响的 query（计划/今日，因 Agent 可能改了计划）。
 
 ### 验收（T4）

@@ -25,6 +25,7 @@ M1 目标：**搭出能登录、能用 Bearer 拉到真实数据的 Expo/RN 客�
 1. **目录形态**（默认 monorepo）：
    - 现有项目根引入 workspace（npm workspaces）：`apps/mobile`（Expo App）、`packages/contracts`（共享 zod，T2 建）。
    - 现有 Next.js 代码归位（保持在根或迁 `apps/web`，二选一——为降低对现有 Web 的扰动，默认**保持现有结构不动，仅新增 `apps/mobile` 与 `packages/contracts`**）。
+   - **回归验收**：引入 workspaces 会改变 `node_modules` 提升策略，可能影响 Next.js 构建。改造后必须跑 `npm run build` + `npm test` 确认 Web 无回归，再继续 T2。
 2. **建 Expo App**：`apps/mobile` 用 Expo（managed）+ TypeScript 模板，`expo-router`（文件路由，心智接近 Next App Router）。
 3. **核心依赖**：
    - `expo-router`（导航）
@@ -47,7 +48,8 @@ M1 目标：**搭出能登录、能用 Bearer 拉到真实数据的 Expo/RN 客�
 ### 步骤
 
 1. 新建 `packages/contracts`，把 M0-T3 定义的 zod schema（auth/profile/goals/plan/training/agent 等的 request/response）放这里，作为 web 与 mobile 的单一事实源。
-2. 后端（现有 `src/contracts` 或 `src/domain/contracts.ts`）改为从该包 import，避免两份漂移（若 monorepo 改动现有 Web 风险偏大，可先**只让 mobile 依赖 contracts 包，后端暂时各自维护、用类型测试保证一致**——二选一，默认后者更稳）。
+2. **默认方案：后端也从该包 import**，把 `src/domain/validation.ts` 里的 zod schema 迁到 `packages/contracts`，后端改 import 路径。这样契约是真正的单一事实源，避免「mobile 用包、后端用自己那份」导致的两份漂移（运行时校验语义会悄悄分叉，类型测试防不住）。
+   - 若 monorepo 改造成本或 Web 扰动过大，退路是「先只让 mobile 依赖包，后端暂时各自维护」——但这是退路而非默认，需在执行时显式确认并补强类型+运行时双重测试防漂移。
 3. 导出推导类型：`export type LoginResponse = z.infer<typeof loginResponseSchema>` 等。
 
 ### 验收（T2）
@@ -148,5 +150,5 @@ M1 目标：**搭出能登录、能用 Bearer 拉到真实数据的 Expo/RN 客�
 
 1. **仓库形态**：monorepo（`apps/mobile` + `packages/contracts`，共享类型最顺）vs 独立 repo（隔离干净但类型靠发包/复制）。默认 monorepo。
 2. **样式方案**：nativewind（复用 Tailwind 心智）vs RN StyleSheet + token。默认 nativewind，团队若不熟 Tailwind 则用后者。
-3. **后端契约是否立即改为依赖共享包**：默认先不动现有 Web、仅 mobile 依赖，靠类型测试防漂移；视 monorepo 改造成本再决定是否统一。
+3. **后端契约是否立即改为依赖共享包**：默认**立即统一**（后端也从 packages/contracts import），这是 monorepo 的最大价值；若改造成本过大再退到「仅 mobile 依赖 + 强测试防漂移」。
 4. **Apple Developer 账号 / bundleId**：真机调试与后续 TestFlight 需要，建议 M1 期间就把账号与 bundleId 定下来。

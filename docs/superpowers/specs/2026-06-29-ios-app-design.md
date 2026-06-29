@@ -20,7 +20,7 @@ Healthy Body Manager 当前是一套 **Next.js 15（App Router）+ React 19 + Pr
 1. **后端定位**：现有 Next.js API 升级为「Web + App 双客户端后端」，业务 service 不动。
 2. **客户端选型**：React Native + Expo（TypeScript），而非原生 SwiftUI。
 3. **鉴权**：从纯 httpOnly cookie session 扩展为「Bearer access token + refresh token」，**向后兼容**现有 Web cookie。
-4. **数据库**：从 SQLite 迁移到 Postgres（多端并发 + 服务器部署）。
+4. **数据库**：从 SQLite 迁移到 Postgres。**真正的硬驱动是部署形态**——Next.js 要部署到 Vercel/serverless 或常驻服务器时，SQLite 文件库无法持久化/并发写，并非「多端并发」本身（本项目为单人使用，并发不是真问题）。Postgres 同时顺带解决多端写入与服务器部署。
 5. **API 契约**：冻结一套 `/api/v1` 稳定接口 + 共享 zod 类型，供 RN 客户端生成 client。
 6. **Agent 对话**：当前为一次性 JSON 请求/响应（非 SSE），客户端首期沿用请求/响应即可，流式作为后续增强。
 7. **原生能力分期**：HealthKit、APNs 推送、后台同步作为 §7 独立阶段，不阻塞首个可用版本，但上架前需落地 HealthKit 以保证原生价值。
@@ -62,8 +62,9 @@ Healthy Body Manager 当前是一套 **Next.js 15（App Router）+ React 19 + Pr
 1. **登录端点增强**（`app/api/auth/login/route.ts`）：除了写 cookie，额外在响应体返回 `{ accessToken, refreshToken, expiresAt }`。Web 端忽略 body 里的 token 继续用 cookie；App 端忽略 cookie，把 token 存进 **iOS Keychain（expo-secure-store）**。
 2. **复用现有 `Session` 表**：`refreshToken` 沿用现有 session 机制（hash 存储、30 天有效）。`accessToken` 为短期（如 15 分钟），可用无状态 JWT 或同样落 `Session` 表（首期建议落表，最简单，复用 `hashToken`）。
 3. **`getCurrentUser()` 双通道**：先读 `Authorization: Bearer <token>` header，命中则按 token 查；否则回退读 cookie。`withUser`（`src/auth/api.ts`）零改动即可同时支持两端。
-4. **刷新端点**：新增 `POST /api/v1/auth/refresh`，用 refreshToken 换新 accessToken。
+4. **刷新端点**：新增 `POST /api/v1/auth/refresh`，用 refreshToken 换新 accessToken。**推荐启用 refresh token rotation**：每次刷新同时发新 refreshToken 并失效旧的，降低长效 token 被盗后的风险（30 天长效 token 存设备上风险较高）。
 5. **登出**：`logout` 支持按 token 失效。
+6. **限流**：`/api/auth/login` 与 `/api/auth/refresh` 暴露给 App 后即公开攻击面，需加 IP/账号维度的限流（可简易中间件或 Upstash/部署平台限流）。
 
 **注意**：此项是 App 能登录的前提，必须在客户端开发前完成。改动集中在 `src/auth/session.ts`、`src/auth/api.ts`、`app/api/auth/*`，不影响 Web 行为。
 
@@ -80,7 +81,7 @@ Healthy Body Manager 当前是一套 **Next.js 15（App Router）+ React 19 + Pr
 1. **版本化**：新增 `/api/v1` 前缀（可用 route group 或薄转发层指向现有 handler），冻结契约，避免改 Web 时打断 App。
 2. **类型契约**：把请求/响应 schema 用 zod 显式定义（项目已用 zod，`src/domain/validation.ts` 已有基础），客户端 import 同一份 zod 做运行时校验 + 类型推导。
 3. **统一错误格式**：约定 `{ error: string, code?: string }`，App 端统一拦截 401 触发刷新/重登。
-4. **分页/增量**：列表型数据（activity/sleep/recovery records）已带 `updatedAt`，约定 `?since=<ISO>` 增量拉取，支撑客户端缓存与离线。
+4. **分页/增量**：列表型数据（activity/sleep/recovery records）**注意这些表只有 `createdAt`，没有 `updatedAt`**（见 `prisma/schema.prisma`）。增量拉取应基于 `startedAt`（activity）/ `date`（sleep/recovery）或 `createdAt`，约定 `?since=<ISO>` 增量过滤，支撑客户端缓存与离线。
 
 ## §5 客户端架构（Expo / React Native）
 
@@ -123,7 +124,7 @@ Healthy Body Manager 当前是一套 **Next.js 15（App Router）+ React 19 + Pr
 ## §9 离线与同步策略
 
 - **读**：TanStack Query 持久化缓存（AsyncStorage），离线展示上次数据。
-- **增量**：基于 `updatedAt` + `?since=` 拉增量。
+- **增量**：基于 `startedAt`/`date`/`createdAt`（这些表无 `updatedAt`）+ `?since=` 拉增量。
 - **写**：打卡等写操作支持乐观更新 + 失败回滚；离线写入排队，恢复网络后重放（首期可只做「在线才允许写」，离线写入排队作为后续增强）。
 
 ## §10 测试与发布
