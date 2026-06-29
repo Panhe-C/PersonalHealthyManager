@@ -31,6 +31,14 @@ export async function POST(request: Request) {
     return invalidCredentialsResponse();
   }
 
-  await createSession(user.id);
-  return NextResponse.json({ ok: true });
+  const tokens = await createSession(user.id);
+  // Web clients keep using the httpOnly cookie (set by createSession) and ignore the body tokens.
+  // Native clients ignore the cookie and persist accessToken/refreshToken in SecureStore.
+  return NextResponse.json({
+    ok: true,
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    accessExpiresAt: tokens.accessExpiresAt.toISOString(),
+    refreshExpiresAt: tokens.refreshExpiresAt.toISOString()
+  });
 }

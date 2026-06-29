@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["dom", "es2022"],
+    "types": ["react", "react-native"],
+    "paths": {
+      "@/*": ["./*"],
+      "@hbm/contracts": ["../../packages/contracts/src"],
+      "@hbm/contracts/*": ["../../packages/contracts/src/*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
+  "exclude": ["node_modules"]
+}

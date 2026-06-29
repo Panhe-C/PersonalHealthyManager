@@ -21,6 +21,12 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@hbm/contracts": [
+        "packages/contracts/src"
+      ],
+      "@hbm/contracts/*": [
+        "packages/contracts/src/*"
       ]
     },
     "plugins": [
@@ -36,6 +42,9 @@
     ".next/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "apps/mobile",
+    "apps/mobile/node_modules",
+    "packages/contracts/node_modules"
   ]
 }
