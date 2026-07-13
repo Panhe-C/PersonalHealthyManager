@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { router } from "expo-router";
+import { demoCredentials } from "../../src/auth/demoCredentials";
 import { useAuth } from "../../src/auth/AuthContext";
 import { Button } from "../../src/components/Button";
 import { Screen } from "../../src/components/Screen";
@@ -10,8 +11,8 @@ import { spacing, useTheme } from "../../src/theme/tokens";
 export default function LoginScreen() {
   const { signIn } = useAuth();
   const { tokens } = useTheme();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState<string>(demoCredentials.email);
+  const [password, setPassword] = useState<string>(demoCredentials.password);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -20,7 +21,7 @@ export default function LoginScreen() {
     setError(null);
     try {
       await signIn(email.trim().toLowerCase(), password);
-      router.replace("/(app)/(tabs)");
+      router.replace("/(app)/(tabs)/today");
     } catch (e) {
       setError(e instanceof Error ? e.message : "登录失败");
     } finally {

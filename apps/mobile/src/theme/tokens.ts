@@ -1,23 +1,21 @@
 import { useColorScheme } from "react-native";
 
-// Approximated from app/globals.css (oklch → hex) so the RN app visually echoes
-// the Web design system. RN doesn't reliably support oklch, so we use hex.
 export const lightTokens = {
-  bg: "#f3f6f1",
-  panel: "#fdfefc",
-  panelSoft: "#eef2ec",
-  ink: "#2b3530",
-  inkStrong: "#1f2925",
-  muted: "#6b7670",
-  line: "#dde3dc",
-  lineStrong: "#c4ccc2",
-  sage: "#5a8a6b",
-  sageStrong: "#3f6b52",
-  sageSoft: "#e8efdf",
+  bg: "#F6F4EE",
+  panel: "#FBFAF6",
+  panelSoft: "#F0EEE7",
+  ink: "#243129",
+  inkStrong: "#17231D",
+  muted: "#718077",
+  line: "#D9D7CF",
+  lineStrong: "#BEBFB7",
+  sage: "#718579",
+  sageStrong: "#52685C",
+  sageSoft: "#E3E8E1",
   blue: "#4a78a8",
   blueSoft: "#e8eef4",
-  clay: "#b07a4a",
-  claySoft: "#f1e6d8",
+  clay: "#C87958",
+  claySoft: "#F2E2DA",
   danger: "#b3413f",
   dangerSoft: "#f1e0df"
 } as const;
@@ -52,10 +50,10 @@ export const spacing = {
 } as const;
 
 export const radius = {
-  sm: 12,
-  md: 16,
-  lg: 22,
-  xl: 30
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 22
 } as const;
 
 export const typography = {
@@ -65,10 +63,12 @@ export const typography = {
   lg: 18,
   xl: 22,
   xxl: 28,
-  display: 34
+  display: 36,
+  hero: 44,
+  metric: 56
 } as const;
 
-export type ThemeTokens = typeof lightTokens;
+export type ThemeTokens = { [K in keyof typeof lightTokens]: string };
 
 export function useTheme(): { tokens: ThemeTokens; isDark: boolean } {
   const scheme = useColorScheme();

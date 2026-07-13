@@ -1,9 +1,26 @@
 import * as SecureStore from "expo-secure-store";
-import { z } from "zod";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 
 const ACCESS_TOKEN_KEY = "hbm.access_token";
 const REFRESH_TOKEN_KEY = "hbm.refresh_token";
 const ACCESS_EXPIRES_KEY = "hbm.access_expires_at";
+
+// expo-secure-store is native-only; on web (and any non-native target) we fall
+// back to AsyncStorage, which is backed by localStorage. Tokens are not as
+// hardened on web, but it keeps the same async API and unblocks web previews.
+const storage =
+  Platform.OS === "web"
+    ? {
+        getItem: (key: string) => AsyncStorage.getItem(key),
+        setItem: (key: string, value: string) => AsyncStorage.setItem(key, value),
+        deleteItem: (key: string) => AsyncStorage.removeItem(key)
+      }
+    : {
+        getItem: (key: string) => SecureStore.getItemAsync(key),
+        setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
+        deleteItem: (key: string) => SecureStore.deleteItemAsync(key)
+      };
 
 export interface TokenBundle {
   accessToken: string;
@@ -14,31 +31,33 @@ export interface TokenBundle {
 
 export async function loadTokens(): Promise<TokenBundle | null> {
   const [accessToken, refreshToken, accessExpiresAt] = await Promise.all([
-    SecureStore.getItemAsync(ACCESS_TOKEN_KEY),
-    SecureStore.getItemAsync(REFRESH_TOKEN_KEY),
-    SecureStore.getItemAsync(ACCESS_EXPIRES_KEY)
+    storage.getItem(ACCESS_TOKEN_KEY),
+    storage.getItem(REFRESH_TOKEN_KEY),
+    storage.getItem(ACCESS_EXPIRES_KEY)
   ]);
   if (!accessToken || !refreshToken) return null;
-  return { accessToken, refreshToken, accessExpiresAt: accessExpiresAt ?? "", refreshExpiresAt: undefined };
+  cached = { accessToken, refreshToken, accessExpiresAt: accessExpiresAt ?? "", refreshExpiresAt: undefined };
+  return cached;
 }
 
 export async function saveTokens(tokens: TokenBundle): Promise<void> {
+  cached = tokens;
   await Promise.all([
-    SecureStore.setItemAsync(ACCESS_TOKEN_KEY, tokens.accessToken),
-    SecureStore.setItemAsync(REFRESH_TOKEN_KEY, tokens.refreshToken),
-    SecureStore.setItemAsync(ACCESS_EXPIRES_KEY, tokens.accessExpiresAt)
+    storage.setItem(ACCESS_TOKEN_KEY, tokens.accessToken),
+    storage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken),
+    storage.setItem(ACCESS_EXPIRES_KEY, tokens.accessExpiresAt)
   ]);
 }
 
 export async function clearTokens(): Promise<void> {
   await Promise.all([
-    SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY),
-    SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY),
-    SecureStore.deleteItemAsync(ACCESS_EXPIRES_KEY)
+    storage.deleteItem(ACCESS_TOKEN_KEY),
+    storage.deleteItem(REFRESH_TOKEN_KEY),
+    storage.deleteItem(ACCESS_EXPIRES_KEY)
   ]);
 }
 
-// In-memory mirror so we don't await SecureStore on every request.
+// In-memory mirror so we don't await storage on every request.
 let cached: TokenBundle | null = null;
 
 export async function getAccessToken(): Promise<string | null> {

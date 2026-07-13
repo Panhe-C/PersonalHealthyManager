@@ -7,9 +7,10 @@ export function Text({ style, size = "md", weight = "regular", ...props }: TextP
     <RNText
       style={[
         styles.base,
-        { color: tokens.ink, fontSize: typography[size] },
+        { color: tokens.ink, fontSize: typography[size], lineHeight: Math.round(typography[size] * 1.28) },
         weight === "medium" && styles.medium,
         weight === "strong" && styles.strong,
+        (size === "display" || size === "hero" || size === "metric") && styles.editorial,
         style
       ]}
       {...props}
@@ -18,7 +19,8 @@ export function Text({ style, size = "md", weight = "regular", ...props }: TextP
 }
 
 const styles = StyleSheet.create({
-  base: { lineHeight: 22 },
+  base: {},
+  editorial: { fontFamily: "Georgia" },
   medium: { fontWeight: "500" },
   strong: { fontWeight: "700" }
 });

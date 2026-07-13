@@ -11,7 +11,7 @@ export function Button({ title, onPress, variant = "primary", disabled, ...props
       disabled={disabled}
       style={({ pressed }) => [
         styles.base,
-        { backgroundColor: isPrimary ? tokens.sage : "transparent", borderColor: tokens.line, opacity: pressed ? 0.85 : 1 },
+        { backgroundColor: isPrimary ? tokens.sage : "transparent", borderColor: isPrimary ? tokens.sage : tokens.line, opacity: pressed ? 0.78 : 1 },
         disabled && styles.disabled
       ]}
       {...props}
@@ -24,6 +24,6 @@ export function Button({ title, onPress, variant = "primary", disabled, ...props
 }
 
 const styles = StyleSheet.create({
-  base: { paddingVertical: spacing.md, paddingHorizontal: spacing.lg, borderRadius: radius.md, borderWidth: 1 },
+  base: { minHeight: 48, justifyContent: "center", paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: radius.md, borderWidth: 1 },
   disabled: { opacity: 0.5 }
 });

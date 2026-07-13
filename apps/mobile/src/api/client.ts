@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import { z } from "zod";
 import { getAccessToken, getRefreshToken, setTokens, resetTokens } from "../auth/tokenStore";
 
 const API_BASE_URL = (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ?? "http://localhost:3000";
@@ -65,6 +66,7 @@ export interface RequestOptions {
   // zod schema to validate the response body. Throws ApiError on mismatch.
   schema?: z.ZodTypeAny;
   headers?: Record<string, string>;
+  skipAuthRefresh?: boolean;
   // Internal: avoid infinite refresh loop.
   _retried?: boolean;
 }
@@ -85,7 +87,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined
   });
 
-  if (response.status === 401 && !options._retried) {
+  if (response.status === 401 && !options.skipAuthRefresh && !options._retried) {
     const newToken = await refreshAccessToken();
     if (newToken) {
       return request<T>(path, { ...options, _retried: true });
@@ -102,7 +104,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     } catch {
       // ignore
     }
-    if (response.status === 401) {
+    if (response.status === 401 && !options.skipAuthRefresh) {
       await resetTokens();
       onUnauthorized?.();
     }
@@ -132,7 +134,7 @@ export const api = {
     login: (email: string, password: string) =>
       request<{ ok: true; accessToken: string; refreshToken: string; accessExpiresAt: string; refreshExpiresAt: string }>(
         `${API_BASE_URL}/api/auth/login`,
-        { method: "POST", body: { email, password } }
+        { method: "POST", body: { email, password }, skipAuthRefresh: true }
       ),
     logout: (refreshToken?: string) =>
       request<{ ok: true }>(`${API_BASE_URL}/api/auth/logout`, { method: "POST", body: refreshToken ? { refreshToken } : {} })
