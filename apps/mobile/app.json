@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "Healthy Body Manager",
+    "slug": "hbm-mobile",
+    "scheme": "hbm",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f172a"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.hbm.mobile",
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "读取你的训练、睡眠与心率数据，用于生成个性化计划与恢复看板。"
+      }
+    },
+    "android": {
+      "package": "com.hbm.mobile"
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "apiBaseUrl": "http://localhost:3000"
+    }
+  }
+}

@@ -1,9 +1,12 @@
 import { cache } from "react";
 import { prisma } from "@/src/db/client";
+import * as planQuery from "@/src/services/planQueryService";
 
-export const getBodyProfile = cache(async (userId: string) =>
-  prisma.bodyProfile.findUnique({ where: { userId } })
-);
+// RSC read helpers delegate to the shared planQueryService (single source of
+// truth for plan reads, also used by /api/v1 endpoints) and wrap with cache()
+// to preserve the existing Web request-dedup behavior.
+
+export const getBodyProfile = cache(planQuery.getBodyProfile);
 
 export const getCalendarSnapshot = cache(async (userId: string, weekStart: Date, weekEnd: Date) =>
   prisma.calendarSnapshot.findFirst({
@@ -16,49 +19,12 @@ export const getCalendarSnapshot = cache(async (userId: string, weekStart: Date,
   })
 );
 
-export const getActivePlan = cache(async (userId: string) =>
-  prisma.plan.findFirst({
-    where: { userId, status: { not: "superseded" } },
-    orderBy: { createdAt: "desc" },
-    include: {
-      trainingTasks: {
-        orderBy: { date: "asc" },
-        include: { checklistItems: { orderBy: { order: "asc" } } }
-      }
-    }
-  })
-);
-
-export const getActivePlanSummary = cache(async (userId: string) =>
-  prisma.plan.findFirst({
-    where: { userId, status: { not: "superseded" } },
-    orderBy: { createdAt: "desc" },
-    select: { id: true, summary: true, nutritionTargetsJson: true }
-  })
-);
-
-export const getPrimaryGoal = cache(async (userId: string) =>
-  prisma.goal.findFirst({
-    where: { userId, status: "active" },
-    orderBy: { priority: "desc" }
-  })
-);
-
-export const getLatestRecovery = cache(async (userId: string) =>
-  prisma.recoveryRecord.findFirst({ where: { userId }, orderBy: { date: "desc" } })
-);
-
-export const getLatestSleep = cache(async (userId: string) =>
-  prisma.sleepRecord.findFirst({ where: { userId }, orderBy: { date: "desc" } })
-);
-
-export const getRecentActivities = cache(async (userId: string) =>
-  prisma.activityRecord.findMany({
-    where: { userId },
-    orderBy: { startedAt: "desc" },
-    take: 10
-  })
-);
+export const getActivePlan = cache(planQuery.getActivePlan);
+export const getActivePlanSummary = cache(planQuery.getActivePlanSummary);
+export const getPrimaryGoal = cache(planQuery.getPrimaryGoal);
+export const getLatestRecovery = cache(planQuery.getLatestRecovery);
+export const getLatestSleep = cache(planQuery.getLatestSleep);
+export const getRecentActivities = cache(planQuery.getRecentActivities);
 
 export const getDraftsForPlan = cache(async (userId: string, planId: string | null) => {
   if (!planId) return [];
