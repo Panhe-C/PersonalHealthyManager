@@ -61,7 +61,7 @@ export async function getAgentConversationForUser(
       title: true,
       updatedAt: true,
       messages: {
-        orderBy: { createdAt: "asc" },
+        orderBy: { createdAt: "desc" },
         take: 100,
         select: { id: true, role: true, content: true }
       }
@@ -69,7 +69,7 @@ export async function getAgentConversationForUser(
   });
 
   if (!conversation) return null;
-  return { ...serializeSummary(conversation), messages: conversation.messages };
+  return { ...serializeSummary(conversation), messages: [...conversation.messages].reverse() };
 }
 
 export async function getAgentConversationSummaryForUser(

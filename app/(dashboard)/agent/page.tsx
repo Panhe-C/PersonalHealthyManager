@@ -27,7 +27,7 @@ export default async function AgentPage() {
   });
 
   return (
-    <main className="page grid" style={{ gap: 0 }}>
+    <main className="agent-page">
       <AgentPanel
         initialConversations={conversations.map((conversation) => ({
           id: conversation.id,

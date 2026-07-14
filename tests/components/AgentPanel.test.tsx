@@ -60,6 +60,22 @@ describe("AgentPanel", () => {
     expect(screen.getByRole("form", { name: "Message composer" })).toHaveClass("agent-composer-dock");
   });
 
+  it("renders a ChatGPT-style conversation shell with a sidebar and active chat header", () => {
+    const { container } = render(
+      <AgentPanel
+        initialConversations={conversations}
+        initialConversationId="conv-1"
+        initialMessages={[{ id: "msg-1", role: "assistant", content: "Recovery answer" }]}
+      />
+    );
+
+    expect(container.querySelector(".agent-chat-shell")).toBeInTheDocument();
+    expect(container.querySelector(".agent-rail-brand")).toHaveTextContent("Healthy Body Agent");
+    expect(container.querySelector(".agent-chat-header")).toHaveTextContent("Recovery");
+    expect(container.querySelector(".agent-panel")).not.toHaveClass("surface");
+    expect(screen.getByRole("button", { name: "New chat" })).toHaveClass("agent-new-chat");
+  });
+
   it("renders conversation list and selected messages", () => {
     render(
       <AgentPanel
