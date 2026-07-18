@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useRouter } from "expo-router";
 import { Alert, StyleSheet, View } from "react-native";
-import { Bell, Brain, CalendarDays, Cloud, Download, LogOut, Ruler, Shield, Target, Utensils, Watch } from "lucide-react-native";
+import { Bell, Brain, CalendarDays, Cloud, Download, KeyRound, Link, LogOut, Ruler, Shield, Target, Utensils, Watch } from "lucide-react-native";
 import { Screen } from "../../../src/components/Screen";
 import { Text } from "../../../src/components/Text";
 import { EmptyState, Spinner } from "../../../src/components/States";
@@ -43,6 +43,8 @@ export default function SettingsTab() {
         </SettingsGroup>
 
         <SettingsGroup title="数据与连接">
+          <HairlineRow icon={<KeyRound {...iconProps} />} title="模型运行时" value={settings.data?.hasApiKey ? settings.data.modelProvider : "未配置密钥"} onPress={() => router.push("../model-settings")} />
+          <HairlineRow icon={<Link {...iconProps} />} title="连接配置" subtitle="维护 Endpoint、开关和访问令牌" onPress={() => router.push("../connection-settings")} />
           <HairlineRow icon={<Watch {...iconProps} />} title="COROS" value={mcpConnectionStatus(connection("coros"))} onPress={() => Alert.alert("COROS", "连接状态来自服务器设置。")}/>
           <HairlineRow icon={<CalendarDays {...iconProps} />} title="日历" value={mcpConnectionStatus(connection("calendar"))} onPress={() => Alert.alert("日历", "连接状态来自服务器设置。")}/>
           <HairlineRow icon={<Utensils {...iconProps} />} title="餐食菜单" value={mcpConnectionStatus(connection("meal_menu"))} onPress={() => Alert.alert("餐食菜单", "连接状态来自服务器设置。")}/>

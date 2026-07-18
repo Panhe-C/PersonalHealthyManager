@@ -2,7 +2,7 @@ import { z } from "zod";
 import { api } from "./client";
 
 export const mobileSettingsSchema = z.object({
-  modelProvider: z.string(),
+  modelProvider: z.enum(["openai", "anthropic", "deepseek", "minimax", "kimi", "glm", "custom"]),
   modelName: z.string(),
   modelBaseUrl: z.string(),
   hasApiKey: z.boolean(),
@@ -32,4 +32,14 @@ export type MobileMcpConnection = MobileSettings["dataMcpConnections"][number];
 
 export function getSettings() {
   return api.get<MobileSettings>("/settings", mobileSettingsSchema);
+}
+
+export function saveSettings(settings: MobileSettings, apiKey = "") {
+  return api.post<MobileSettings>("/settings", {
+    modelProvider: settings.modelProvider,
+    modelName: settings.modelName,
+    modelBaseUrl: settings.modelBaseUrl,
+    apiKey,
+    dataMcpConnections: settings.dataMcpConnections
+  }, mobileSettingsSchema);
 }
