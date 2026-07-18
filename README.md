@@ -2,6 +2,23 @@
 
 Healthy Body Manager is a personal training, recovery, schedule, and nutrition planning prototype. It combines a Next.js Web App with a rule-based planning engine and a conversational Agent shell.
 
+## 产品简介
+
+**一句话定位**：用规则引擎保证训练安全底线，用 AI Agent 提供自然语言交互，把"今天该练什么、能不能练、什么时间练、怎么吃"一次性回答清楚。
+
+**面向谁**：有可穿戴设备（COROS 等）的耐力运动爱好者 + 用飞书日历管理时间的白领 + 有短期赛事目标需要倒推备战 + 受过伤需要保守递进的人。
+
+**核心闭环**：可穿戴数据/日历同步 → 规则引擎产出保守周计划 → 打卡自适应重排剩余计划 → 营养目标与菜单建议 → 日历草稿确认写入 → AI Agent 对话复盘与调整。
+
+**关键设计**：
+- **安全门控**：睡眠 <6h、恢复 <50%、有伤病，任一命中即自动降级为 recovery 强度
+- **确认优先**：日历写入需用户显式确认，外部事件 ID 复用避免重复建会
+- **可撤销 Agent**：动作分 readonly / reversible / external_irreversible 三级，reversible 动作全量留快照可回滚
+- **数据源解耦**：外部字段在 `src/providers` 内规范化，规划引擎只吃内部模型
+- **双端**：Next.js Web + Expo iOS（M1 骨架已就位，5 Tab：今日/计划/数据/教练/我的）
+
+完整产品说明见 [docs/product-overview.md](./docs/product-overview.md)。
+
 ## First Version
 
 - Email/password login with user-scoped data.
