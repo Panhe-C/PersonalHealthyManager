@@ -1,5 +1,26 @@
 import { prisma } from "@/src/db/client";
-import { verifyPassword } from "@/src/auth/password";
+import { hashPassword, verifyPassword } from "@/src/auth/password";
+
+export async function getUserAccount(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, timezone: true, createdAt: true }
+  });
+  if (!user) throw new Error("Account not found");
+  return user;
+}
+
+export async function changeUserPassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { passwordHash: true } });
+  if (!user) throw new Error("Account not found");
+  if (!verifyPassword(currentPassword, user.passwordHash)) throw new Error("Invalid password");
+  if (verifyPassword(newPassword, user.passwordHash)) throw new Error("New password must be different");
+
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: userId }, data: { passwordHash: hashPassword(newPassword) } }),
+    prisma.session.deleteMany({ where: { userId } })
+  ]);
+}
 
 /**
  * Permanently deletes a user account. Deletes the NoAction-referenced children

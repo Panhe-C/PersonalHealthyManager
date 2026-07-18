@@ -1,22 +1,29 @@
 import type { ReactNode } from "react";
+import { useRouter } from "expo-router";
 import { Alert, StyleSheet, View } from "react-native";
-import { Bell, Brain, CalendarDays, Cloud, Download, LogOut, Ruler, Target, Utensils, Watch } from "lucide-react-native";
+import { Bell, Brain, CalendarDays, Cloud, Download, LogOut, Ruler, Shield, Target, Utensils, Watch } from "lucide-react-native";
 import { Screen } from "../../../src/components/Screen";
 import { Text } from "../../../src/components/Text";
 import { EmptyState, Spinner } from "../../../src/components/States";
 import { HairlineRow, PageHeader } from "../../../src/components/QuietHealth";
-import { useGoalsQuery, useProfileQuery } from "../../../src/api/hooks";
+import { useAccountQuery, useGoalsQuery, useProfileQuery, useSettingsQuery } from "../../../src/api/hooks";
 import { useAuth } from "../../../src/auth/AuthContext";
-import { demoCredentials } from "../../../src/auth/demoCredentials";
+import { mcpConnectionStatus } from "../../../src/settingsStatus";
 import { spacing, useTheme } from "../../../src/theme/tokens";
 
 export default function SettingsTab() {
+  const router = useRouter();
   const { signOut } = useAuth();
   const goals = useGoalsQuery();
   const profile = useProfileQuery();
+  const account = useAccountQuery();
+  const settings = useSettingsQuery();
   const { tokens } = useTheme();
   const iconProps = { color: tokens.ink, size: 21, strokeWidth: 1.5 } as const;
-  const initials = demoCredentials.email.slice(0, 2).toUpperCase();
+  const accountEmail = account.data?.email ?? "正在读取账户…";
+  const initials = account.data?.email.slice(0, 2).toUpperCase() ?? "HB";
+  const connection = (id: "coros" | "calendar" | "meal_menu") =>
+    settings.data?.dataMcpConnections.find((item) => item.id === id);
 
   return (
     <Screen>
@@ -26,21 +33,25 @@ export default function SettingsTab() {
         <View style={[styles.avatar, { backgroundColor: tokens.sage }]}><Text size="xl" weight="medium" style={{ color: "#fff" }}>{initials}</Text></View>
         <View style={styles.identityCopy}>
           <Text size="xl" weight="strong" style={{ color: tokens.inkStrong }}>个人健康空间</Text>
-          <Text style={{ color: tokens.muted }}>{demoCredentials.email}</Text>
+          <Text style={{ color: account.error ? tokens.danger : tokens.muted }}>{account.error ? "账户信息加载失败" : accountEmail}</Text>
         </View>
       </View>
 
       <View style={styles.settingsList}>
+        <SettingsGroup title="账户">
+          <HairlineRow icon={<Shield {...iconProps} />} title="账户安全" subtitle="修改密码会退出所有设备" onPress={() => router.push("../account-security")} />
+        </SettingsGroup>
+
         <SettingsGroup title="数据与连接">
-          <HairlineRow icon={<Watch {...iconProps} />} title="COROS" value="已连接" onPress={() => Alert.alert("COROS", "通过数据连接同步恢复、睡眠和训练。")}/>
-          <HairlineRow icon={<CalendarDays {...iconProps} />} title="日历" value="已连接" onPress={() => Alert.alert("日历", "训练安排可生成日历草稿。")}/>
-          <HairlineRow icon={<Utensils {...iconProps} />} title="餐食菜单" value="本地" onPress={() => Alert.alert("餐食菜单", "当前使用本地命令连接。")}/>
+          <HairlineRow icon={<Watch {...iconProps} />} title="COROS" value={mcpConnectionStatus(connection("coros"))} onPress={() => Alert.alert("COROS", "连接状态来自服务器设置。")}/>
+          <HairlineRow icon={<CalendarDays {...iconProps} />} title="日历" value={mcpConnectionStatus(connection("calendar"))} onPress={() => Alert.alert("日历", "连接状态来自服务器设置。")}/>
+          <HairlineRow icon={<Utensils {...iconProps} />} title="餐食菜单" value={mcpConnectionStatus(connection("meal_menu"))} onPress={() => Alert.alert("餐食菜单", "连接状态来自服务器设置。")}/>
         </SettingsGroup>
 
         <SettingsGroup title="偏好">
           <HairlineRow icon={<Cloud {...iconProps} />} title="外观" value="跟随系统" onPress={() => Alert.alert("外观", "当前跟随系统浅色或深色模式。")}/>
           <HairlineRow icon={<Ruler {...iconProps} />} title="单位" value="公制" onPress={() => Alert.alert("单位", "距离使用公里，体重使用公斤。")}/>
-          <HairlineRow icon={<Bell {...iconProps} />} title="通知" value="开启" onPress={() => Alert.alert("通知", "训练提醒和恢复提示已开启。")}/>
+          <HairlineRow icon={<Bell {...iconProps} />} title="通知" value="未配置" onPress={() => Alert.alert("通知", "推送通知尚未配置，不会显示虚假的开启状态。")}/>
         </SettingsGroup>
 
         <SettingsGroup title="目标">

@@ -50,16 +50,17 @@ npm install
 cp .env.example .env
 npm run prisma:generate
 npx prisma migrate deploy
-npm run seed
+HBM_OWNER_EMAIL=you@example.com \
+HBM_OWNER_PASSWORD='use-a-strong-password' \
+npm run owner:setup
 npm run dev
 ```
 
 `npm run dev` starts the Next.js dev server with built-in Fast Refresh, which hot-reloads changes under `app/`, `src/`, and `components/` (including route handlers and server modules) without a manual restart.
 
-Open the local URL printed by Next.js and log in with:
+Open the local URL printed by Next.js and log in with the owner credentials you supplied above. `npm run owner:setup` is idempotent: rerunning it updates the owner's password and timezone. Set `HBM_OWNER_TIMEZONE` when a timezone other than `Asia/Shanghai` is needed.
 
-- Email: `demo@example.com`
-- Password: `healthy-body-demo`
+`npm run seed` remains available only for local development fixtures. It must not be used to provision a real personal account.
 
 Then:
 

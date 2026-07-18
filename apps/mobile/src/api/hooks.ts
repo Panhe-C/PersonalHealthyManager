@@ -16,6 +16,16 @@ import {
   type TodayOverview
 } from "./schemas";
 import { api } from "./client";
+import { getAccount } from "./account";
+import { getSettings } from "./settings";
+
+export function useAccountQuery() {
+  return useQuery({ queryKey: ["account"], queryFn: getAccount });
+}
+
+export function useSettingsQuery() {
+  return useQuery({ queryKey: ["settings"], queryFn: getSettings });
+}
 
 export function useProfileQuery() {
   return useQuery({

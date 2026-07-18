@@ -4,8 +4,8 @@ import { useState, type FormEvent } from "react";
 import { Activity, CalendarCheck2, HeartPulse, LogIn, Moon } from "lucide-react";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("demo@example.com");
-  const [password, setPassword] = useState("healthy-body-demo");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -42,7 +42,7 @@ export default function LoginPage() {
             <span className="eyebrow">Today&apos;s coaching view</span>
             <h2>Plan around recovery, schedule, and meals.</h2>
             <p className="page-subtitle">
-              The demo account opens with sample COROS, calendar, and training data so you can review the weekly planning flow.
+              Sign in to use your own recovery, calendar, training, and meal data.
             </p>
           </div>
           <div className="preview-grid">

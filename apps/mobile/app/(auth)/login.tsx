@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { router } from "expo-router";
-import { demoCredentials } from "../../src/auth/demoCredentials";
 import { useAuth } from "../../src/auth/AuthContext";
 import { Button } from "../../src/components/Button";
 import { Screen } from "../../src/components/Screen";
@@ -11,8 +10,8 @@ import { spacing, useTheme } from "../../src/theme/tokens";
 export default function LoginScreen() {
   const { signIn } = useAuth();
   const { tokens } = useTheme();
-  const [email, setEmail] = useState<string>(demoCredentials.email);
-  const [password, setPassword] = useState<string>(demoCredentials.password);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -37,7 +36,7 @@ export default function LoginScreen() {
       </View>
       <View style={styles.field}>
         <Text size="sm" style={{ color: tokens.muted }}>邮箱</Text>
-        <TextInputMock value={email} onChange={setEmail} placeholder="demo@example.com" tokens={tokens} />
+        <TextInputMock value={email} onChange={setEmail} placeholder="you@example.com" tokens={tokens} />
       </View>
       <View style={styles.field}>
         <Text size="sm" style={{ color: tokens.muted }}>密码</Text>
@@ -49,9 +48,6 @@ export default function LoginScreen() {
   );
 }
 
-// Minimal text input wrapper so the scaffold doesn't require extra deps;
-// swap for @react-native-... TextInput in the real app — kept inline to keep
-// the scaffold self-contained.
 import { TextInput } from "react-native";
 function TextInputMock({ value, onChange, placeholder, secure, tokens }: { value: string; onChange: (v: string) => void; placeholder: string; secure?: boolean; tokens: ReturnType<typeof useTheme>["tokens"] }) {
   return (
