@@ -257,14 +257,14 @@ describe("SettingsForm", () => {
     expect(calendarScope.getByLabelText("Auth type for Calendar")).toBeInTheDocument();
     expect(calendarScope.queryByLabelText("MCP server for Calendar")).not.toBeInTheDocument();
     expect(calendarScope.queryByLabelText("Capability for Calendar")).not.toBeInTheDocument();
-    expect(calendarScope.queryByLabelText("Login URL for Calendar")).not.toBeInTheDocument();
+    expect(calendarScope.getByLabelText("Login URL for Calendar")).toBeInTheDocument();
     expect(calendarScope.queryByLabelText("Notes for Calendar")).not.toBeInTheDocument();
 
     expect(mealMenuScope.getByLabelText("Endpoint for Meal Menu")).toBeInTheDocument();
     expect(mealMenuScope.getByLabelText("Auth type for Meal Menu")).toBeInTheDocument();
     expect(mealMenuScope.queryByLabelText("MCP server for Meal Menu")).not.toBeInTheDocument();
     expect(mealMenuScope.queryByLabelText("Capability for Meal Menu")).not.toBeInTheDocument();
-    expect(mealMenuScope.queryByLabelText("Login URL for Meal Menu")).not.toBeInTheDocument();
+    expect(mealMenuScope.getByLabelText("Login URL for Meal Menu")).toBeInTheDocument();
     expect(mealMenuScope.queryByLabelText("Notes for Meal Menu")).not.toBeInTheDocument();
   });
 
@@ -491,6 +491,277 @@ describe("SettingsForm", () => {
         auth: { type: "bearer", token: "calendar-token-123456" }
       })
     );
+  });
+
+  it("renders and submits a Data MCP login URL", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        modelProvider: "openai",
+        modelName: "gpt-4o-mini",
+        modelBaseUrl: "https://api.openai.com/v1",
+        hasApiKey: false,
+        apiKeyHint: null,
+        dataMcpConnections: [
+          defaultDataMcpConnections[0],
+          {
+            ...defaultDataMcpConnections[1],
+            loginUrl: "https://calendar.example.test/login"
+          },
+          defaultDataMcpConnections[2]
+        ]
+      })
+    } as never);
+
+    render(
+      <SettingsForm
+        initialSettings={{
+          modelProvider: "openai",
+          modelName: "gpt-4o-mini",
+          modelBaseUrl: "https://api.openai.com/v1",
+          hasApiKey: false,
+          apiKeyHint: null,
+          dataMcpConnections: defaultDataMcpConnections
+        }}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText("Login URL for Calendar"), { target: { value: "https://calendar.example.test/login" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/settings",
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+
+    const [, requestInit] = vi.mocked(fetch).mock.calls.at(-1) ?? [];
+    const body = JSON.parse(String(requestInit?.body));
+    expect(body.dataMcpConnections[1]).toEqual(
+      expect.objectContaining({ id: "calendar", loginUrl: "https://calendar.example.test/login" })
+    );
+  });
+
+  it("opens a login-required modal and routes OAuth2 login through the OAuth start endpoint", async () => {
+    const oauthConnection = {
+      ...defaultDataMcpConnections[0],
+      auth: {
+        type: "oauth2" as const,
+        authorizeUrl: "https://login.example.test/oauth/authorize",
+        tokenUrl: "https://login.example.test/oauth/token",
+        clientId: "client-1",
+        scopes: "sleep recovery"
+      }
+    };
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        results: [
+          {
+            id: "coros",
+            label: "COROS",
+            status: "auth_required",
+            message: "COROS login is required before this MCP connection can be tested.",
+            latencyMs: null
+          }
+        ]
+      })
+    } as never).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        modelProvider: "openai",
+        modelName: "gpt-4o-mini",
+        modelBaseUrl: "https://api.openai.com/v1",
+        hasApiKey: false,
+        apiKeyHint: null,
+        dataMcpConnections: [oauthConnection, defaultDataMcpConnections[1], defaultDataMcpConnections[2]]
+      })
+    } as never);
+
+    const originalLocation = window.location;
+    const assign = vi.fn();
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { ...originalLocation, assign }
+    });
+
+    render(
+      <SettingsForm
+        initialSettings={{
+          modelProvider: "openai",
+          modelName: "gpt-4o-mini",
+          modelBaseUrl: "https://api.openai.com/v1",
+          hasApiKey: false,
+          apiKeyHint: null,
+          dataMcpConnections: [
+            oauthConnection,
+            defaultDataMcpConnections[1],
+            defaultDataMcpConnections[2]
+          ]
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Test" })[0]);
+
+    expect(await screen.findByRole("dialog", { name: "COROS login required" })).toBeInTheDocument();
+    expect(screen.getByText("COROS login is required before this MCP connection can be tested.")).toBeInTheDocument();
+    expect(screen.getByText("Login required")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Login COROS" }));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/settings",
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+    const [, requestInit] = vi.mocked(fetch).mock.calls.at(-1) ?? [];
+    expect(JSON.parse(String(requestInit?.body))).toEqual(
+      expect.objectContaining({
+        dataMcpConnections: expect.arrayContaining([expect.objectContaining({ id: "coros", auth: oauthConnection.auth })])
+      })
+    );
+    expect(assign).toHaveBeenCalledWith("/api/settings/mcp/oauth/start?connection=coros");
+
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: originalLocation
+    });
+  });
+
+  it("shows fallback guidance when auth-required test result has an empty message", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        results: [{ id: "coros", label: "COROS", status: "auth_required", message: "", latencyMs: null }]
+      })
+    } as never);
+
+    render(
+      <SettingsForm
+        initialSettings={{
+          modelProvider: "openai",
+          modelName: "gpt-4o-mini",
+          modelBaseUrl: "https://api.openai.com/v1",
+          hasApiKey: false,
+          apiKeyHint: null,
+          dataMcpConnections: defaultDataMcpConnections
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Test" })[0]);
+
+    expect(await screen.findByRole("dialog", { name: "COROS login required" })).toBeInTheDocument();
+    expect(screen.getByText("This MCP connection needs authentication before testing can continue.")).toBeInTheDocument();
+  });
+
+  it("closes the login-required modal from the secondary Cancel action", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        results: [
+          {
+            id: "coros",
+            label: "COROS",
+            status: "auth_required",
+            message: "COROS login is required before this MCP connection can be tested.",
+            latencyMs: null
+          }
+        ]
+      })
+    } as never);
+
+    render(
+      <SettingsForm
+        initialSettings={{
+          modelProvider: "openai",
+          modelName: "gpt-4o-mini",
+          modelBaseUrl: "https://api.openai.com/v1",
+          hasApiKey: false,
+          apiKeyHint: null,
+          dataMcpConnections: defaultDataMcpConnections
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Test" })[0]);
+
+    expect(await screen.findByRole("dialog", { name: "COROS login required" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("dialog", { name: "COROS login required" })).not.toBeInTheDocument();
+  });
+
+  it("opens a configured external login URL for non-OAuth MCP login", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        results: [
+          { id: "coros", label: "COROS", status: "auth_required", message: "COROS login is required before this MCP connection can be tested.", latencyMs: null }
+        ]
+      })
+    } as never);
+    const open = vi.fn();
+    vi.stubGlobal("open", open);
+
+    render(
+      <SettingsForm
+        initialSettings={{
+          modelProvider: "openai",
+          modelName: "gpt-4o-mini",
+          modelBaseUrl: "https://api.openai.com/v1",
+          hasApiKey: false,
+          apiKeyHint: null,
+          dataMcpConnections: [
+            { ...defaultDataMcpConnections[0], loginUrl: "https://coros.example.test/login", auth: { type: "bearer" } },
+            defaultDataMcpConnections[1],
+            defaultDataMcpConnections[2]
+          ]
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Test" })[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "Login COROS" }));
+
+    expect(open).toHaveBeenCalledWith("https://coros.example.test/login", "_blank", "noopener,noreferrer");
+  });
+
+  it("shows guidance when login is required but no login URL is configured", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        results: [
+          { id: "coros", label: "COROS", status: "auth_required", message: "COROS login is required before this MCP connection can be tested.", latencyMs: null }
+        ]
+      })
+    } as never);
+
+    render(
+      <SettingsForm
+        initialSettings={{
+          modelProvider: "openai",
+          modelName: "gpt-4o-mini",
+          modelBaseUrl: "https://api.openai.com/v1",
+          hasApiKey: false,
+          apiKeyHint: null,
+          dataMcpConnections: [
+            { ...defaultDataMcpConnections[0], auth: { type: "bearer" } },
+            defaultDataMcpConnections[1],
+            defaultDataMcpConnections[2]
+          ]
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Test" })[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "Login COROS" }));
+
+    expect(screen.getByText("No login URL configured. Configure OAuth2 or a login URL first.")).toBeInTheDocument();
   });
 
   it("renders OAuth2 fields and login link for a non-COROS MCP connection", () => {

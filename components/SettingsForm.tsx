@@ -48,7 +48,6 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
   const [loginPromptConnectionId, setLoginPromptConnectionId] = useState<DataMcpConnection["id"] | null>(null);
   const [loginPromptMessage, setLoginPromptMessage] = useState("");
   const [loginPromptError, setLoginPromptError] = useState("");
-
   function updateConnection(id: DataMcpConnection["id"], updates: Partial<DataMcpConnection>) {
     setConnections((items) => items.map((item) => (item.id === id ? { ...item, ...updates } : item)));
     setTestResults([]);
@@ -122,40 +121,46 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
     };
   }
 
+  function applySavedSettings(settings: SettingsView) {
+    setModelProvider(settings.modelProvider);
+    setModelName(settings.modelName);
+    setModelBaseUrl(settings.modelBaseUrl);
+    setConnections(settings.dataMcpConnections);
+    setHasApiKey(settings.hasApiKey);
+    setApiKeyHint(settings.apiKeyHint);
+    setApiKey("");
+  }
+
+  async function persistSettingsDraft() {
+    const response = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildSettingsDraft())
+    });
+    const body = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(body.error ?? "Settings could not be saved");
+    }
+
+    applySavedSettings(body);
+    return body as SettingsView;
+  }
+
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setError("");
     setMessage("");
 
-    const response = await fetch("/api/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        modelProvider,
-        modelName,
-        modelBaseUrl,
-        apiKey,
-        dataMcpConnections: connections
-      })
-    });
-    const body = await response.json();
-
-    if (!response.ok) {
-      setError(body.error ?? "Settings could not be saved");
+    try {
+      await persistSettingsDraft();
+      setMessage("Settings saved");
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Settings could not be saved");
+    } finally {
       setSaving(false);
-      return;
     }
-
-    setModelProvider(body.modelProvider);
-    setModelName(body.modelName);
-    setModelBaseUrl(body.modelBaseUrl);
-    setConnections(body.dataMcpConnections);
-    setHasApiKey(body.hasApiKey);
-    setApiKeyHint(body.apiKeyHint);
-    setApiKey("");
-    setMessage("Settings saved");
-    setSaving(false);
   }
 
   async function runTest(target: string) {
@@ -163,6 +168,9 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
     setError("");
     setMessage("");
     setTestResults([]);
+    setLoginPromptConnectionId(null);
+    setLoginPromptMessage("");
+    setLoginPromptError("");
 
     try {
       const response = await fetch("/api/settings/test", {
@@ -177,11 +185,13 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
         return;
       }
 
-      setTestResults(body.results ?? []);
-
-      const authRequiredResult = (body.results ?? []).find((result: TestResult) => result.status === "auth_required");
+      const results = (body.results ?? []) as TestResult[];
+      setTestResults(results);
+      const authRequiredResult = results.find((result) => result.status === "auth_required");
       if (authRequiredResult) {
-        setLoginPromptConnectionId(authRequiredResult.id as DataMcpConnection["id"]);
+        const connection = connections.find((item) => item.id === authRequiredResult.id);
+        if (!connection) return;
+        setLoginPromptConnectionId(connection.id);
         setLoginPromptMessage(authRequiredResult.message);
         setLoginPromptError("");
       }
@@ -190,6 +200,37 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
     } finally {
       setTestingTarget(null);
     }
+  }
+
+  function closeLoginPrompt() {
+    setLoginPromptConnectionId(null);
+    setLoginPromptMessage("");
+    setLoginPromptError("");
+  }
+
+  async function startLogin() {
+    if (!loginPromptConnection) return;
+
+    if (loginPromptConnection.auth?.type === "oauth2") {
+      setSaving(true);
+      setLoginPromptError("");
+      try {
+        await persistSettingsDraft();
+        window.location.assign(`/api/settings/mcp/oauth/start?connection=${loginPromptConnection.id}`);
+      } catch (loginError) {
+        setLoginPromptError(loginError instanceof Error ? loginError.message : "Settings could not be saved");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
+    if (loginPromptConnection.loginUrl) {
+      window.open(loginPromptConnection.loginUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    setLoginPromptError("No login URL configured. Configure OAuth2 or a login URL first.");
   }
 
   function authHint(auth: DataMcpAuthConfig | undefined) {
@@ -207,6 +248,15 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
 
     return (
       <div className="connection-auth">
+        <label className="field">
+          Login URL
+          <input
+            aria-label={`Login URL for ${connection.label}`}
+            value={connection.loginUrl ?? ""}
+            onChange={(event) => updateConnection(connection.id, { loginUrl: event.target.value })}
+            placeholder="https://provider.example/login"
+          />
+        </label>
         <label className="field">
           Auth type
           <select
@@ -375,28 +425,6 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
     }
 
     window.location.assign("/api/settings/mcp/oauth/start?connection=coros");
-  }
-
-  function closeLoginPrompt() {
-    setLoginPromptConnectionId(null);
-    setLoginPromptMessage("");
-    setLoginPromptError("");
-  }
-
-  function startLogin() {
-    if (!loginPromptConnection) return;
-
-    if (loginPromptConnection.auth?.type === "oauth2") {
-      window.location.assign(`/api/settings/mcp/oauth/start?connection=${loginPromptConnection.id}`);
-      return;
-    }
-
-    if (loginPromptConnection.loginUrl) {
-      window.open(loginPromptConnection.loginUrl, "_blank", "noopener,noreferrer");
-      return;
-    }
-
-    setLoginPromptError("No login URL configured. Configure OAuth2 or a login URL first.");
   }
 
   function renderCorosConnectionAssistant(connection: DataMcpConnection) {
@@ -575,7 +603,7 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
               <div className={resultClass(result.status)} key={result.id}>
                 <strong>{result.label}</strong>
                 <span>{statusLabel[result.status]}</span>
-                <p>{result.message}</p>
+                <p>{result.status === "auth_required" ? "Open the login prompt to continue." : result.message}</p>
                 {result.latencyMs != null ? <small>{result.latencyMs} ms</small> : null}
               </div>
             ))}

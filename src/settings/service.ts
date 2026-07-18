@@ -614,9 +614,10 @@ function statusMessage(status: number) {
   return `Provider returned HTTP ${status}.`;
 }
 
-async function withLatency(run: () => Promise<Omit<SettingsTestResult, "latencyMs">>): Promise<SettingsTestResult> {
+async function withLatency(run: () => Promise<Omit<SettingsTestResult, "latencyMs"> | SettingsTestResult>): Promise<SettingsTestResult> {
   const start = Date.now();
   const result = await run();
+  if ("latencyMs" in result) return result;
   return { ...result, latencyMs: Date.now() - start };
 }
 
@@ -863,6 +864,9 @@ async function testMcpConnection(connection: DataMcpConnection): Promise<Setting
           };
         }
         return { id: connection.id, label: connection.label, status: "connected", message: `MCP endpoint initialized with HTTP ${response.status}.` };
+      }
+      if (response.status === 401 || response.status === 403) {
+        return mcpLoginRequiredResult(connection);
       }
       if (response.status === 401 || response.status === 403) {
         return mcpLoginRequiredResult(connection);
