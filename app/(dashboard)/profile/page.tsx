@@ -1,10 +1,12 @@
 import { Activity, HeartPulse, Moon } from "lucide-react";
+import { HealthTrendCharts } from "@/components/HealthTrendCharts";
 import { MetricCard } from "@/components/MetricCard";
 import { ProfileForm } from "@/components/ProfileForm";
 import { ProfileInsights } from "@/components/ProfileInsights";
 import { SyncDemoDataButton } from "@/components/SyncDemoDataButton";
 import { requireUser } from "@/src/auth/session";
 import { prisma } from "@/src/db/client";
+import { buildDailyTrends } from "@/src/presentation/healthTrends";
 
 function parseStringList(value: string | undefined) {
   if (!value) return [];
@@ -47,11 +49,12 @@ export default async function ProfilePage() {
   const user = await requireUser();
   const [profile, allActivities, sleepRecords, recoveryRecords] = await Promise.all([
     prisma.bodyProfile.findUnique({ where: { userId: user.id } }),
-    prisma.activityRecord.findMany({ where: { userId: user.id }, orderBy: { startedAt: "desc" }, take: 7 }),
-    prisma.sleepRecord.findMany({ where: { userId: user.id }, orderBy: { date: "desc" }, take: 7 }),
-    prisma.recoveryRecord.findMany({ where: { userId: user.id }, orderBy: { date: "desc" }, take: 7 })
+    prisma.activityRecord.findMany({ where: { userId: user.id }, orderBy: { startedAt: "desc" }, take: 30 }),
+    prisma.sleepRecord.findMany({ where: { userId: user.id }, orderBy: { date: "desc" }, take: 14 }),
+    prisma.recoveryRecord.findMany({ where: { userId: user.id }, orderBy: { date: "desc" }, take: 14 })
   ]);
   const activities = preferLiveRecords(allActivities);
+  const trendDays = buildDailyTrends({ timezone: user.timezone, activities, sleepRecords, recoveryRecords });
   const latestActivity = activities[0];
   const latestSleep = sleepRecords[0];
   const latestRecovery = recoveryRecords[0];
@@ -111,6 +114,8 @@ export default async function ProfilePage() {
         recoveryRecords={recoveryRecords}
         dataMode={hasDemoData ? "demo" : "live"}
       />
+
+      <HealthTrendCharts days={trendDays} />
 
       <section>
         <div className="panel-heading">
