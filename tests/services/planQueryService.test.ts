@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { planFindFirst, recoveryFindFirst, sleepFindFirst, goalFindFirst } = vi.hoisted(() => ({
   planFindFirst: vi.fn(),
@@ -19,10 +19,16 @@ vi.mock("@/src/db/client", () => ({
 import { getTodayOverview } from "@/src/services/planQueryService";
 
 beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-06-29T01:00:00.000Z"));
   vi.clearAllMocks();
   recoveryFindFirst.mockResolvedValue(null);
   sleepFindFirst.mockResolvedValue(null);
   goalFindFirst.mockResolvedValue(null);
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("getTodayOverview timezone filtering", () => {

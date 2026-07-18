@@ -1,8 +1,12 @@
 import Constants from "expo-constants";
 import { z } from "zod";
 import { getAccessToken, getRefreshToken, setTokens, resetTokens } from "../auth/tokenStore";
+import { resolveApiBaseUrl } from "../config/apiBaseUrl";
 
-const API_BASE_URL = (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ?? "http://localhost:3000";
+const API_BASE_URL = resolveApiBaseUrl(
+  process.env.EXPO_PUBLIC_API_BASE_URL,
+  Constants.expoConfig?.extra?.apiBaseUrl as string | undefined
+);
 const V1 = `${API_BASE_URL}/api/v1`;
 
 export class ApiError extends Error {

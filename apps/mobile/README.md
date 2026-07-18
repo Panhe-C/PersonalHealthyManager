@@ -1,41 +1,81 @@
 # @hbm/mobile
 
-iOS App client for Healthy Body Manager (Expo + React Native + expo-router).
+iOS client for Healthy Body Manager, built with Expo and React Native.
 
-This is the M1 skeleton described in `docs/superpowers/specs/2026-06-29-ios-app-m1-client-skeleton-plan.md`. It is a **scaffold**: the file structure, navigation, auth flow, API client (Bearer + 401 auto-refresh + single-flight), and design-token底座 are in place, but the npm dependencies are **not yet installed** and the app has not been run on a simulator/device in this session.
+## Physical iPhone: same-network Stage 1
 
-## Run it (first time)
+This workflow runs the API and SQLite database on the Mac while the iPhone connects over the same local network.
+
+Prerequisites:
+
+- Mac and iPhone are connected to the same network.
+- Expo Go is installed on the iPhone.
+- The repository dependencies are installed with `npm install`.
+- The backend `.env` and Prisma SQLite database are configured.
+
+### 1. Start the backend for phone access
+
+From the repository root:
 
 ```bash
-# from repo root — workspaces include apps/mobile + packages/contracts
-npm install
-
-# point the app at your local backend (defaults to http://localhost:3000)
-# edit app.json -> expo.extra.apiBaseUrl, or set EXPO_PUBLIC_API_BASE_URL
-
-cd apps/mobile
-npx expo start            # press i for iOS simulator
+npm run dev:phone
 ```
 
-Prerequisites: Expo CLI (comes with `expo`), Xcode + iOS simulator, and the backend running (`npm run dev` from repo root). An Apple Developer account is **not** required for M1 simulator work — only for M4/M5 device + TestFlight.
+Keep this terminal running. Unlike `npm run dev`, this command listens on all Mac network interfaces at port 3000.
 
-## What's here
+### 2. Find and verify the Mac address
 
-- `app/_layout.tsx` — root: QueryClientProvider + AuthProvider + route guard by `status`.
-- `app/(auth)/login.tsx` — email/password → `signIn` → token persisted in SecureStore.
-- `app/(app)/_layout.tsx` — redirects to login when not authed.
-- `app/(app)/(tabs)/_layout.tsx` — 5 tabs: 今日 / 计划 / 数据 / 教练 / 我的.
-- `src/api/client.ts` — fetch wrapper: injects `Authorization: Bearer`, on 401 refreshes via `/api/auth/refresh` (single-flight), replays the original request, zod-validates responses, maps `{ error, code }` to `ApiError`.
-- `src/auth/tokenStore.ts` — SecureStore-backed token persistence with in-memory mirror.
-- `src/auth/AuthContext.tsx` — `useAuth()` exposing `status / signIn / signOut`.
-- `src/theme/tokens.ts` — design tokens approximated from `app/globals.css` (light/dark).
-- `src/components/*` — minimal `Screen / Text / Button / Card / Spinner` set.
+In a second terminal:
 
-The 今日 tab calls `useProfileQuery()` (`GET /api/v1/profile`) as the M1 "真实数据探针" — it proves the Bearer + auto-refresh chain works end-to-end against the M0 backend.
+```bash
+npm run phone:check
+npm run phone:check -- http://<mac-lan-ip>:3000
+```
 
-## Known gaps / next steps (M2+)
+The first command prints candidate addresses. Use the address belonging to the network shared with the iPhone. The second command verifies the backend. HTTP `401` from `/api/v1/profile` is expected and healthy because the probe is not logged in.
 
-- Tab screens beyond 今日 are placeholders (M2 今日/计划/打卡, M3 看板/Agent/目标).
-- No tests yet — add RN Testing Library tests for `client.ts` (401 auto-refresh + single-flight) and `AuthContext` once deps are installed.
-- `assets/icon.png` + `assets/splash.png` referenced by `app.json` are not committed — drop in real assets before EAS Build (M4/M5).
-- HealthKit / push / background sync / deep link / MCP OAuth are M4/M5.
+### 3. Configure the mobile API origin
+
+Create the ignored local environment file:
+
+```bash
+cp apps/mobile/.env.example apps/mobile/.env.local
+```
+
+Edit it with the verified address:
+
+```dotenv
+EXPO_PUBLIC_API_BASE_URL=http://<mac-lan-ip>:3000
+```
+
+Do not use `localhost`: on a physical iPhone, `localhost` means the iPhone itself. Do not commit `.env.local`.
+
+### 4. Start Expo in LAN mode
+
+In a third terminal, from the repository root:
+
+```bash
+npm run start:phone --workspace @hbm/mobile
+```
+
+Open Expo Go on the iPhone and scan the QR code. Grant Local Network access if iOS prompts for it. The backend and Expo terminals must remain running while using the development build.
+
+Stage 1 is complete only after the physical iPhone logs in and loads API-backed data in Today, Plan, Insights, Coach, and Settings.
+
+## Simulator development
+
+For an iOS simulator, the fallback API origin in `app.json` remains `http://localhost:3000`:
+
+```bash
+npm run dev
+npm run ios --workspace @hbm/mobile
+```
+
+## Mobile architecture
+
+- `app/_layout.tsx`: Query client, authentication provider, and route guard.
+- `app/(auth)/login.tsx`: email/password login.
+- `app/(app)/(tabs)`: Today, Plan, Insights, Coach, and Settings tabs.
+- `src/api/client.ts`: Bearer authentication, single-flight refresh, and response validation.
+- `src/auth/tokenStore.ts`: SecureStore-backed access and refresh tokens.
+- `src/config/apiBaseUrl.ts`: validated runtime API-origin resolution.

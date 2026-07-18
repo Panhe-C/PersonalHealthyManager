@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
 
 type ThemePref = "auto" | "light" | "dark";
@@ -23,7 +23,7 @@ const NEXT_LABEL: Record<ThemePref, string> = {
 
 function resolveTheme(pref: ThemePref): "dark" | "light" {
   if (pref === "auto") {
-    return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches
+    return typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches
       ? "dark"
       : "light";
   }
@@ -53,7 +53,8 @@ export function ThemeToggle() {
     setPref(stored);
     applyPref(stored);
 
-    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    const mql = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!mql) return;
     const onChange = () => {
       setPref((current) => {
         if (current === "auto") applyPref("auto");

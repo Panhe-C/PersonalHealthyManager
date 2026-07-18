@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Send, Trash2 } from "lucide-react";
+import { MessageSquare, Plus, Send, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ActionButton } from "@/components/ActionButton";
 import { AgentMemoryPanel } from "@/components/AgentMemoryPanel";
@@ -294,6 +294,7 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
   const [sending, setSending] = useState(false);
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const suggestions = useMemo(() => buildSuggestions(messages), [messages]);
+  const selectedConversation = conversations.find((conversation) => conversation.id === selectedConversationId);
 
   async function undoAdjustment(messageId: string, adjustmentId: string) {
     const response = await fetch(`/api/agent/adjustments/${adjustmentId}/undo`, { method: "POST" });
@@ -440,11 +441,20 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
   }
 
   return (
-    <section className="agent-workspace">
+    <section className="agent-workspace agent-chat-shell">
       <aside className="agent-conversation-rail" aria-label="Agent conversations">
-        <button className="agent-new-chat" type="button" onClick={createConversation} disabled={loadingConversation}>
-          New chat
-        </button>
+        <div className="agent-rail-top">
+          <div className="agent-rail-brand">
+            <span className="agent-rail-brand-mark" aria-hidden="true">
+              <MessageSquare size={17} />
+            </span>
+            <span>Healthy Body Agent</span>
+          </div>
+          <button className="agent-new-chat" type="button" onClick={createConversation} disabled={loadingConversation}>
+            <Plus aria-hidden="true" size={16} />
+            <span>New chat</span>
+          </button>
+        </div>
         <div className="agent-conversation-list">
           {conversations.map((conversation) => (
             <div
@@ -492,7 +502,17 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
         <AgentMemoryPanel />
       </aside>
 
-      <section className="surface agent-panel">
+      <section className="agent-panel">
+        <header className="agent-chat-header">
+          <div>
+            <span className="agent-chat-eyebrow">Active chat</span>
+            <h1>{selectedConversation?.title ?? "New conversation"}</h1>
+          </div>
+          <div className="agent-chat-status" aria-label="Agent status">
+            <span aria-hidden="true" />
+            Ready
+          </div>
+        </header>
         {error ? <div className="message message-error">{error}</div> : null}
         <div className="agent-messages agent-messages-scroll" aria-label="Conversation messages" aria-live="polite" ref={messagesRef}>
           {messages.length === 0 ? (
