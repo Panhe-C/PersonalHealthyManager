@@ -79,3 +79,19 @@ npm run build
 ```
 
 The project uses SQLite for local development. Local `.env` and database files are ignored by Git.
+
+## Backup and recovery
+
+Create a consistent SQLite snapshot while the app is running:
+
+```bash
+npm run data:backup
+```
+
+Backups and their SHA-256 manifests are written to the ignored `backups/` directory. To restore one, stop the Web server first and pass the explicit confirmation flag:
+
+```bash
+npm run data:restore -- --from backups/<snapshot>.sqlite --confirm
+```
+
+Restore validates the SQLite header and manifest, then keeps the current database in `backups/pre-restore-*` before replacing it.
