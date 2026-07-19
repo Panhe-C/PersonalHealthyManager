@@ -6,7 +6,7 @@ import { Screen } from "../../../src/components/Screen";
 import { Text } from "../../../src/components/Text";
 import { EmptyState, Spinner } from "../../../src/components/States";
 import { HairlineRow, PageHeader } from "../../../src/components/QuietHealth";
-import { useAccountQuery, useGoalsQuery, useProfileQuery, useSettingsQuery } from "../../../src/api/hooks";
+import { useAccountQuery, useAutomationStatesQuery, useGoalsQuery, useProfileQuery, useSettingsQuery } from "../../../src/api/hooks";
 import { useAuth } from "../../../src/auth/AuthContext";
 import { mcpConnectionStatus } from "../../../src/settingsStatus";
 import { spacing, useTheme } from "../../../src/theme/tokens";
@@ -18,6 +18,7 @@ export default function SettingsTab() {
   const profile = useProfileQuery();
   const account = useAccountQuery();
   const settings = useSettingsQuery();
+  const automations = useAutomationStatesQuery();
   const { tokens } = useTheme();
   const iconProps = { color: tokens.ink, size: 21, strokeWidth: 1.5 } as const;
   const accountEmail = account.data?.email ?? "正在读取账户…";
@@ -43,6 +44,7 @@ export default function SettingsTab() {
         </SettingsGroup>
 
         <SettingsGroup title="数据与连接">
+          <HairlineRow icon={<Cloud {...iconProps} />} title="自动同步" value={automations.data?.some((item) => item.status === "failed") ? "需检查" : automations.data?.length ? "运行中" : "未运行"} onPress={() => Alert.alert("自动同步", automations.data?.map((item) => `${item.kind}: ${item.status}${item.lastError ? ` · ${item.lastError}` : ""}`).join("\n") || "自动任务尚未运行。")}/>
           <HairlineRow icon={<KeyRound {...iconProps} />} title="模型运行时" value={settings.data?.hasApiKey ? settings.data.modelProvider : "未配置密钥"} onPress={() => router.push("../model-settings")} />
           <HairlineRow icon={<Link {...iconProps} />} title="连接配置" subtitle="维护 Endpoint、开关和访问令牌" onPress={() => router.push("../connection-settings")} />
           <HairlineRow icon={<Watch {...iconProps} />} title="COROS" value={mcpConnectionStatus(connection("coros"))} onPress={() => Alert.alert("COROS", "连接状态来自服务器设置。")}/>
@@ -53,7 +55,7 @@ export default function SettingsTab() {
         <SettingsGroup title="偏好">
           <HairlineRow icon={<Cloud {...iconProps} />} title="外观" value="跟随系统" onPress={() => Alert.alert("外观", "当前跟随系统浅色或深色模式。")}/>
           <HairlineRow icon={<Ruler {...iconProps} />} title="单位" value="公制" onPress={() => Alert.alert("单位", "距离使用公里，体重使用公斤。")}/>
-          <HairlineRow icon={<Bell {...iconProps} />} title="通知" value="未配置" onPress={() => Alert.alert("通知", "推送通知尚未配置，不会显示虚假的开启状态。")}/>
+          <HairlineRow icon={<Bell {...iconProps} />} title="通知与提醒" value="管理" onPress={() => router.push("../notification-settings")} />
         </SettingsGroup>
 
         <SettingsGroup title="目标">

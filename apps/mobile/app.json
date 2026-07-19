@@ -22,12 +22,13 @@
     "android": {
       "package": "com.hbm.mobile"
     },
-    "plugins": ["expo-router"],
+    "plugins": ["expo-router", "expo-notifications"],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "apiBaseUrl": "http://localhost:3000"
+      "apiBaseUrl": "http://localhost:3000",
+      "easProjectId": ""
     }
   }
 }

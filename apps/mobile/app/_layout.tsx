@@ -3,6 +3,9 @@ import { Stack } from "expo-router";
 import { useState } from "react";
 import { AuthProvider, useAuth } from "../src/auth/AuthContext";
 import { useTheme } from "../src/theme/tokens";
+import { configureNotificationPresentation } from "../src/notifications";
+
+configureNotificationPresentation();
 
 function RootStack() {
   const { status } = useAuth();

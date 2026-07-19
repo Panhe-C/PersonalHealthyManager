@@ -15,21 +15,23 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  sessions          Session[]
-  bodyProfile       BodyProfile?
-  goals             Goal[]
-  activityRecords   ActivityRecord[]
-  sleepRecords      SleepRecord[]
-  recoveryRecords   RecoveryRecord[]
-  calendarSnapshots CalendarSnapshot[]
-  mealMenus         MealMenu[]
-  plans             Plan[]
-  calendarDrafts    CalendarEventDraft[]
-  agentConversations AgentConversation[]
-  agentMessages     AgentMessage[]
-  agentMemories     AgentMemory[]
-  settings          UserSettings?
-  pushTokens        PushToken[]
+  sessions               Session[]
+  bodyProfile            BodyProfile?
+  goals                  Goal[]
+  activityRecords        ActivityRecord[]
+  sleepRecords           SleepRecord[]
+  recoveryRecords        RecoveryRecord[]
+  calendarSnapshots      CalendarSnapshot[]
+  mealMenus              MealMenu[]
+  plans                  Plan[]
+  calendarDrafts         CalendarEventDraft[]
+  agentConversations     AgentConversation[]
+  agentMessages          AgentMessage[]
+  agentMemories          AgentMemory[]
+  settings               UserSettings?
+  pushTokens             PushToken[]
+  automationStates       AutomationState[]
+  notificationDeliveries NotificationDelivery[]
 }
 
 model Session {
@@ -37,7 +39,7 @@ model Session {
   tokenHash String   @unique
   userId    String
   kind      String   @default("refresh") // "refresh" (long-lived, Web cookie) | "access" (short-lived Bearer)
-  parentId  String?  // for access tokens: tokenHash of the owning refresh token (cascade invalidation)
+  parentId  String? // for access tokens: tokenHash of the owning refresh token (cascade invalidation)
   expiresAt DateTime
   createdAt DateTime @default(now())
 
@@ -77,37 +79,37 @@ model Goal {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   trainingTasks TrainingTask[]
 
   @@unique([id, userId])
 }
 
 model ActivityRecord {
-  id                    String   @id @default(cuid())
-  userId                String
-  source                String
-  sourceId              String
-  sportType             String
-  startedAt             DateTime
-  endedAt               DateTime
-  durationMinutes       Int
-  distanceKm            Float?
-  averagePaceSecPerKm   Int?
-  averageSpeedKph       Float?
-  averageHeartRateBpm   Int?
-  calories              Int?
-  trainingLoad          Float?
-  intensity             String
-  metadataJson          String
-  createdAt             DateTime @default(now())
+  id                  String   @id @default(cuid())
+  userId              String
+  source              String
+  sourceId            String
+  sportType           String
+  startedAt           DateTime
+  endedAt             DateTime
+  durationMinutes     Int
+  distanceKm          Float?
+  averagePaceSecPerKm Int?
+  averageSpeedKph     Float?
+  averageHeartRateBpm Int?
+  calories            Int?
+  trainingLoad        Float?
+  intensity           String
+  metadataJson        String
+  createdAt           DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   linkedCompletions TrainingCompletion[]
 
-  @@index([userId, startedAt])
   @@unique([userId, source, sourceId])
   @@unique([id, userId])
+  @@index([userId, startedAt])
 }
 
 model SleepRecord {
@@ -124,8 +126,8 @@ model SleepRecord {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId, date])
   @@unique([userId, source, date])
+  @@index([userId, date])
 }
 
 model RecoveryRecord {
@@ -144,8 +146,8 @@ model RecoveryRecord {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId, date])
   @@unique([userId, source, date])
+  @@index([userId, date])
 }
 
 model CalendarSnapshot {
@@ -197,8 +199,8 @@ model Plan {
   adjustments    PlanAdjustment[]
   calendarDrafts CalendarEventDraft[]
 
-  @@index([userId, weekStart, weekEnd])
   @@unique([id, userId])
+  @@index([userId, weekStart, weekEnd])
 }
 
 model TrainingTask {
@@ -224,8 +226,8 @@ model TrainingTask {
   completion     TrainingCompletion?
   calendarDraft  CalendarEventDraft?
 
-  @@index([userId, date])
   @@unique([id, userId])
+  @@index([userId, date])
 }
 
 model TrainingChecklistItem {
@@ -252,14 +254,14 @@ model TrainingCompletion {
   plannedVsActualJson String
   completedAt         DateTime @default(now())
 
-  task TrainingTask @relation(fields: [taskId, userId], references: [id, userId], onDelete: Cascade)
+  task           TrainingTask    @relation(fields: [taskId, userId], references: [id, userId], onDelete: Cascade)
   linkedActivity ActivityRecord? @relation(fields: [linkedActivityId, userId], references: [id, userId], onDelete: NoAction)
 
   @@unique([taskId, userId])
 }
 
 model PlanAdjustment {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   planId            String
   userId            String
   trigger           String
@@ -269,9 +271,9 @@ model PlanAdjustment {
   explanation       String
   actionId          String?
   messageId         String?
-  undoable          Boolean  @default(false)
+  undoable          Boolean   @default(false)
   undoneAt          DateTime?
-  createdAt         DateTime @default(now())
+  createdAt         DateTime  @default(now())
 
   plan Plan @relation(fields: [planId, userId], references: [id, userId], onDelete: Cascade)
 
@@ -298,25 +300,25 @@ model CalendarEventDraft {
   plan         Plan?         @relation(fields: [planId, userId], references: [id, userId], onDelete: Cascade)
   trainingTask TrainingTask? @relation(fields: [trainingTaskId, userId], references: [id, userId], onDelete: Cascade)
 
-  @@index([userId, startsAt])
   @@unique([trainingTaskId, userId])
+  @@index([userId, startsAt])
 }
 
 model AgentConversation {
-  id                  String   @id @default(cuid())
+  id                  String    @id @default(cuid())
   userId              String
   title               String
   summary             String?
   summaryUpdatedAt    DateTime?
-  summaryMessageCount Int      @default(0)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  summaryMessageCount Int       @default(0)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages AgentMessage[]
 
-  @@index([userId, updatedAt])
   @@unique([id, userId])
+  @@index([userId, updatedAt])
 }
 
 model AgentMessage {
@@ -351,8 +353,8 @@ model AgentMemory {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId, status])
   @@unique([id, userId])
+  @@index([userId, status])
 }
 
 model UserSettings {
@@ -384,4 +386,36 @@ model PushToken {
 
   @@unique([userId, token])
   @@index([userId])
+}
+
+model AutomationState {
+  id              String    @id @default(cuid())
+  userId          String
+  kind            String
+  status          String    @default("idle")
+  lastStartedAt   DateTime?
+  lastCompletedAt DateTime?
+  lastSuccessAt   DateTime?
+  lastError       String?
+  detailsJson     String    @default("{}")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, kind])
+  @@index([userId])
+}
+
+model NotificationDelivery {
+  id          String   @id @default(cuid())
+  userId      String
+  kind        String
+  dedupeKey   String
+  deliveredAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, kind, dedupeKey])
+  @@index([userId, deliveredAt])
 }

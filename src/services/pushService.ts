@@ -18,25 +18,44 @@ export async function listPushTokens(userId: string) {
 }
 
 /**
- * Send a push notification to all of a user's registered tokens via Expo Push.
- * Stubbed here (no network in dev); wire `EXPO_PUSH_ACCESS_TOKEN` + the actual
- * fetch in production. Failures are swallowed and logged — push is best-effort.
+ * Send a push notification to all of a user's registered Expo tokens.
  */
 export async function sendPushToUser(
   userId: string,
   payload: { title: string; body: string; data?: Record<string, unknown> }
-): Promise<void> {
+): Promise<{ attempted: number; sent: number; failed: number }> {
   const tokens = await listPushTokens(userId);
-  if (tokens.length === 0) return;
+  if (tokens.length === 0) return { attempted: 0, sent: 0, failed: 0 };
 
-  const expoTickets = tokens
-    .map((t) => t.token)
-    .filter((token) => token.startsWith("ExponentPushToken["));
+  const expoTokens = tokens.filter((item) => /^(ExponentPushToken|ExpoPushToken)\[.+\]$/.test(item.token));
+  if (expoTokens.length === 0) return { attempted: 0, sent: 0, failed: 0 };
 
-  if (expoTickets.length === 0) return;
+  const accessToken = process.env.EXPO_PUSH_ACCESS_TOKEN?.trim();
+  let sent = 0;
+  let failed = 0;
 
-  // TODO(M4): enable when EXPO_PUSH_ACCESS_TOKEN is set in production.
-  // await fetch("https://exp.host/--/api/v2/push/send", { ... })
-  // eslint-disable-next-line no-console
-  console.debug("[push] would send", payload, "to", expoTickets.length, "tokens");
+  for (let index = 0; index < expoTokens.length; index += 100) {
+    const batch = expoTokens.slice(index, index + 100);
+    const response = await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
+      },
+      body: JSON.stringify(batch.map((item) => ({ to: item.token, sound: "default", ...payload })))
+    });
+    if (!response.ok) throw new Error(`Expo push gateway returned HTTP ${response.status}`);
+    const body = await response.json() as { data?: Array<{ status?: string; details?: { error?: string } }> };
+    const tickets = body.data ?? [];
+    sent += tickets.filter((ticket) => ticket.status === "ok").length;
+    failed += batch.length - tickets.filter((ticket) => ticket.status === "ok").length;
+
+    const staleIds = tickets.flatMap((ticket, ticketIndex) =>
+      ticket.details?.error === "DeviceNotRegistered" ? [batch[ticketIndex]?.id] : []
+    ).filter((id): id is string => Boolean(id));
+    if (staleIds.length > 0) await prisma.pushToken.deleteMany({ where: { id: { in: staleIds }, userId } });
+  }
+
+  return { attempted: expoTokens.length, sent, failed };
 }

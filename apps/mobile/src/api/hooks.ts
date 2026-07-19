@@ -18,6 +18,11 @@ import {
 import { api } from "./client";
 import { getAccount } from "./account";
 import { getSettings } from "./settings";
+import { getAutomationStates } from "./automation";
+
+export function useAutomationStatesQuery() {
+  return useQuery({ queryKey: ["automation", "status"], queryFn: getAutomationStates, refetchInterval: 60_000 });
+}
 
 export function useAccountQuery() {
   return useQuery({ queryKey: ["account"], queryFn: getAccount });

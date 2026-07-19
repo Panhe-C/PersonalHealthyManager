@@ -3,6 +3,7 @@ import { normalizeFeishuCalendarSnapshot } from "@/src/providers/calendar";
 import { normalizeCorosActivity, normalizeCorosRecovery, normalizeCorosSleep } from "@/src/providers/coros";
 import { fetchCorosRemoteMcpSnapshot } from "@/src/providers/coros-mcp";
 import { loadDataMcpConnection } from "@/src/settings/service";
+import { fetchLarkCalendarPayload } from "@/src/providers/lark-calendar-read";
 
 type CorosImportPayload = {
   activities?: unknown[];
@@ -264,4 +265,8 @@ export async function importCalendarPayload(userId: string, payload: unknown) {
 
     return tx.calendarSnapshot.create({ data });
   });
+}
+
+export async function syncCalendarFromLarkCli(userId: string, now = new Date()) {
+  return importCalendarPayload(userId, await fetchLarkCalendarPayload(now));
 }

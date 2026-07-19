@@ -18,6 +18,8 @@
     "phone:check": "node scripts/phone-preflight.mjs",
     "data:backup": "node scripts/data-backup.mjs",
     "data:restore": "node scripts/data-restore.mjs",
+    "automation:run": "node --import tsx scripts/run-automations.ts",
+    "automation:watch": "node --import tsx scripts/run-automations.ts --watch",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "seed": "node --import tsx scripts/seed.ts",
