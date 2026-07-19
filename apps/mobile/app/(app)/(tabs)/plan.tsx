@@ -1,13 +1,14 @@
 import { Alert, Pressable, StyleSheet, View } from "react-native";
-import { Dumbbell, Utensils } from "lucide-react-native";
+import { CalendarCheck, Dumbbell, Utensils } from "lucide-react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Screen } from "../../../src/components/Screen";
 import { Text } from "../../../src/components/Text";
 import { Button } from "../../../src/components/Button";
 import { EmptyState, Spinner } from "../../../src/components/States";
 import { HairlineRow, PageHeader } from "../../../src/components/QuietHealth";
-import { useActivePlanQuery } from "../../../src/api/hooks";
+import { useActivePlanQuery, useCalendarDraftsQuery } from "../../../src/api/hooks";
 import { generateActivePlan } from "../../../src/api/training";
+import { confirmCalendarDraft } from "../../../src/api/calendar";
 import { currentWeekStartIso, formatDateLabel, formatTaskWindow, parseJsonObject, weekDayNumbers } from "../../../src/ui/format";
 import { spacing, useTheme } from "../../../src/theme/tokens";
 
@@ -16,6 +17,7 @@ const weekNames = ["一", "二", "三", "四", "五", "六", "日"];
 export default function PlanTab() {
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useActivePlanQuery();
+  const drafts = useCalendarDraftsQuery();
   const { tokens } = useTheme();
   const generateMutation = useMutation({
     mutationFn: () => generateActivePlan(currentWeekStartIso()),
@@ -25,6 +27,14 @@ export default function PlanTab() {
       Alert.alert("计划已生成", "本周训练和饮食建议已同步到 App。");
     },
     onError: (err) => Alert.alert("生成失败", err instanceof Error ? err.message : "请稍后重试。")
+  });
+  const confirmMutation = useMutation({
+    mutationFn: confirmCalendarDraft,
+    onSuccess: (draft) => {
+      void queryClient.invalidateQueries({ queryKey: ["calendar", "drafts"] });
+      Alert.alert(draft.status === "confirmed" ? "已写入日历" : "写入失败", draft.failureReason || "飞书日历已更新。");
+    },
+    onError: (err) => Alert.alert("确认失败", err instanceof Error ? err.message : "请稍后重试。")
   });
   const nutrition = parseJsonObject(data?.nutritionTargetsJson, {
     proteinTargetGrams: null,
@@ -89,6 +99,20 @@ export default function PlanTab() {
             <Text size="lg" weight="strong" style={[styles.sectionTitle, { color: tokens.sage }]}>饮食</Text>
             <HairlineRow icon={<Utensils color={tokens.sage} size={21} strokeWidth={1.5} />} title="蛋白目标" subtitle={String(nutrition.carbohydrateGuidance)} value={typeof nutrition.proteinTargetGrams === "number" ? `${nutrition.proteinTargetGrams}g` : "未设置"} />
             <HairlineRow title="热量目标" value={String(nutrition.calorieTarget)} />
+          </View>
+
+          <View>
+            <Text size="lg" weight="strong" style={[styles.sectionTitle, { color: tokens.sage }]}>日历草稿</Text>
+            {drafts.data?.length ? drafts.data.map((draft) => (
+              <HairlineRow
+                key={draft.id}
+                icon={<CalendarCheck color={draft.status === "failed" ? tokens.danger : tokens.sage} size={21} strokeWidth={1.5} />}
+                title={draft.title}
+                subtitle={`${formatTaskWindow(draft.startsAt, draft.endsAt)}${draft.failureReason ? ` · ${draft.failureReason}` : ""}`}
+                value={confirmMutation.isPending && confirmMutation.variables === draft.id ? "写入中" : draft.status === "failed" ? "重试" : draft.operation === "cancel" ? "确认取消" : "确认"}
+                onPress={() => confirmMutation.mutate(draft.id)}
+              />
+            )) : <Text size="sm" style={{ color: tokens.muted }}>没有待确认的日历变更。</Text>}
           </View>
         </>
       ) : (

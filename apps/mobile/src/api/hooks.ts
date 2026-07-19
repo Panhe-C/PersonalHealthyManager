@@ -19,6 +19,9 @@ import { api } from "./client";
 import { getAccount } from "./account";
 import { getSettings } from "./settings";
 import { getAutomationStates } from "./automation";
+import { getProfile } from "./profile";
+import { getGoals } from "./goals";
+import { getCalendarDrafts } from "./calendar";
 
 export function useAutomationStatesQuery() {
   return useQuery({ queryKey: ["automation", "status"], queryFn: getAutomationStates, refetchInterval: 60_000 });
@@ -35,15 +38,19 @@ export function useSettingsQuery() {
 export function useProfileQuery() {
   return useQuery({
     queryKey: ["profile"],
-    queryFn: () => api.get<unknown>("/profile")
+    queryFn: getProfile
   });
 }
 
 export function useGoalsQuery() {
   return useQuery({
     queryKey: ["goals"],
-    queryFn: () => api.get<Goal[]>("/goals", goalListResponseSchema)
+    queryFn: getGoals
   });
+}
+
+export function useCalendarDraftsQuery() {
+  return useQuery({ queryKey: ["calendar", "drafts"], queryFn: getCalendarDrafts });
 }
 
 export function useTodayOverviewQuery() {

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useRouter } from "expo-router";
 import { Alert, StyleSheet, View } from "react-native";
-import { Bell, Brain, CalendarDays, Cloud, Download, KeyRound, Link, LogOut, Ruler, Shield, Target, Utensils, Watch } from "lucide-react-native";
+import { Bell, Brain, CalendarDays, Cloud, Download, KeyRound, Link, LogOut, Ruler, Shield, Target, UserRound, Utensils, Watch } from "lucide-react-native";
 import { Screen } from "../../../src/components/Screen";
 import { Text } from "../../../src/components/Text";
 import { EmptyState, Spinner } from "../../../src/components/States";
@@ -40,6 +40,7 @@ export default function SettingsTab() {
 
       <View style={styles.settingsList}>
         <SettingsGroup title="账户">
+          <HairlineRow icon={<UserRound {...iconProps} />} title="个人资料" subtitle="身体数据、限制和偏好" onPress={() => router.push("../profile-settings")} />
           <HairlineRow icon={<Shield {...iconProps} />} title="账户安全" subtitle="修改密码会退出所有设备" onPress={() => router.push("../account-security")} />
         </SettingsGroup>
 
@@ -59,6 +60,7 @@ export default function SettingsTab() {
         </SettingsGroup>
 
         <SettingsGroup title="目标">
+          <HairlineRow icon={<Target {...iconProps} />} title="管理目标" subtitle="新建、编辑或暂停目标" onPress={() => router.push("../goal-settings")} />
           {goals.isLoading ? <Spinner /> : goals.error ? <EmptyState title="目标加载失败" description="请确认后端服务。" /> : goals.data?.length ? goals.data.slice(0, 4).map((goal) => (
             <HairlineRow
               key={goal.id}
@@ -72,7 +74,7 @@ export default function SettingsTab() {
 
         <SettingsGroup title="隐私">
           <HairlineRow icon={<Brain {...iconProps} />} title="Agent 记忆" value={profile.data ? "可用" : "同步中"} onPress={() => Alert.alert("Agent 记忆", "可在教练页面管理已保存的偏好和约束。")}/>
-          <HairlineRow icon={<Download {...iconProps} />} title="导出数据" onPress={() => Alert.alert("导出数据", "数据导出功能将在后续版本开放。")}/>
+          <HairlineRow icon={<Download {...iconProps} />} title="导出数据" subtitle="生成脱敏 JSON 文件" onPress={() => router.push("../data-export")} />
         </SettingsGroup>
 
         <HairlineRow
