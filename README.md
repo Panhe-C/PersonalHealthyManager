@@ -95,3 +95,9 @@ npm run data:restore -- --from backups/<snapshot>.sqlite --confirm
 ```
 
 Restore validates the SQLite header and manifest, then keeps the current database in `backups/pre-restore-*` before replacing it.
+
+## Privacy and release
+
+- [Privacy notice](docs/privacy-policy.md)
+- [Data export and account deletion](docs/data-deletion.md)
+- [Release checklist](docs/release-checklist.md)

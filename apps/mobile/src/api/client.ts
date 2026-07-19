@@ -132,6 +132,7 @@ export const api = {
   post: <T>(path: string, body?: unknown, schema?: z.ZodTypeAny) => request<T>(path, { method: "POST", body, schema }),
   patch: <T>(path: string, body?: unknown, schema?: z.ZodTypeAny) => request<T>(path, { method: "PATCH", body, schema }),
   delete: <T>(path: string, schema?: z.ZodTypeAny) => request<T>(path, { method: "DELETE", schema }),
+  deleteWithBody: <T>(path: string, body: unknown, schema?: z.ZodTypeAny) => request<T>(path, { method: "DELETE", body, schema }),
   // Auth calls hit /api/auth (not /api/v1/auth) — same handlers, but the login
   // flow needs to be reachable before a token exists.
   auth: {

@@ -2,21 +2,24 @@ import { Pressable, StyleSheet, type PressableProps } from "react-native";
 import { Text } from "./Text";
 import { radius, spacing, useTheme } from "../theme/tokens";
 
-export function Button({ title, onPress, variant = "primary", disabled, ...props }: PressableProps & { title: string; variant?: "primary" | "ghost" }) {
+export function Button({ title, onPress, variant = "primary", disabled, ...props }: PressableProps & { title: string; variant?: "primary" | "ghost" | "danger" }) {
   const { tokens } = useTheme();
   const isPrimary = variant === "primary";
+  const isDanger = variant === "danger";
+  const backgroundColor = isPrimary ? tokens.sage : isDanger ? tokens.danger : "transparent";
+  const borderColor = isPrimary ? tokens.sage : isDanger ? tokens.danger : tokens.line;
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
       style={({ pressed }) => [
         styles.base,
-        { backgroundColor: isPrimary ? tokens.sage : "transparent", borderColor: isPrimary ? tokens.sage : tokens.line, opacity: pressed ? 0.78 : 1 },
+        { backgroundColor, borderColor, opacity: pressed ? 0.78 : 1 },
         disabled && styles.disabled
       ]}
       {...props}
     >
-      <Text size="md" weight="medium" style={{ color: isPrimary ? "#fff" : tokens.ink, textAlign: "center" }}>
+      <Text size="md" weight="medium" style={{ color: isPrimary || isDanger ? "#fff" : tokens.ink, textAlign: "center" }}>
         {title}
       </Text>
     </Pressable>

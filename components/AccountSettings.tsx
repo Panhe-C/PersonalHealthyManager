@@ -10,6 +10,9 @@ export function AccountSettings({ email, timezone }: { email: string; timezone: 
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,6 +42,27 @@ export function AccountSettings({ email, timezone }: { email: string; timezone: 
       setError(changeError instanceof Error ? changeError.message : "Password could not be changed");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function deleteAccount(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setDeleteError("");
+    if (!window.confirm("Permanently delete this account and all server data? This cannot be undone.")) return;
+
+    setDeleting(true);
+    try {
+      const response = await fetch("/api/v1/account", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: deletePassword })
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error ?? "Account could not be deleted");
+      window.location.assign("/login");
+    } catch (deletionError) {
+      setDeleteError(deletionError instanceof Error ? deletionError.message : "Account could not be deleted");
+      setDeleting(false);
     }
   }
 
@@ -79,6 +103,21 @@ export function AccountSettings({ email, timezone }: { email: string; timezone: 
           <button className="button" type="submit" disabled={saving}>{saving ? "Changing..." : "Change password"}</button>
           {message ? <span className="message" role="status">{message}</span> : null}
           {error ? <span className="message message-error" role="alert">{error}</span> : null}
+        </div>
+      </form>
+
+      <form className="account-danger-zone" onSubmit={deleteAccount}>
+        <div>
+          <h3>Permanently delete account</h3>
+          <p className="page-subtitle">Export your data first. Server data cannot be recovered; local backups and third-party calendar events must be removed separately.</p>
+        </div>
+        <label className="field">
+          Current password to confirm deletion
+          <input autoComplete="current-password" type="password" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} required />
+        </label>
+        <div className="toolbar">
+          <button className="button button-danger" type="submit" disabled={deleting}>{deleting ? "Deleting..." : "Delete account permanently"}</button>
+          {deleteError ? <span className="message message-error" role="alert">{deleteError}</span> : null}
         </div>
       </form>
     </section>

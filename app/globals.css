@@ -1252,6 +1252,17 @@ h3 {
   background: var(--sage-soft);
 }
 
+.button-danger {
+  border-color: var(--danger);
+  background: var(--danger);
+  box-shadow: none;
+}
+
+.button-danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: color-mix(in oklch, var(--danger) 88%, black);
+}
+
 .icon-button {
   width: 40px;
   height: 40px;
@@ -2593,6 +2604,24 @@ body:has(.agent-page) .nav-link {
   border-color: color-mix(in oklch, var(--sage) 62%, var(--line));
   background: #fff;
   box-shadow: 0 0 0 4px color-mix(in oklch, var(--sage-soft) 72%, transparent);
+}
+
+.account-danger-zone {
+  display: grid;
+  gap: 14px;
+  border: 1px solid color-mix(in oklch, var(--danger) 50%, var(--line));
+  border-radius: 18px;
+  padding: 18px;
+  background: var(--danger-soft);
+}
+
+.account-danger-zone h3 {
+  margin: 0 0 4px;
+  color: var(--danger);
+}
+
+.account-danger-zone .field {
+  max-width: 520px;
 }
 
 .settings-form-grid {

@@ -35,4 +35,14 @@ describe("AccountSettings", () => {
     await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/v1/account", expect.objectContaining({ method: "PATCH" })));
     expect(await screen.findByRole("status")).toHaveTextContent("Existing sessions were signed out");
   });
+
+  it("requires confirmation and the current password before deleting the account", async () => {
+    vi.stubGlobal("confirm", vi.fn(() => false));
+    render(<AccountSettings email="owner@example.com" timezone="Asia/Shanghai" />);
+    fireEvent.change(screen.getByLabelText("Current password to confirm deletion"), { target: { value: "current-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Delete account permanently" }));
+
+    expect(confirm).toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
 });
