@@ -109,7 +109,7 @@ export async function generatePlanForUser(userId: string, weekStart: Date) {
     metadata: {}
   }));
   const normalizedSleep: NormalizedSleepRecord[] = sleepRecords.map((sleep) => ({
-    source: "coros",
+    source: sleep.source as NormalizedSleepRecord["source"],
     date: sleep.date,
     sleepStart: sleep.sleepStart ?? undefined,
     sleepEnd: sleep.sleepEnd ?? undefined,
@@ -118,7 +118,7 @@ export async function generatePlanForUser(userId: string, weekStart: Date) {
     metadata: {}
   }));
   const normalizedRecovery: NormalizedRecoveryRecord[] = recoveryRecords.map((recovery) => ({
-    source: "coros",
+    source: recovery.source as NormalizedRecoveryRecord["source"],
     date: recovery.date,
     recoveryPercent: recovery.recoveryPercent ?? undefined,
     hrvMs: recovery.hrvMs ?? undefined,

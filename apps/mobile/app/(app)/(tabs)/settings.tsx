@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useRouter } from "expo-router";
 import { Alert, StyleSheet, View } from "react-native";
-import { Bell, Brain, CalendarDays, Cloud, Download, KeyRound, Link, LogOut, Ruler, Shield, Target, UserRound, Utensils, Watch } from "lucide-react-native";
+import { Bell, Brain, CalendarDays, Cloud, Download, HeartPulse, KeyRound, Link, LogOut, Ruler, Shield, Target, UserRound, Utensils, Watch } from "lucide-react-native";
 import { Screen } from "../../../src/components/Screen";
 import { Text } from "../../../src/components/Text";
 import { EmptyState, Spinner } from "../../../src/components/States";
@@ -45,6 +45,7 @@ export default function SettingsTab() {
         </SettingsGroup>
 
         <SettingsGroup title="数据与连接">
+          <HairlineRow icon={<HeartPulse {...iconProps} />} title="Apple 健康" subtitle="授权并同步 HealthKit" onPress={() => router.push("../healthkit-settings")} />
           <HairlineRow icon={<Cloud {...iconProps} />} title="自动同步" value={automations.data?.some((item) => item.status === "failed") ? "需检查" : automations.data?.length ? "运行中" : "未运行"} onPress={() => Alert.alert("自动同步", automations.data?.map((item) => `${item.kind}: ${item.status}${item.lastError ? ` · ${item.lastError}` : ""}`).join("\n") || "自动任务尚未运行。")}/>
           <HairlineRow icon={<KeyRound {...iconProps} />} title="模型运行时" value={settings.data?.hasApiKey ? settings.data.modelProvider : "未配置密钥"} onPress={() => router.push("../model-settings")} />
           <HairlineRow icon={<Link {...iconProps} />} title="连接配置" subtitle="维护 Endpoint、开关和访问令牌" onPress={() => router.push("../connection-settings")} />

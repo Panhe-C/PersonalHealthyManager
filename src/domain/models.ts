@@ -26,7 +26,7 @@ export type NormalizedActivityRecord = {
 };
 
 export type NormalizedSleepRecord = {
-  source: "coros";
+  source: "coros" | "healthkit";
   date: Date;
   sleepStart?: Date;
   sleepEnd?: Date;
@@ -36,7 +36,7 @@ export type NormalizedSleepRecord = {
 };
 
 export type NormalizedRecoveryRecord = {
-  source: "coros";
+  source: "coros" | "healthkit";
   date: Date;
   recoveryPercent?: number;
   hrvMs?: number;

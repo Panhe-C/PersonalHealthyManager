@@ -22,7 +22,27 @@
     "android": {
       "package": "com.hbm.mobile"
     },
-    "plugins": ["expo-router", "expo-notifications"],
+    "plugins": [
+      "expo-router",
+      "expo-notifications",
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "读取你的训练、睡眠、心率、HRV 和身体数据，用于生成个性化计划与恢复建议。",
+          "NSHealthUpdateUsageDescription": "Healthy Body Manager 当前不会向 Apple 健康写入数据。",
+          "background": true
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.0"
+          }
+        }
+      ],
+      "./plugins/with-ios-16-pods"
+    ],
     "experiments": {
       "typedRoutes": true
     },
