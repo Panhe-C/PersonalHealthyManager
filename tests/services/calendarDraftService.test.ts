@@ -3,117 +3,84 @@ import { prisma } from "@/src/db/client";
 import { confirmCalendarDrafts } from "@/src/services/calendarDraftService";
 
 vi.mock("@/src/db/client", () => ({
-  prisma: {
-    calendarEventDraft: {
-      findMany: vi.fn(),
-      updateMany: vi.fn()
-    },
-    $transaction: vi.fn()
-  }
+  prisma: { calendarEventDraft: { findMany: vi.fn(), updateMany: vi.fn() } }
 }));
 
+const baseDraft = {
+  id: "draft-1",
+  userId: "user-1",
+  status: "draft",
+  operation: "upsert",
+  title: "Easy run",
+  startsAt: new Date("2026-07-20T00:00:00.000Z"),
+  endsAt: new Date("2026-07-20T01:00:00.000Z"),
+  notes: "Recovery pace",
+  externalEventId: null
+};
+
 describe("calendar draft service", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(prisma.$transaction).mockImplementation(async (callback) => callback(prisma as never));
-  });
+  beforeEach(() => vi.clearAllMocks());
 
   it("returns already confirmed drafts without writing them again", async () => {
-    const confirmedDraft = {
-      id: "draft-1",
-      userId: "user-1",
-      status: "confirmed"
-    };
-    vi.mocked(prisma.calendarEventDraft.findMany).mockResolvedValue([confirmedDraft] as never);
-
-    const drafts = await confirmCalendarDrafts("user-1", ["draft-1"]);
-
+    const confirmed = { ...baseDraft, status: "confirmed" };
+    vi.mocked(prisma.calendarEventDraft.findMany).mockResolvedValueOnce([confirmed] as never).mockResolvedValueOnce([confirmed] as never);
+    const writer = vi.fn();
+    const drafts = await confirmCalendarDrafts("user-1", ["draft-1"], writer);
+    expect(writer).not.toHaveBeenCalled();
     expect(prisma.calendarEventDraft.updateMany).not.toHaveBeenCalled();
-    expect(drafts).toEqual([confirmedDraft]);
+    expect(drafts).toEqual([confirmed]);
   });
 
   it("rejects superseded drafts so stale pages cannot confirm them", async () => {
-    vi.mocked(prisma.calendarEventDraft.findMany).mockResolvedValue([
-      {
-        id: "draft-1",
-        userId: "user-1",
-        status: "superseded"
-      }
-    ] as never);
-
-    await expect(confirmCalendarDrafts("user-1", ["draft-1"])).rejects.toThrow("Draft is not actionable");
-
-    expect(prisma.calendarEventDraft.updateMany).not.toHaveBeenCalled();
+    vi.mocked(prisma.calendarEventDraft.findMany).mockResolvedValue([{ ...baseDraft, status: "superseded" }] as never);
+    await expect(confirmCalendarDrafts("user-1", ["draft-1"], vi.fn())).rejects.toThrow("Draft is not actionable");
   });
 
-  it("retains an existing external event id when confirming an update draft", async () => {
-    const draft = {
-      id: "draft-1",
-      userId: "user-1",
-      status: "draft",
-      externalEventId: "feishu-event-1"
-    };
-    vi.mocked(prisma.calendarEventDraft.findMany)
-      .mockResolvedValueOnce([draft] as never)
-      .mockResolvedValueOnce([{ ...draft, status: "confirmed" }] as never);
+  it("claims a draft before writing and stores the real external event id", async () => {
+    const confirmed = { ...baseDraft, status: "confirmed", externalEventId: "feishu-event-1" };
+    vi.mocked(prisma.calendarEventDraft.findMany).mockResolvedValueOnce([baseDraft] as never).mockResolvedValueOnce([confirmed] as never);
     vi.mocked(prisma.calendarEventDraft.updateMany).mockResolvedValue({ count: 1 });
+    const writer = vi.fn().mockResolvedValue({ externalEventId: "feishu-event-1" });
 
-    await confirmCalendarDrafts("user-1", ["draft-1"]);
+    await confirmCalendarDrafts("user-1", ["draft-1"], writer);
 
-    expect(prisma.calendarEventDraft.updateMany).toHaveBeenCalledWith({
-      where: {
-        id: "draft-1",
-        userId: "user-1",
-        status: { in: ["draft", "failed"] }
-      },
-      data: {
-        status: "confirmed",
-        externalEventId: "feishu-event-1",
-        failureReason: null
-      }
+    expect(writer).toHaveBeenCalledWith(baseDraft);
+    expect(prisma.calendarEventDraft.updateMany).toHaveBeenNthCalledWith(1, {
+      where: { id: "draft-1", userId: "user-1", status: { in: ["draft", "failed"] } },
+      data: { status: "writing", failureReason: null }
+    });
+    expect(prisma.calendarEventDraft.updateMany).toHaveBeenNthCalledWith(2, {
+      where: { id: "draft-1", userId: "user-1", status: "writing" },
+      data: { status: "confirmed", externalEventId: "feishu-event-1", failureReason: null }
     });
   });
 
-  it("clears the external event id when confirming a cancellation draft", async () => {
-    const draft = {
-      id: "draft-1",
-      userId: "user-1",
-      status: "draft",
-      operation: "cancel",
-      externalEventId: "feishu-event-1"
-    };
-    vi.mocked(prisma.calendarEventDraft.findMany)
-      .mockResolvedValueOnce([draft] as never)
-      .mockResolvedValueOnce([{ ...draft, status: "confirmed", externalEventId: null }] as never);
+  it("clears the external event id after a real cancellation", async () => {
+    const draft = { ...baseDraft, operation: "cancel", externalEventId: "feishu-event-1" };
+    vi.mocked(prisma.calendarEventDraft.findMany).mockResolvedValueOnce([draft] as never).mockResolvedValueOnce([{ ...draft, status: "confirmed", externalEventId: null }] as never);
     vi.mocked(prisma.calendarEventDraft.updateMany).mockResolvedValue({ count: 1 });
-
-    await confirmCalendarDrafts("user-1", ["draft-1"]);
-
-    expect(prisma.calendarEventDraft.updateMany).toHaveBeenCalledWith({
-      where: {
-        id: "draft-1",
-        userId: "user-1",
-        status: { in: ["draft", "failed"] }
-      },
-      data: {
-        status: "confirmed",
-        externalEventId: null,
-        failureReason: null
-      }
+    await confirmCalendarDrafts("user-1", ["draft-1"], vi.fn().mockResolvedValue({ externalEventId: null }));
+    expect(prisma.calendarEventDraft.updateMany).toHaveBeenNthCalledWith(2, {
+      where: { id: "draft-1", userId: "user-1", status: "writing" },
+      data: { status: "confirmed", externalEventId: null, failureReason: null }
     });
   });
 
-  it("rejects a draft that becomes superseded before the conditional write", async () => {
-    vi.mocked(prisma.calendarEventDraft.findMany).mockResolvedValue([
-      {
-        id: "draft-1",
-        userId: "user-1",
-        status: "draft",
-        externalEventId: null
-      }
-    ] as never);
+  it("records provider failures and leaves the draft retryable", async () => {
+    const failed = { ...baseDraft, status: "failed", failureReason: "Missing calendar scope" };
+    vi.mocked(prisma.calendarEventDraft.findMany).mockResolvedValueOnce([baseDraft] as never).mockResolvedValueOnce([failed] as never);
+    vi.mocked(prisma.calendarEventDraft.updateMany).mockResolvedValue({ count: 1 });
+    const result = await confirmCalendarDrafts("user-1", ["draft-1"], vi.fn().mockRejectedValue(new Error("Missing calendar scope")));
+    expect(prisma.calendarEventDraft.updateMany).toHaveBeenNthCalledWith(2, {
+      where: { id: "draft-1", userId: "user-1", status: "writing" },
+      data: { status: "failed", failureReason: "Missing calendar scope" }
+    });
+    expect(result[0].status).toBe("failed");
+  });
+
+  it("rejects a draft that becomes unavailable before it can be claimed", async () => {
+    vi.mocked(prisma.calendarEventDraft.findMany).mockResolvedValue([baseDraft] as never);
     vi.mocked(prisma.calendarEventDraft.updateMany).mockResolvedValue({ count: 0 });
-
-    await expect(confirmCalendarDrafts("user-1", ["draft-1"])).rejects.toThrow("Draft is no longer actionable");
+    await expect(confirmCalendarDrafts("user-1", ["draft-1"], vi.fn())).rejects.toThrow("Draft is no longer actionable");
   });
 });

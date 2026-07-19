@@ -11,11 +11,12 @@ type Draft = {
   endsAt: string;
   operation: string;
   status: string;
+  failureReason?: string | null;
 };
 
 export function CalendarDraftList({ drafts }: { drafts: Draft[] }) {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
-  const draftIds = drafts.filter((draft) => draft.status === "draft").map((draft) => draft.id);
+  const draftIds = drafts.filter((draft) => ["draft", "failed"].includes(draft.status)).map((draft) => draft.id);
 
   async function confirm(id: string) {
     setConfirmingId(id);
@@ -75,19 +76,22 @@ export function CalendarDraftList({ drafts }: { drafts: Draft[] }) {
                         : "status status-info"
                   }
                 >
-                  {draft.status === "confirmed" ? "Confirmed" : draft.operation === "cancel" ? "Cancellation" : "Draft"}
+                  {draft.status === "confirmed" ? "Confirmed" : draft.status === "writing" ? "Writing…" : draft.status === "failed" ? "Failed" : draft.operation === "cancel" ? "Cancellation" : "Draft"}
                 </span>
+                {draft.failureReason ? <div className="message message-error">{draft.failureReason}</div> : null}
               </div>
               <ActionButton
                 type="button"
                 onClick={() => confirm(draft.id)}
-                disabled={draft.status !== "draft" || confirmingId !== null}
+                disabled={!["draft", "failed"].includes(draft.status) || confirmingId !== null}
               >
                 <CalendarCheck aria-hidden="true" size={16} />{" "}
-                {draft.status === "draft"
+                {["draft", "failed"].includes(draft.status)
                   ? confirmingId === draft.id
                     ? "Confirming..."
-                    : draft.operation === "cancel"
+                    : draft.status === "failed"
+                      ? "Retry"
+                      : draft.operation === "cancel"
                       ? "Confirm cancellation"
                       : "Confirm"
                   : "Confirmed"}

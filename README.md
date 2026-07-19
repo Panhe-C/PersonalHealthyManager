@@ -38,7 +38,7 @@ The first version exposes import endpoints that an external Agent or MCP workflo
 
 The Web App includes a `Sync demo data` command that exercises those same endpoints with local sample payloads.
 
-Calendar write-back is confirmation-first. Confirming a draft currently records a mock Feishu external event ID. A real Feishu MCP write can replace that provider boundary without changing the plan or UI workflow.
+Calendar write-back is confirmation-first. Confirming a draft invokes the locally authenticated `lark-cli` user identity to create, update, or delete the corresponding Feishu event. Failed writes retain their error and can be retried; the app never records a mock event ID.
 
 Generating the same week again supersedes the previous active plan and its calendar drafts, so only the latest proposal remains actionable. Existing external event IDs are carried into replacement drafts to avoid duplicate calendar events, while events that no longer fit the plan become cancellation drafts.
 When checklist feedback changes a future scheduled task, its calendar draft is updated too. Previously confirmed events return to draft status with the same external event ID so the change requires confirmation.
