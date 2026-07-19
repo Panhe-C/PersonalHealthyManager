@@ -18,6 +18,7 @@ import { POST } from "@/app/api/auth/login/route";
 import { verifyPassword } from "@/src/auth/password";
 import { createSession } from "@/src/auth/session";
 import { prisma } from "@/src/db/client";
+import { resetRateLimitsForTests } from "@/src/security/rateLimit";
 
 const user = {
   id: "user-1",
@@ -30,6 +31,7 @@ const user = {
 
 describe("POST /api/auth/login", () => {
   beforeEach(() => {
+    resetRateLimitsForTests();
     vi.clearAllMocks();
     vi.mocked(verifyPassword).mockReturnValue(true);
     vi.mocked(prisma.user.findUnique).mockResolvedValue(user as never);
@@ -88,5 +90,32 @@ describe("POST /api/auth/login", () => {
     );
 
     expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { email: "demo@example.com" } });
+  });
+
+  it("rate limits repeated attempts against the same account", async () => {
+    vi.mocked(verifyPassword).mockReturnValue(false);
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const response = await POST(
+        new Request("http://localhost/api/auth/login", {
+          method: "POST",
+          headers: { "x-forwarded-for": `192.0.2.${attempt + 1}` },
+          body: JSON.stringify({ email: "demo@example.com", password: "wrong" })
+        })
+      );
+      expect(response.status).toBe(401);
+    }
+
+    const blocked = await POST(
+      new Request("http://localhost/api/auth/login", {
+        method: "POST",
+        headers: { "x-forwarded-for": "192.0.2.99" },
+        body: JSON.stringify({ email: "demo@example.com", password: "wrong" })
+      })
+    );
+
+    expect(blocked.status).toBe(429);
+    expect(blocked.headers.get("retry-after")).toBeTruthy();
+    expect(prisma.user.findUnique).toHaveBeenCalledTimes(5);
   });
 });
