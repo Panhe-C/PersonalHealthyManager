@@ -11,6 +11,7 @@ describe("automation LaunchAgent", () => {
     expect(plist).toContain("scripts/run-automations.ts");
     expect(plist).toContain("--watch");
     expect(plist).toContain("--env-file=/Users/test/Healthy &amp; Body/.env");
+    expect(plist).toContain("/opt/node/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin");
     expect(plist).not.toContain("DATABASE_URL");
   });
 });

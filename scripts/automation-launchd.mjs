@@ -17,6 +17,24 @@ function launchctl(args, options = {}) {
   return execFileSync("launchctl", args, { encoding: "utf8", stdio: options.inherit ? "inherit" : "pipe" });
 }
 
+function pause(milliseconds) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
+function bootstrapWithRetry() {
+  let lastError;
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    try {
+      launchctl(["bootstrap", `gui/${process.getuid()}`, plistPath], { inherit: true });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 4) pause(attempt * 500);
+    }
+  }
+  throw lastError;
+}
+
 if (command === "install") {
   mkdirSync(launchAgentsDirectory, { recursive: true });
   mkdirSync(logDirectory, { recursive: true });
@@ -24,7 +42,8 @@ if (command === "install") {
   writeFileSync(temporaryPath, createAutomationLaunchAgent({ projectRoot, nodePath: process.execPath, logDirectory }), { mode: 0o600 });
   renameSync(temporaryPath, plistPath);
   try { launchctl(["bootout", serviceTarget]); } catch {}
-  launchctl(["bootstrap", `gui/${process.getuid()}`, plistPath], { inherit: true });
+  pause(300);
+  bootstrapWithRetry();
   launchctl(["kickstart", "-k", serviceTarget], { inherit: true });
   console.log(`Installed and started ${AUTOMATION_LABEL}`);
 } else if (command === "uninstall") {

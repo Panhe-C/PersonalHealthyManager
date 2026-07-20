@@ -36,7 +36,12 @@ function dailyFreeWindows(start: Date, days: number, busy: FeishuWindow[]) {
 export async function fetchLarkCalendarPayload(now = new Date(), days = 8, runner: CalendarCommandRunner = runLarkCalendarCommand): Promise<FeishuCalendarPayload> {
   const end = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
   const stdout = await runner(["calendar", "+agenda", "--start", dayText(now), "--end", dayText(end), "--as", "user", "--format", "json"]);
-  const envelope = JSON.parse(stdout) as { ok?: boolean; data?: AgendaEvent[] };
+  let envelope: { ok?: boolean; data?: AgendaEvent[] };
+  try {
+    envelope = JSON.parse(stdout) as { ok?: boolean; data?: AgendaEvent[] };
+  } catch {
+    throw new Error("Feishu agenda response was not valid JSON.");
+  }
   if (envelope.ok !== true || !Array.isArray(envelope.data)) throw new Error("Feishu agenda response was invalid.");
   const busy = envelope.data.flatMap((event) => event.free_busy_status !== "free" && event.start_time?.datetime && event.end_time?.datetime
     ? [{ start: event.start_time.datetime, end: event.end_time.datetime, title: event.summary || "Busy" }]

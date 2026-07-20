@@ -26,6 +26,7 @@ export function createAutomationLaunchAgent({ projectRoot, nodePath, logDirector
   ];
   const stdoutPath = path.join(logDirectory, "automation.log");
   const stderrPath = path.join(logDirectory, "automation.error.log");
+  const executablePath = [path.dirname(nodePath), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"].join(":");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -39,6 +40,11 @@ ${argumentsList.map(xmlString).join("\n")}
   </array>
   <key>WorkingDirectory</key>
   <string>${escapeXml(projectRoot)}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>${escapeXml(executablePath)}</string>
+  </dict>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>

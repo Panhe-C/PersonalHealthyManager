@@ -26,4 +26,8 @@ describe("Lark calendar read provider", () => {
   it("rejects malformed command output", async () => {
     await expect(fetchLarkCalendarPayload(new Date(), 1, vi.fn().mockResolvedValue(JSON.stringify({ ok: false })))).rejects.toThrow("invalid");
   });
+
+  it("reports empty command output as an invalid response", async () => {
+    await expect(fetchLarkCalendarPayload(new Date(), 1, vi.fn().mockResolvedValue(""))).rejects.toThrow("not valid JSON");
+  });
 });

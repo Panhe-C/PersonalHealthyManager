@@ -16,6 +16,10 @@ export type CalendarWriteDraft = {
 export type CalendarWriteResult = { externalEventId: string | null };
 export type CalendarCommandRunner = (args: string[]) => Promise<string>;
 
+type LarkErrorEnvelope = {
+  error?: { message?: string; hint?: string };
+};
+
 function findEventId(value: unknown): string | null {
   if (!value || typeof value !== "object") return null;
   if ("event_id" in value && typeof value.event_id === "string") return value.event_id;
@@ -34,6 +38,25 @@ export function parseLarkCalendarResult(stdout: string): string | null {
   return findEventId(envelope);
 }
 
+export function larkCalendarCommandError(error: unknown): Error {
+  if (error && typeof error === "object") {
+    const processError = error as Record<string, unknown>;
+    for (const stream of ["stderr", "stdout"] as const) {
+      if (!(stream in processError)) continue;
+      const output = String(processError[stream] ?? "").trim();
+      if (!output) continue;
+      try {
+        const envelope = JSON.parse(output) as LarkErrorEnvelope;
+        const message = envelope.error?.message || envelope.error?.hint;
+        if (message) return new Error(message);
+      } catch {
+        // Preserve the original process error when a stream is not JSON.
+      }
+    }
+  }
+  return new Error(error instanceof Error ? error.message : "Feishu calendar command failed.");
+}
+
 export async function runLarkCalendarCommand(args: string[]) {
   const command = process.env.HBM_LARK_CLI_PATH?.trim() || "lark-cli";
   try {
@@ -48,14 +71,7 @@ export async function runLarkCalendarCommand(args: string[]) {
     });
     return stdout;
   } catch (error) {
-    const stderr = error && typeof error === "object" && "stderr" in error ? String(error.stderr) : "";
-    try {
-      const envelope = JSON.parse(stderr) as { error?: { message?: string; hint?: string } };
-      throw new Error(envelope.error?.message || envelope.error?.hint || "Feishu calendar command failed.");
-    } catch (parseError) {
-      if (parseError instanceof Error && parseError.message !== "Feishu calendar command failed.") throw parseError;
-      throw new Error(error instanceof Error ? error.message : "Feishu calendar command failed.");
-    }
+    throw larkCalendarCommandError(error);
   }
 }
 

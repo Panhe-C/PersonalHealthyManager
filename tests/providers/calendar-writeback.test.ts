@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { parseLarkCalendarResult, writeCalendarDraft } from "@/src/providers/calendar-writeback";
+import { larkCalendarCommandError, parseLarkCalendarResult, writeCalendarDraft } from "@/src/providers/calendar-writeback";
 
 const draft = {
   id: "draft-1",
@@ -35,5 +35,18 @@ describe("Feishu calendar write-back", () => {
     await expect(writeCalendarDraft({ ...draft, operation: "cancel", externalEventId: "evt-1" }, runner)).resolves.toEqual({ externalEventId: null });
     expect(runner).toHaveBeenCalledWith(expect.arrayContaining(["calendar", "events", "delete", "--as", "user"]));
     expect(runner.mock.calls[0][0]).toContain(JSON.stringify({ calendar_id: "primary", event_id: "evt-1", need_notification: "true" }));
+  });
+
+  it("surfaces a structured CLI error written to stdout", () => {
+    const error = Object.assign(new Error("Command failed"), {
+      stdout: JSON.stringify({ ok: false, error: { message: "keychain not initialized", hint: "run config init" } }),
+      stderr: "",
+    });
+    expect(larkCalendarCommandError(error).message).toBe("keychain not initialized");
+  });
+
+  it("preserves the process error when CLI output is empty", () => {
+    const error = Object.assign(new Error("lark-cli exited with code 1"), { stdout: "", stderr: "" });
+    expect(larkCalendarCommandError(error).message).toBe("lark-cli exited with code 1");
   });
 });
