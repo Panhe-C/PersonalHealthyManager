@@ -42,6 +42,9 @@ npm test
 npx tsc --noEmit -p apps/mobile/tsconfig.json
 npm test --workspace @hbm/mobile
 npm run build
+npm run release:check
 ```
+
+`release:check` 会读取发布环境变量和隐私说明，明确报告 EAS Project ID、HTTPS API、Bundle ID、Apple Team ID 与隐私元数据是否齐全。它在缺失项存在时返回非零状态，适合作为正式构建前的本地或 CI 门禁。
 
 iOS 原生构建、真机签名和外部服务调用必须单独验收；模拟器或单元测试通过不能替代这些证据。

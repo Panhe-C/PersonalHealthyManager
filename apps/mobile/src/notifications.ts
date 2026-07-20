@@ -34,7 +34,10 @@ export async function enableTrainingNotifications(tasks: ReminderTask[]) {
   }
 
   let remoteRegistered = false;
-  const projectId = Constants.easConfig?.projectId || String(Constants.expoConfig?.extra?.easProjectId || "").trim();
+  const configuredEas = Constants.expoConfig?.extra?.eas as { projectId?: string } | undefined;
+  const projectId = Constants.easConfig?.projectId
+    || configuredEas?.projectId
+    || String(Constants.expoConfig?.extra?.easProjectId || "").trim();
   if (Device.isDevice && projectId) {
     const token = await Notifications.getExpoPushTokenAsync({ projectId });
     await registerPushToken(token.data, Platform.OS);

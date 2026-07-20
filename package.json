@@ -21,6 +21,7 @@
     "automation:run": "node --import tsx scripts/run-automations.ts",
     "automation:watch": "node --import tsx scripts/run-automations.ts --watch",
     "automation:service": "node scripts/automation-launchd.mjs",
+    "release:check": "node scripts/release-preflight.mjs",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "seed": "node --import tsx scripts/seed.ts",
