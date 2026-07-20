@@ -7,7 +7,13 @@ import { upcomingReminderTasks, type ReminderTask } from "./notificationSchedule
 
 export function configureNotificationPresentation() {
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false })
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false
+    })
   });
 }
 
