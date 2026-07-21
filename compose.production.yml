@@ -1,0 +1,31 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${HBM_PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: file:/data/healthy-body.sqlite
+      SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:?set SETTINGS_ENCRYPTION_KEY in the deployment environment}
+      HBM_OWNER_EMAIL: ${HBM_OWNER_EMAIL:-}
+      HBM_OWNER_TIMEZONE: ${HBM_OWNER_TIMEZONE:-Asia/Shanghai}
+    volumes:
+      - hbm-data:/data
+
+  owner-setup:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: tools
+    environment:
+      DATABASE_URL: file:/data/healthy-body.sqlite
+      SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:?set SETTINGS_ENCRYPTION_KEY in the deployment environment}
+      HBM_OWNER_TIMEZONE: ${HBM_OWNER_TIMEZONE:-Asia/Shanghai}
+    volumes:
+      - hbm-data:/data
+
+volumes:
+  hbm-data:

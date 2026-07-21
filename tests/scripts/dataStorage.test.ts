@@ -9,6 +9,10 @@ describe("data storage scripts", () => {
     expect(resolveSqlitePath("/repo", { DATABASE_URL: "file:./personal.db" })).toBe("/repo/prisma/personal.db");
   });
 
+  it("preserves absolute SQLite paths used by persistent production volumes", () => {
+    expect(resolveSqlitePath("/app", { DATABASE_URL: "file:/data/healthy-body.sqlite" })).toBe("/data/healthy-body.sqlite");
+  });
+
   it("rejects non-SQLite databases", () => {
     expect(() => resolveSqlitePath("/repo", { DATABASE_URL: "postgresql://localhost/db" })).toThrow("SQLite");
   });

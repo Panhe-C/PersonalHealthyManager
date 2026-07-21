@@ -15,6 +15,7 @@ export function resolveSqlitePath(rootDir, env = process.env) {
   const url = readDatabaseUrl(rootDir, env);
   if (!url.startsWith("file:")) throw new Error("Backup tools currently support SQLite DATABASE_URL values only.");
   const value = decodeURIComponent(url.slice("file:".length));
+  if (path.isAbsolute(value)) return path.normalize(value);
   return path.resolve(path.join(rootDir, "prisma"), value);
 }
 

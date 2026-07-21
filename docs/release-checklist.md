@@ -11,6 +11,7 @@
 - [x] Expo SDK 53 升级、依赖对齐、Expo Doctor 检查和 iOS 原生全量构建
 - [x] 登录与 Agent 请求限流、安全响应头、数据库健康检查
 - [x] SQLite 校验备份与可回滚恢复脚本
+- [x] 单实例生产容器、SQLite 持久化卷、启动迁移、健康检查和容器内在线备份
 - [x] GitHub Actions：安装、Prisma、Web/移动测试、类型检查和生产构建
 - [x] macOS LaunchAgent 配置生成、安装并完成重启、日志和任务执行验证
 - [x] 隐私说明草案与数据删除说明

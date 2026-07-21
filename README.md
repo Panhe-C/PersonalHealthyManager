@@ -80,6 +80,40 @@ npm run build
 
 The project uses SQLite for local development. Local `.env` and database files are ignored by Git.
 
+## Single-node production deployment
+
+The production container keeps SQLite under a named `/data` volume, applies committed Prisma migrations before every start, runs as an unprivileged user, and exposes `/api/health` as its container health check. This is intended for the current single-user, single-instance deployment; do not run multiple replicas against the same SQLite file.
+
+Generate and store a stable 32-byte settings encryption key in the deployment environment, then build and start the service behind an HTTPS reverse proxy:
+
+```bash
+export SETTINGS_ENCRYPTION_KEY="$(openssl rand -base64 32)"
+docker compose -f compose.production.yml up -d --build
+docker compose -f compose.production.yml ps
+```
+
+The published port binds to localhost by default (`127.0.0.1:3000`). Configure the reverse proxy to forward to it, or set `HBM_PORT` when another local port is needed. Keep the generated encryption key stable: changing it makes saved provider credentials unreadable.
+
+Create the real owner account once inside the running container. Supply the password only for that command instead of storing it in the Compose file:
+
+```bash
+docker compose -f compose.production.yml --profile tools run --rm \
+  -e HBM_OWNER_EMAIL="you@example.com" \
+  -e HBM_OWNER_PASSWORD="replace-with-a-strong-password" \
+  owner-setup
+```
+
+The one-shot setup image shares only the persistent database volume with the app and exits after provisioning. The minimal runtime image does not include development tools or the setup script. Never run `npm run seed` in production.
+
+Create an online SQLite snapshot inside the persistent volume:
+
+```bash
+docker compose -f compose.production.yml exec app \
+  node scripts/data-backup.mjs /data/backups
+```
+
+Copy `/data/backups` to separate storage on a schedule. A named Docker volume is persistence, not an independent backup.
+
 ## Backup and recovery
 
 Create a consistent SQLite snapshot while the app is running:
