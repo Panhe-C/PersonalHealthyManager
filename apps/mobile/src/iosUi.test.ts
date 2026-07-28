@@ -50,4 +50,20 @@ describe("iOS native mobile UI", () => {
   it("keeps one press-feedback opacity in the tokens", () => {
     expect(read("./theme/tokens.ts")).toContain("pressed: 0.72");
   });
+
+  it("lets the native header and the tab bar own the screen insets", () => {
+    const source = read("./components/Screen.tsx");
+
+    expect(source).toContain('contentInsetAdjustmentBehavior="automatic"');
+    expect(source).toContain("BottomTabBarHeightContext");
+    expect(source).not.toContain("SafeAreaView");
+    expect(source).not.toContain("paddingHorizontal");
+  });
+
+  it("uses iOS control metrics for buttons and inputs", () => {
+    expect(read("./components/Button.tsx")).toContain("minHeight: 50");
+    expect(read("./components/TextField.tsx")).toContain("minHeight: 44");
+    expect(read("./components/TextField.tsx")).toContain("useWindowDimensions");
+    expect(read("./components/TextField.tsx")).toContain("fontScale >= 1.4");
+  });
 });

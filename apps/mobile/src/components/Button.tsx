@@ -1,32 +1,88 @@
 import { Pressable, StyleSheet, type PressableProps } from "react-native";
+import { radius, spacing, useTheme } from "../theme/tokens";
 import { Text } from "./Text";
-import { opacity, radius, spacing, useTheme } from "../theme/tokens";
 
-export function Button({ title, onPress, variant = "primary", disabled, ...props }: PressableProps & { title: string; variant?: "primary" | "ghost" | "danger" }) {
+type Variant =
+  | "filled"
+  | "tinted"
+  | "plain"
+  | "destructive"
+  | "primary"
+  | "ghost"
+  | "danger";
+
+type ButtonProps = PressableProps & {
+  label?: string;
+  title?: string;
+  variant?: Variant;
+};
+
+const variantAliases: Record<Variant, "filled" | "tinted" | "plain" | "destructive"> = {
+  filled: "filled",
+  tinted: "tinted",
+  plain: "plain",
+  destructive: "destructive",
+  primary: "filled",
+  ghost: "plain",
+  danger: "destructive"
+};
+
+export function Button({
+  label,
+  title,
+  variant = "filled",
+  disabled,
+  style,
+  ...props
+}: ButtonProps) {
   const { tokens } = useTheme();
-  const isPrimary = variant === "primary";
-  const isDanger = variant === "danger";
-  const backgroundColor = isPrimary ? tokens.sage : isDanger ? tokens.danger : "transparent";
-  const borderColor = isPrimary ? tokens.sage : isDanger ? tokens.danger : tokens.line;
+  const resolvedVariant = variantAliases[variant];
+  const backgroundColor =
+    resolvedVariant === "filled"
+      ? tokens.controlFill
+      : resolvedVariant === "destructive"
+        ? tokens.destructiveFill
+        : resolvedVariant === "tinted"
+          ? tokens.fill
+          : "transparent";
+  const color =
+    resolvedVariant === "filled"
+      ? tokens.controlLabel
+      : resolvedVariant === "destructive"
+        ? tokens.destructiveLabel
+        : tokens.tint;
+  const buttonLabel = label ?? title ?? "";
+
   return (
     <Pressable
-      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: Boolean(disabled) }}
       disabled={disabled}
-      style={({ pressed }) => [
+      style={(state) => [
         styles.base,
-        { backgroundColor, borderColor, opacity: pressed ? opacity.pressed : 1 },
-        disabled && styles.disabled
+        {
+          backgroundColor,
+          opacity: disabled ? 0.45 : state.pressed ? 0.65 : 1
+        },
+        typeof style === "function" ? style(state) : style
       ]}
       {...props}
     >
-      <Text size="md" weight="medium" style={{ color: isPrimary || isDanger ? "#fff" : tokens.ink, textAlign: "center" }}>
-        {title}
+      <Text size="headline" style={{ color }}>
+        {buttonLabel}
       </Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  base: { minHeight: 48, justifyContent: "center", paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: radius.md, borderWidth: 1 },
-  disabled: { opacity: opacity.disabled }
+  base: {
+    alignItems: "center",
+    borderRadius: radius.md,
+    justifyContent: "center",
+    marginHorizontal: spacing.md,
+    minHeight: 50,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm
+  }
 });

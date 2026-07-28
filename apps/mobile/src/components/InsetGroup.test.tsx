@@ -1,3 +1,4 @@
+/* eslint-disable import/first -- component imports must follow Vitest module mocks */
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("react-native", () => ({
