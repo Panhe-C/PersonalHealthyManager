@@ -57,12 +57,12 @@ describe("SettingsForm", () => {
     expect(screen.getByRole("option", { name: "GLM / Zhipu" })).toBeInTheDocument();
   });
 
-  it("fills provider defaults when the provider changes", () => {
+  it("shows the derived model read-only for a hosted provider", () => {
     render(
       <SettingsForm
         initialSettings={{
           modelProvider: "openai",
-          modelName: "gpt-4o-mini",
+          modelName: "gpt-5.6-terra",
           modelBaseUrl: "https://api.openai.com/v1",
           hasApiKey: false,
           apiKeyHint: null,
@@ -73,16 +73,39 @@ describe("SettingsForm", () => {
 
     fireEvent.change(screen.getByRole("combobox", { name: "Provider" }), { target: { value: "kimi" } });
 
-    expect(screen.getByRole("textbox", { name: "Model" })).toHaveValue("kimi-k2.6");
-    expect(screen.getByRole("textbox", { name: "Base URL" })).toHaveValue("https://api.moonshot.ai/v1");
+    expect(screen.getByTestId("derived-model")).toHaveTextContent("kimi-k3");
+    expect(screen.getByTestId("derived-model")).toHaveTextContent("https://api.moonshot.ai/v1");
+    expect(screen.queryByRole("textbox", { name: "Model" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Base URL" })).toBeNull();
   });
 
-  it("sends the current model draft when testing the model", async () => {
+  it("exposes model and base URL inputs only for the custom provider", () => {
     render(
       <SettingsForm
         initialSettings={{
           modelProvider: "openai",
-          modelName: "gpt-4o-mini",
+          modelName: "gpt-5.6-terra",
+          modelBaseUrl: "https://api.openai.com/v1",
+          hasApiKey: false,
+          apiKeyHint: null,
+          dataMcpConnections: defaultDataMcpConnections
+        }}
+      />
+    );
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Provider" }), { target: { value: "custom" } });
+
+    expect(screen.getByRole("textbox", { name: "Model" })).toHaveValue("");
+    expect(screen.getByRole("textbox", { name: "Base URL" })).toHaveValue("");
+    expect(screen.queryByTestId("derived-model")).toBeNull();
+  });
+
+  it("omits the model identity from the test draft for a hosted provider", async () => {
+    render(
+      <SettingsForm
+        initialSettings={{
+          modelProvider: "openai",
+          modelName: "gpt-5.6-terra",
           modelBaseUrl: "https://api.openai.com/v1",
           hasApiKey: false,
           apiKeyHint: null,
@@ -105,15 +128,12 @@ describe("SettingsForm", () => {
     });
 
     const [, requestInit] = vi.mocked(fetch).mock.calls.at(-1) ?? [];
-    expect(JSON.parse(String(requestInit?.body))).toEqual({
-      target: "model",
-      draft: expect.objectContaining({
-        modelProvider: "deepseek",
-        modelName: "deepseek-v4-flash",
-        modelBaseUrl: "https://api.deepseek.com",
-        apiKey: "sk-draft-1234"
-      })
-    });
+    const draft = JSON.parse(String(requestInit?.body)).draft;
+    expect(draft).toEqual(
+      expect.objectContaining({ modelProvider: "deepseek", apiKey: "sk-draft-1234" })
+    );
+    expect(draft).not.toHaveProperty("modelName");
+    expect(draft).not.toHaveProperty("modelBaseUrl");
   });
 
   it("shows model test progress and then the result after clicking Test model", async () => {

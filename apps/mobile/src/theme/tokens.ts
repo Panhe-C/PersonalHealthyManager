@@ -12,8 +12,6 @@ export const lightTokens = {
   sage: "#718579",
   sageStrong: "#52685C",
   sageSoft: "#E3E8E1",
-  blue: "#4a78a8",
-  blueSoft: "#e8eef4",
   clay: "#C87958",
   claySoft: "#F2E2DA",
   danger: "#b3413f",
@@ -32,8 +30,6 @@ export const darkTokens = {
   sage: "#7dbd8f",
   sageStrong: "#a0d6af",
   sageSoft: "#3a4a3f",
-  blue: "#7ba3d0",
-  blueSoft: "#3a4a52",
   clay: "#c79866",
   claySoft: "#4a3d2f",
   danger: "#d36464",
@@ -54,6 +50,11 @@ export const radius = {
   md: 12,
   lg: 16,
   xl: 22
+} as const;
+
+export const opacity = {
+  pressed: 0.72,
+  disabled: 0.5
 } as const;
 
 export const typography = {

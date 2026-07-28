@@ -46,10 +46,4 @@ describe("coach message state", () => {
       "msg-9"
     ]);
   });
-
-  it("removes markdown noise before rendering assistant copy", () => {
-    const formatCoachMessage = (coachMessages as typeof coachMessages & { formatCoachMessage?: (value: string) => string }).formatCoachMessage;
-
-    expect(formatCoachMessage?.("**建议**\n| 日期 | 强度 |\n|---|---|\n| 周一 | 轻松 |")).toBe("建议\n日期 · 强度\n周一 · 轻松");
-  });
 });

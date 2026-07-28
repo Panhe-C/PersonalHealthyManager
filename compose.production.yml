@@ -11,6 +11,15 @@ services:
       SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:?set SETTINGS_ENCRYPTION_KEY in the deployment environment}
       HBM_OWNER_EMAIL: ${HBM_OWNER_EMAIL:-}
       HBM_OWNER_TIMEZONE: ${HBM_OWNER_TIMEZONE:-Asia/Shanghai}
+      HBM_APP_BASE_URL: ${HBM_APP_BASE_URL:?set HBM_APP_BASE_URL to the public origin so verification links resolve}
+      HBM_EMAIL_TRANSPORT: ${HBM_EMAIL_TRANSPORT:-smtp}
+      HBM_EMAIL_FROM: ${HBM_EMAIL_FROM:?set HBM_EMAIL_FROM to the sender address for verification emails}
+      HBM_SMTP_HOST: ${HBM_SMTP_HOST:-}
+      HBM_SMTP_PORT: ${HBM_SMTP_PORT:-587}
+      HBM_SMTP_SECURE: ${HBM_SMTP_SECURE:-false}
+      HBM_SMTP_USER: ${HBM_SMTP_USER:-}
+      HBM_SMTP_PASSWORD: ${HBM_SMTP_PASSWORD:-}
+      HBM_APP_OAUTH_RETURN_URL: ${HBM_APP_OAUTH_RETURN_URL:-hbm://mcp-oauth}
     volumes:
       - hbm-data:/data
 

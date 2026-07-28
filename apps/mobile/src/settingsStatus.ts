@@ -1,5 +1,24 @@
 import type { MobileMcpConnection } from "./api/settings";
 
+/**
+ * Describes an OAuth2 connection without exposing an editable secret: there is
+ * no token to type, only an authorization to run or renew.
+ */
+export function oauthConnectionDetail(connection: MobileMcpConnection, now = new Date()): string {
+  const { auth } = connection;
+  if (auth.type !== "oauth2") return "";
+  if (!auth.accessTokenHint) return "尚未授权。";
+
+  const expiresAt = auth.expiresAt ? new Date(auth.expiresAt) : null;
+  if (!expiresAt || Number.isNaN(expiresAt.getTime())) {
+    return `已授权 ${auth.accessTokenHint}`;
+  }
+  if (expiresAt.getTime() <= now.getTime()) {
+    return `授权已于 ${expiresAt.toLocaleString()} 过期，请重新授权。`;
+  }
+  return `已授权 ${auth.accessTokenHint} · ${expiresAt.toLocaleString()} 到期`;
+}
+
 export function mcpConnectionStatus(connection: MobileMcpConnection | undefined) {
   if (!connection) return "未配置";
   if (!connection.enabled) return "已关闭";

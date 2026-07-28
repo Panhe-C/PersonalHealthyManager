@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
-import { useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import * as Notifications from "expo-notifications";
 import { AuthProvider, useAuth } from "../src/auth/AuthContext";
+import { FeedbackProvider } from "../src/components/Feedback";
 import { useTheme } from "../src/theme/tokens";
 import { configureNotificationPresentation } from "../src/notifications";
 
@@ -49,8 +49,10 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <NotificationNavigation />
-        <RootStack />
+        <FeedbackProvider>
+          <NotificationNavigation />
+          <RootStack />
+        </FeedbackProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

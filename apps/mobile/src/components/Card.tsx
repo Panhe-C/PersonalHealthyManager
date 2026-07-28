@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, View, type PressableProps, type ViewProps } from "react-native";
-import { radius, spacing, useTheme } from "../theme/tokens";
+import { opacity, radius, spacing, useTheme } from "../theme/tokens";
 
 type CardProps = ViewProps & Pick<PressableProps, "disabled" | "onLongPress" | "onPress">;
 
@@ -25,6 +25,6 @@ export function Card({ disabled, onLongPress, onPress, style, ...props }: CardPr
 
 const styles = StyleSheet.create({
   card: { padding: spacing.lg, borderRadius: radius.lg, borderWidth: 1 },
-  disabled: { opacity: 0.5 },
-  pressed: { opacity: 0.82 }
+  disabled: { opacity: opacity.disabled },
+  pressed: { opacity: opacity.pressed }
 });

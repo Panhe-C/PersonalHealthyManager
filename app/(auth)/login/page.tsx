@@ -1,17 +1,23 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { Activity, CalendarCheck2, HeartPulse, LogIn, Moon } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resendNotice, setResendNotice] = useState("");
+  const [isResending, setIsResending] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    setNeedsVerification(false);
+    setResendNotice("");
     setIsSubmitting(true);
 
     try {
@@ -22,6 +28,12 @@ export default function LoginPage() {
       });
 
       if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        if (body?.code === "email_unverified") {
+          setNeedsVerification(true);
+          setError("Verify your email address before signing in.");
+          return;
+        }
         setError("Invalid email or password");
         return;
       }
@@ -31,6 +43,29 @@ export default function LoginPage() {
       setError("Invalid email or password");
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function resendVerification() {
+    setIsResending(true);
+    setResendNotice("");
+
+    try {
+      const response = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email })
+      });
+
+      setResendNotice(
+        response.ok
+          ? "A new verification link is on its way."
+          : "Too many requests just now. Wait a few minutes before trying again."
+      );
+    } catch {
+      setResendNotice("Could not reach the server. Try again later.");
+    } finally {
+      setIsResending(false);
     }
   }
 
@@ -109,10 +144,32 @@ export default function LoginPage() {
             </p>
           ) : null}
 
+          {needsVerification ? (
+            <>
+              {resendNotice ? (
+                <p className="message" role="status">
+                  {resendNotice}
+                </p>
+              ) : null}
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={resendVerification}
+                disabled={isResending}
+              >
+                {isResending ? "Sending..." : "Resend the verification email"}
+              </button>
+            </>
+          ) : null}
+
           <button className="button login-submit" type="submit" disabled={isSubmitting}>
             <LogIn aria-hidden="true" size={18} />
             {isSubmitting ? "Signing in..." : "Sign in"}
           </button>
+
+          <p className="auth-alt">
+            No account yet? <Link href="/register">Create one</Link>
+          </p>
         </form>
       </div>
     </main>

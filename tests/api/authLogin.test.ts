@@ -25,6 +25,7 @@ const user = {
   email: "demo@example.com",
   passwordHash: "hash",
   timezone: "Asia/Shanghai",
+  emailVerifiedAt: new Date("2026-06-01T00:00:00Z"),
   createdAt: new Date(),
   updatedAt: new Date()
 };
@@ -72,6 +73,21 @@ describe("POST /api/auth/login", () => {
     expect(body.accessToken).toBe("access-123");
     expect(body.refreshToken).toBe("refresh-456");
     expect(body.accessExpiresAt).toBe("2026-06-29T15:00:00.000Z");
+  });
+
+  it("refuses to issue a session while the email is unverified", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ ...user, emailVerifiedAt: null } as never);
+
+    const response = await POST(
+      new Request("http://localhost/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email: "demo@example.com", password: "correct" })
+      })
+    );
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).code).toBe("email_unverified");
+    expect(createSession).not.toHaveBeenCalled();
   });
 
   it("normalizes email to lowercase before lookup", async () => {

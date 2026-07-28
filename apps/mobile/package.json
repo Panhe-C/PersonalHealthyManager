@@ -30,6 +30,7 @@
     "expo-secure-store": "~14.2.4",
     "expo-sharing": "~13.1.5",
     "expo-status-bar": "~2.2.3",
+    "expo-web-browser": "~14.2.0",
     "lucide-react-native": "^0.468.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",
@@ -42,6 +43,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.0.10",
+    "eslint-config-expo": "~9.2.0",
     "typescript": "~5.8.3"
   }
 }

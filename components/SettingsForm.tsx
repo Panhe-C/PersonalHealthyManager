@@ -5,6 +5,7 @@ import { FlaskConical, Save } from "lucide-react";
 import {
   corosMcpRegionOptions,
   modelProviders,
+  providerNeedsManualModel,
   type DataMcpAuthConfig,
   type DataMcpConnection,
   type DataMcpTransport,
@@ -48,6 +49,8 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
   const [loginPromptConnectionId, setLoginPromptConnectionId] = useState<DataMcpConnection["id"] | null>(null);
   const [loginPromptMessage, setLoginPromptMessage] = useState("");
   const [loginPromptError, setLoginPromptError] = useState("");
+  const needsManualModel = providerNeedsManualModel(modelProvider);
+
   function updateConnection(id: DataMcpConnection["id"], updates: Partial<DataMcpConnection>) {
     setConnections((items) => items.map((item) => (item.id === id ? { ...item, ...updates } : item)));
     setTestResults([]);
@@ -114,8 +117,7 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
   function buildSettingsDraft() {
     return {
       modelProvider,
-      modelName,
-      modelBaseUrl,
+      ...(needsManualModel ? { modelName, modelBaseUrl } : {}),
       apiKey,
       dataMcpConnections: connections
     };
@@ -522,7 +524,7 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
         <div className="panel-heading">
           <div>
             <h2>Model runtime</h2>
-            <p className="page-subtitle">Provider, model, base URL, and encrypted API key storage.</p>
+            <p className="page-subtitle">Pick a provider and paste an API key; the model and base URL come with it.</p>
           </div>
           <button className="button" type="button" onClick={() => runTest("all")} disabled={testingTarget !== null}>
             <FlaskConical aria-hidden="true" size={16} />
@@ -545,25 +547,38 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
               ))}
             </select>
           </label>
-          <label className="field">
-            Model
-            <input
-              name="modelName"
-              value={modelName}
-              onChange={(event) => setModelName(event.target.value)}
-              placeholder="gpt-4o-mini"
-              required
-            />
-          </label>
-          <label className="field field-span">
-            Base URL
-            <input
-              name="modelBaseUrl"
-              value={modelBaseUrl}
-              onChange={(event) => setModelBaseUrl(event.target.value)}
-              placeholder="https://api.openai.com/v1"
-            />
-          </label>
+          {needsManualModel ? (
+            <>
+              <label className="field">
+                Model
+                <input
+                  name="modelName"
+                  value={modelName}
+                  onChange={(event) => setModelName(event.target.value)}
+                  placeholder="my-model"
+                  required
+                />
+              </label>
+              <label className="field field-span">
+                Base URL
+                <input
+                  name="modelBaseUrl"
+                  value={modelBaseUrl}
+                  onChange={(event) => setModelBaseUrl(event.target.value)}
+                  placeholder="https://api.example.com/v1"
+                  required
+                />
+              </label>
+            </>
+          ) : (
+            <div className="field">
+              Model
+              <p className="settings-derived-value" data-testid="derived-model">
+                {modelName}
+                <span>{modelBaseUrl}</span>
+              </p>
+            </div>
+          )}
           <label className="field field-span">
             API key
             <input

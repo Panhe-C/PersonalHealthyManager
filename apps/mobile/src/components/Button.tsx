@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, type PressableProps } from "react-native";
 import { Text } from "./Text";
-import { radius, spacing, useTheme } from "../theme/tokens";
+import { opacity, radius, spacing, useTheme } from "../theme/tokens";
 
 export function Button({ title, onPress, variant = "primary", disabled, ...props }: PressableProps & { title: string; variant?: "primary" | "ghost" | "danger" }) {
   const { tokens } = useTheme();
@@ -14,7 +14,7 @@ export function Button({ title, onPress, variant = "primary", disabled, ...props
       disabled={disabled}
       style={({ pressed }) => [
         styles.base,
-        { backgroundColor, borderColor, opacity: pressed ? 0.78 : 1 },
+        { backgroundColor, borderColor, opacity: pressed ? opacity.pressed : 1 },
         disabled && styles.disabled
       ]}
       {...props}
@@ -28,5 +28,5 @@ export function Button({ title, onPress, variant = "primary", disabled, ...props
 
 const styles = StyleSheet.create({
   base: { minHeight: 48, justifyContent: "center", paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: radius.md, borderWidth: 1 },
-  disabled: { opacity: 0.5 }
+  disabled: { opacity: opacity.disabled }
 });

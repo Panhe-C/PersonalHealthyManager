@@ -48,3 +48,26 @@ export function AppNavigation() {
     </nav>
   );
 }
+
+export function MobileTabBar() {
+  const pathname = usePathname();
+
+  return (
+    <nav className="mobile-tab-bar" aria-label="Primary navigation">
+      {links.map(({ href, label, icon: Icon }) => {
+        const active = pathname === href || pathname.startsWith(`${href}/`);
+        return (
+          <Link
+            aria-current={active ? "page" : undefined}
+            className={clsx("mobile-tab-link", active && "mobile-tab-link-active")}
+            href={href}
+            key={href}
+          >
+            <Icon aria-hidden="true" size={20} />
+            <span>{label}</span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}

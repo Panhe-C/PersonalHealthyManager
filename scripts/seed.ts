@@ -8,16 +8,20 @@ const DEMO_TIMEZONE = "Asia/Shanghai";
 async function main() {
   const passwordHash = hashPassword(DEMO_PASSWORD);
 
+  const emailVerifiedAt = new Date();
+
   await prisma.user.upsert({
     where: { email: DEMO_EMAIL },
     update: {
       passwordHash,
-      timezone: DEMO_TIMEZONE
+      timezone: DEMO_TIMEZONE,
+      emailVerifiedAt
     },
     create: {
       email: DEMO_EMAIL,
       passwordHash,
-      timezone: DEMO_TIMEZONE
+      timezone: DEMO_TIMEZONE,
+      emailVerifiedAt
     }
   });
 }

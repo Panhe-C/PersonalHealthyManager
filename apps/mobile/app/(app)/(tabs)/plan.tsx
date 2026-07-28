@@ -1,11 +1,14 @@
-import { Alert, Pressable, StyleSheet, View } from "react-native";
+import { useState } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
 import { CalendarCheck, Dumbbell, Utensils } from "lucide-react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Screen } from "../../../src/components/Screen";
 import { Text } from "../../../src/components/Text";
 import { Button } from "../../../src/components/Button";
+import { useFeedback } from "../../../src/components/Feedback";
 import { EmptyState, Spinner } from "../../../src/components/States";
 import { HairlineRow, PageHeader } from "../../../src/components/QuietHealth";
+import { ApiError } from "../../../src/api/client";
 import { useActivePlanQuery, useCalendarDraftsQuery } from "../../../src/api/hooks";
 import { generateActivePlan } from "../../../src/api/training";
 import { confirmCalendarDraft } from "../../../src/api/calendar";
@@ -18,23 +21,37 @@ export default function PlanTab() {
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useActivePlanQuery();
   const drafts = useCalendarDraftsQuery();
+  const { notify } = useFeedback();
   const { tokens } = useTheme();
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const generateMutation = useMutation({
     mutationFn: () => generateActivePlan(currentWeekStartIso()),
     onSuccess: (plan) => {
       queryClient.setQueryData(["plan", "active"], plan);
       void queryClient.invalidateQueries({ queryKey: ["today"] });
-      Alert.alert("计划已生成", "本周训练和饮食建议已同步到 App。");
+      notify({ title: "计划已生成", description: "本周训练和饮食建议已同步。" });
     },
-    onError: (err) => Alert.alert("生成失败", err instanceof Error ? err.message : "请稍后重试。")
+    onError: (err) => {
+      // A 409 means a prerequisite is missing and the message tells the user
+      // what to set up, so it reads as guidance rather than a failure.
+      if (err instanceof ApiError && err.status === 409) {
+        notify({ tone: "neutral", title: "还差一步", description: err.message });
+        return;
+      }
+      notify({ tone: "danger", title: "生成失败", description: err instanceof Error ? err.message : "请稍后重试。" });
+    }
   });
   const confirmMutation = useMutation({
     mutationFn: confirmCalendarDraft,
     onSuccess: (draft) => {
       void queryClient.invalidateQueries({ queryKey: ["calendar", "drafts"] });
-      Alert.alert(draft.status === "confirmed" ? "已写入日历" : "写入失败", draft.failureReason || "飞书日历已更新。");
+      if (draft.status === "confirmed") {
+        notify({ title: "已写入日历", description: "飞书日历已更新。" });
+      } else {
+        notify({ tone: "danger", title: "写入失败", description: draft.failureReason || "请稍后重试。" });
+      }
     },
-    onError: (err) => Alert.alert("确认失败", err instanceof Error ? err.message : "请稍后重试。")
+    onError: (err) => notify({ tone: "danger", title: "确认失败", description: err instanceof Error ? err.message : "请稍后重试。" })
   });
   const nutrition = parseJsonObject(data?.nutritionTargetsJson, {
     proteinTargetGrams: null,
@@ -85,13 +102,21 @@ export default function PlanTab() {
           <View>
             <Text size="lg" weight="strong" style={[styles.sectionTitle, { color: tokens.sage }]}>训练安排</Text>
             {data.trainingTasks.slice(1).map((task) => (
-              <HairlineRow
-                key={task.id}
-                title={task.title}
-                subtitle={`${formatDateLabel(task.date)} · ${formatTaskWindow(task.scheduledStart, task.scheduledEnd)} · ${task.intensity}`}
-                value={`${task.durationMinutes} 分`}
-                onPress={() => Alert.alert(task.title, task.checklistItems.map((item) => `• ${item.label}`).join("\n"))}
-              />
+              <View key={task.id}>
+                <HairlineRow
+                  title={task.title}
+                  subtitle={`${formatDateLabel(task.date)} · ${formatTaskWindow(task.scheduledStart, task.scheduledEnd)} · ${task.intensity}`}
+                  value={`${task.durationMinutes} 分`}
+                  onPress={() => setExpandedTaskId((current) => (current === task.id ? null : task.id))}
+                />
+                {expandedTaskId === task.id ? (
+                  <View style={[styles.taskDetail, { borderBottomColor: tokens.line }]}>
+                    {task.checklistItems.length ? task.checklistItems.map((item) => (
+                      <Text key={item.id} size="sm" style={{ color: tokens.muted }}>· {item.label}</Text>
+                    )) : <Text size="sm" style={{ color: tokens.muted }}>这个任务没有拆分步骤。</Text>}
+                  </View>
+                ) : null}
+              </View>
             ))}
           </View>
 
@@ -153,6 +178,7 @@ const styles = StyleSheet.create({
   sectionTitle: { marginBottom: spacing.xs },
   sessionIcon: { alignItems: "center", borderRadius: 34, borderWidth: 1, height: 64, justifyContent: "center", width: 64 },
   sessionTitleRow: { alignItems: "center", flexDirection: "row", gap: spacing.lg },
+  taskDetail: { borderBottomWidth: 1, gap: spacing.xs, paddingBottom: spacing.md, paddingLeft: spacing.lg },
   timeline: { gap: spacing.sm },
   timelineLabels: { flexDirection: "row", justifyContent: "space-between" },
   timelineTrack: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", paddingHorizontal: spacing.md },

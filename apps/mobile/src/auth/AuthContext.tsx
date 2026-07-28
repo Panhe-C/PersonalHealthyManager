@@ -8,6 +8,12 @@ type Status = "loading" | "guest" | "authed";
 interface AuthContextValue {
   status: Status;
   signIn: (email: string, password: string) => Promise<void>;
+  /**
+   * Creates the account and returns without a session: the server withholds
+   * tokens until the email address is verified.
+   */
+  signUp: (email: string, password: string) => Promise<void>;
+  resendVerification: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -36,6 +42,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           refreshExpiresAt: result.refreshExpiresAt
         });
         setStatus("authed");
+      },
+      signUp: async (email, password) => {
+        await api.auth.register(email, password, Intl.DateTimeFormat().resolvedOptions().timeZone);
+      },
+      resendVerification: async (email) => {
+        await api.auth.resendVerification(email);
       },
       signOut: async () => {
         const refreshToken = getRefreshToken();

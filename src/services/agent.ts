@@ -1,4 +1,5 @@
 import { loadModelRuntimeConfig, type ModelRuntimeConfig } from "@/src/settings/service";
+import { getProviderCredentialSource } from "@/src/settings/defaults";
 import type { AgentContext } from "@/src/services/agentContext";
 import { actionIdList } from "@/src/services/agentActions/registry";
 
@@ -135,6 +136,8 @@ function systemPrompt(intent: AgentIntent, context?: AgentContext) {
     "Do not claim latest COROS data unless the context says fresh COROS sync succeeded during this request.",
     "If fresh sync failed but cached app records are present, analyze the cached records and clearly mention that the live refresh failed.",
     "Do not claim that you wrote to calendars, changed plans, or fetched external data unless the app explicitly provides that result.",
+    "Both clients render Markdown as rich text, so structure anything longer than a couple of sentences: '##' for section headings, '-' for bullets, '**' around the numbers that matter.",
+    "Prefer a Markdown table over a run-on sentence whenever you report the same metrics across several days or items.",
     "If you use a table, include at least one data row; otherwise use a short bullet list instead of an empty table.",
     `You may propose actions only from this list: ${actionIdList().join(", ")}.`,
     "Do not invent action ids or arguments.",
@@ -179,15 +182,26 @@ function extractAnthropicMessage(body: unknown, providerLabel: string) {
   throw new Error("Model response did not include a message.");
 }
 
-async function readModelResponse(response: Response, providerLabel: string) {
+async function readModelResponse(response: Response, config: ModelRuntimeConfig) {
   const body = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    const message =
+    const message = String(
       (body as { error?: { message?: unknown } })?.error?.message ??
-      (body as { message?: unknown })?.message ??
-      `${providerLabel} returned HTTP ${response.status}.`;
-    throw new Error(String(message));
+        (body as { message?: unknown })?.message ??
+        `${config.providerLabel} returned HTTP ${response.status}.`
+    );
+
+    // A rejected key reads the same whether it is expired or simply issued by a
+    // neighbouring product, so name the platform that can issue a working one.
+    if (response.status === 401 || response.status === 403) {
+      const source = getProviderCredentialSource(config.provider);
+      throw new Error(
+        source ? `${config.providerLabel} rejected the API key: ${message}. ${source}` : message
+      );
+    }
+
+    throw new Error(message);
   }
 
   return body;
@@ -215,7 +229,7 @@ async function callAnthropicModel(
     })
   });
 
-  return extractAnthropicMessage(await readModelResponse(response, config.providerLabel), config.providerLabel);
+  return extractAnthropicMessage(await readModelResponse(response, config), config.providerLabel);
 }
 
 async function callOpenAiCompatibleModel(
@@ -243,7 +257,7 @@ async function callOpenAiCompatibleModel(
     })
   });
 
-  return extractOpenAiCompatibleMessage(await readModelResponse(response, config.providerLabel), config.providerLabel);
+  return extractOpenAiCompatibleMessage(await readModelResponse(response, config), config.providerLabel);
 }
 
 async function callConfiguredModel(
@@ -281,7 +295,7 @@ export async function runModelCompletion(
         messages: messages.map((item) => ({ role: item.role, content: item.content }))
       })
     });
-    return extractAnthropicMessage(await readModelResponse(response, config.providerLabel), config.providerLabel);
+    return extractAnthropicMessage(await readModelResponse(response, config), config.providerLabel);
   }
 
   const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}/chat/completions`, {
@@ -300,7 +314,7 @@ export async function runModelCompletion(
       ]
     })
   });
-  return extractOpenAiCompatibleMessage(await readModelResponse(response, config.providerLabel), config.providerLabel);
+  return extractOpenAiCompatibleMessage(await readModelResponse(response, config), config.providerLabel);
 }
 
 export async function createAgentResponseForUser(

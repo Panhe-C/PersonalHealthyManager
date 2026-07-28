@@ -52,6 +52,23 @@ export async function getRecentActivities(userId: string, take = 10) {
   });
 }
 
+/**
+ * The snapshot only has to overlap the target week, not contain it. The Feishu
+ * sync captures from 06:00 on the day it runs, so a snapshot never starts
+ * before the week's Monday midnight and a containment check would reject every
+ * real snapshot from Monday morning onwards.
+ */
+export async function findCalendarSnapshotForWeek(userId: string, weekStart: Date, weekEnd: Date) {
+  return prisma.calendarSnapshot.findFirst({
+    where: {
+      userId,
+      rangeStart: { lte: weekEnd },
+      rangeEnd: { gte: weekStart }
+    },
+    orderBy: { capturedAt: "desc" }
+  });
+}
+
 export async function getPlanForWeek(userId: string, weekStart: Date) {
   return prisma.plan.findFirst({
     where: { userId, weekStart },

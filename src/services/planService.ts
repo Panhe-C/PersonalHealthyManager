@@ -10,7 +10,24 @@ import { createCalendarDraftsFromTasks, reconcileCalendarDrafts } from "@/src/pl
 import { generateWeeklyPlan } from "@/src/planning/engine";
 import { getMockMealMenu } from "@/src/providers/meal-menu";
 import { fetchMealMenusFromStdioMcp } from "@/src/providers/meal-menu-mcp";
+import { findCalendarSnapshotForWeek } from "@/src/services/planQueryService";
 import { loadDataMcpConnection } from "@/src/settings/service";
+
+export type PlanPreconditionCode = "body_profile_missing" | "calendar_snapshot_missing";
+
+/**
+ * A missing prerequisite is the user's next action, not a server fault, so it
+ * carries a code and a message the clients can show verbatim.
+ */
+export class PlanPreconditionError extends Error {
+  constructor(
+    message: string,
+    readonly code: PlanPreconditionCode
+  ) {
+    super(message);
+    this.name = "PlanPreconditionError";
+  }
+}
 
 function parseJson<T>(value: string): T {
   return JSON.parse(value) as T;
@@ -74,22 +91,21 @@ export async function generatePlanForUser(userId: string, weekStart: Date) {
     prisma.activityRecord.findMany({ where: { userId }, orderBy: { startedAt: "desc" }, take: 30 }),
     prisma.sleepRecord.findMany({ where: { userId }, orderBy: { date: "desc" }, take: 14 }),
     prisma.recoveryRecord.findMany({ where: { userId }, orderBy: { date: "desc" }, take: 14 }),
-    prisma.calendarSnapshot.findFirst({
-      where: {
-        userId,
-        rangeStart: { lte: weekStart },
-        rangeEnd: { gte: weekEnd }
-      },
-      orderBy: { capturedAt: "desc" }
-    })
+    findCalendarSnapshotForWeek(userId, weekStart, weekEnd)
   ]);
 
   if (!profile) {
-    throw new Error("Body profile is required before generating a plan.");
+    throw new PlanPreconditionError(
+      "生成计划前需要先填写身高和体重。请到「我的 › 个人资料」补充。",
+      "body_profile_missing"
+    );
   }
 
   if (!calendar) {
-    throw new Error("Calendar snapshot is required before generating a plan.");
+    throw new PlanPreconditionError(
+      "生成计划前需要先同步日历，计划要避开你的忙碌时间。请到「我的 › 自动同步」同步日历。",
+      "calendar_snapshot_missing"
+    );
   }
 
   const normalizedActivities: NormalizedActivityRecord[] = activities.map((activity) => ({

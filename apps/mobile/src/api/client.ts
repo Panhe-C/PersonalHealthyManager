@@ -141,6 +141,17 @@ export const api = {
         `${API_BASE_URL}/api/auth/login`,
         { method: "POST", body: { email, password }, skipAuthRefresh: true }
       ),
+    register: (email: string, password: string, timezone?: string) =>
+      request<{ ok: true; status: "verification_sent"; email: string }>(`${API_BASE_URL}/api/auth/register`, {
+        method: "POST",
+        body: { email, password, ...(timezone ? { timezone } : {}) },
+        skipAuthRefresh: true
+      }),
+    resendVerification: (email: string) =>
+      request<{ ok: true; status: "verification_sent"; email: string }>(
+        `${API_BASE_URL}/api/auth/resend-verification`,
+        { method: "POST", body: { email }, skipAuthRefresh: true }
+      ),
     logout: (refreshToken?: string) =>
       request<{ ok: true }>(`${API_BASE_URL}/api/auth/logout`, { method: "POST", body: refreshToken ? { refreshToken } : {} })
   }

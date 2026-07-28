@@ -1,45 +1,135 @@
 import { useState } from "react";
-import { Alert, Pressable, StyleSheet, TextInput, View } from "react-native";
+import { Pressable, StyleSheet } from "react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Screen } from "../../src/components/Screen";
 import { Text } from "../../src/components/Text";
 import { Button } from "../../src/components/Button";
-import { Card } from "../../src/components/Card";
-import { PageHeader } from "../../src/components/QuietHealth";
+import { ChoiceGroup } from "../../src/components/ChoiceGroup";
+import { useFeedback } from "../../src/components/Feedback";
+import { HairlineRow } from "../../src/components/QuietHealth";
+import { Section } from "../../src/components/Section";
+import { EmptyState, Spinner } from "../../src/components/States";
+import { TextField } from "../../src/components/TextField";
+
 import { useGoalsQuery } from "../../src/api/hooks";
 import { createGoal, pauseGoal, updateGoal, type GoalInput } from "../../src/api/goals";
 import type { Goal } from "../../src/api/schemas";
-import { radius, spacing, useTheme } from "../../src/theme/tokens";
+import { opacity, spacing, useTheme } from "../../src/theme/tokens";
 
-const types: Array<{ value: Goal["type"]; label: string }> = [
-  { value: "primary", label: "主目标" }, { value: "short_term_event", label: "短期赛事" }, { value: "long_term", label: "长期" }, { value: "secondary", label: "次要" }
+const types: readonly { value: Goal["type"]; label: string }[] = [
+  { value: "primary", label: "主目标" },
+  { value: "short_term_event", label: "短期赛事" },
+  { value: "long_term", label: "长期" },
+  { value: "secondary", label: "次要" }
 ];
 
 export default function GoalSettingsScreen() {
-  const query = useGoalsQuery(); const queryClient = useQueryClient(); const { tokens } = useTheme();
-  const [editing, setEditing] = useState<Goal | null>(null); const [title, setTitle] = useState(""); const [type, setType] = useState<Goal["type"]>("primary"); const [priority, setPriority] = useState("10"); const [targetDate, setTargetDate] = useState("");
-  const reset = () => { setEditing(null); setTitle(""); setType("primary"); setPriority("10"); setTargetDate(""); };
-  const edit = (goal: Goal) => { setEditing(goal); setTitle(goal.title); setType(goal.type); setPriority(String(goal.priority)); setTargetDate(goal.targetDate?.slice(0, 10) ?? ""); };
-  const mutation = useMutation({ mutationFn: async () => {
-    const input: GoalInput = { title: title.trim(), type, priority: Number(priority), status: "active", ...(targetDate ? { targetDate } : {}), metrics: editing ? JSON.parse(editing.metricsJson) : {} };
-    return editing ? updateGoal(editing.id, input) : createGoal(input);
-  }, onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["goals"] }); reset(); Alert.alert("已保存", "目标已更新。"); }, onError: (error) => Alert.alert("保存失败", error instanceof Error ? error.message : "请检查输入。") });
-  const inputStyle = [styles.input, { backgroundColor: tokens.panel, borderColor: tokens.line, color: tokens.inkStrong }];
+  const query = useGoalsQuery();
+  const queryClient = useQueryClient();
+  const { confirm, notify } = useFeedback();
+  const { tokens } = useTheme();
+  const [editing, setEditing] = useState<Goal | null>(null);
+  const [title, setTitle] = useState("");
+  const [type, setType] = useState<Goal["type"]>("primary");
+  const [priority, setPriority] = useState("10");
+  const [targetDate, setTargetDate] = useState("");
 
-  return <Screen><PageHeader title="目标管理" subtitle="主目标会直接影响训练计划优先级。" />
-    <Card style={styles.form}><Text size="xl" weight="strong">{editing ? "编辑目标" : "新建目标"}</Text>
-      <TextInput accessibilityLabel="目标名称" placeholder="例如：完成半程马拉松" value={title} onChangeText={setTitle} style={inputStyle} />
-      <View style={styles.types}>{types.map((item) => <Pressable accessibilityRole="button" key={item.value} onPress={() => setType(item.value)} style={[styles.type, { borderColor: type === item.value ? tokens.sage : tokens.line, backgroundColor: type === item.value ? tokens.sageSoft : tokens.panel }]}><Text>{item.label}</Text></Pressable>)}</View>
-      <TextInput accessibilityLabel="优先级" keyboardType="number-pad" placeholder="1-10" value={priority} onChangeText={setPriority} style={inputStyle} />
-      <TextInput accessibilityLabel="目标日期" autoCapitalize="none" placeholder="YYYY-MM-DD（可选）" value={targetDate} onChangeText={setTargetDate} style={inputStyle} />
-      <Button title={mutation.isPending ? "保存中…" : editing ? "保存修改" : "创建目标"} disabled={mutation.isPending || !title.trim()} onPress={() => mutation.mutate()} />
-      {editing ? <Button title="取消编辑" variant="ghost" onPress={reset} /> : null}
-    </Card>
-    <View>{query.data?.map((goal) => <Card key={goal.id} style={styles.goal} onPress={() => edit(goal)}>
-      <View style={styles.goalRow}><View style={{ flex: 1 }}><Text size="lg" weight="strong">{goal.title}</Text><Text size="sm" style={{ color: tokens.muted }}>{types.find((item) => item.value === goal.type)?.label} · 优先级 {goal.priority}</Text></View>
-      <Pressable accessibilityRole="button" onPress={() => Alert.alert("暂停目标", `暂停“${goal.title}”？`, [{ text: "取消", style: "cancel" }, { text: "暂停", style: "destructive", onPress: async () => { await pauseGoal(goal.id); void queryClient.invalidateQueries({ queryKey: ["goals"] }); } }])}><Text style={{ color: tokens.danger }}>暂停</Text></Pressable></View>
-    </Card>)}</View>
-  </Screen>;
+  function reset() {
+    setEditing(null);
+    setTitle("");
+    setType("primary");
+    setPriority("10");
+    setTargetDate("");
+  }
+
+  function edit(goal: Goal) {
+    setEditing(goal);
+    setTitle(goal.title);
+    setType(goal.type);
+    setPriority(String(goal.priority));
+    setTargetDate(goal.targetDate?.slice(0, 10) ?? "");
+  }
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const input: GoalInput = {
+        title: title.trim(),
+        type,
+        priority: Number(priority),
+        status: "active",
+        ...(targetDate ? { targetDate } : {}),
+        metrics: editing ? JSON.parse(editing.metricsJson) : {}
+      };
+      return editing ? updateGoal(editing.id, input) : createGoal(input);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["goals"] });
+      reset();
+      notify({ title: "目标已保存", description: "计划优先级会在下次生成时更新。" });
+    },
+    onError: (error) => notify({ tone: "danger", title: "保存失败", description: error instanceof Error ? error.message : "请检查输入。" })
+  });
+
+  async function pause(goal: Goal) {
+    const confirmed = await confirm({
+      title: `暂停「${goal.title}」？`,
+      description: "暂停后这个目标不再影响训练计划，可以随时重新启用。",
+      confirmLabel: "暂停",
+      destructive: true
+    });
+    if (!confirmed) return;
+    try {
+      await pauseGoal(goal.id);
+      void queryClient.invalidateQueries({ queryKey: ["goals"] });
+      notify({ title: "目标已暂停" });
+    } catch (error) {
+      notify({ tone: "danger", title: "暂停失败", description: error instanceof Error ? error.message : "请稍后重试。" });
+    }
+  }
+
+  return (
+    <Screen>
+      <Text style={{ color: tokens.muted }}>主目标会直接影响训练计划优先级。</Text>
+
+      <Section title={editing ? "编辑目标" : "新建目标"}>
+        <TextField label="目标名称" value={title} onChange={setTitle} placeholder="例如：完成半程马拉松" autoCapitalize="sentences" />
+        <ChoiceGroup label="类型" options={types} value={type} onChange={setType} />
+        <TextField label="优先级" value={priority} onChange={setPriority} keyboardType="number-pad" placeholder="1-10" />
+        <TextField label="目标日期" value={targetDate} onChange={setTargetDate} placeholder="YYYY-MM-DD（可选）" />
+        <Button
+          title={mutation.isPending ? "保存中…" : editing ? "保存修改" : "创建目标"}
+          disabled={mutation.isPending || !title.trim()}
+          onPress={() => mutation.mutate()}
+        />
+        {editing ? <Button title="取消编辑" variant="ghost" onPress={reset} /> : null}
+      </Section>
+
+      <Section title="现有目标" description="点击一行进行编辑。">
+        {query.isLoading ? <Spinner /> : query.error ? (
+          <EmptyState title="目标加载失败" description="请确认后端服务。" />
+        ) : query.data?.length ? query.data.map((goal) => (
+          <HairlineRow
+            key={goal.id}
+            title={goal.title}
+            subtitle={`${types.find((item) => item.value === goal.type)?.label ?? goal.type} · 优先级 ${goal.priority} · ${goal.status}`}
+            onPress={() => edit(goal)}
+            trailing={
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`暂停 ${goal.title}`}
+                onPress={() => pause(goal)}
+                style={({ pressed }) => [styles.pauseAction, pressed && { opacity: opacity.pressed }]}
+              >
+                <Text size="sm" style={{ color: tokens.danger }}>暂停</Text>
+              </Pressable>
+            }
+          />
+        )) : <EmptyState title="还没有目标" description="目标会影响计划和教练建议。" />}
+      </Section>
+    </Screen>
+  );
 }
 
-const styles = StyleSheet.create({ form: { gap: spacing.md }, goal: { marginBottom: spacing.md }, goalRow: { alignItems: "center", flexDirection: "row", gap: spacing.md }, input: { borderRadius: radius.md, borderWidth: 1, fontSize: 16, minHeight: 52, paddingHorizontal: spacing.md }, type: { borderRadius: radius.md, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, types: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm } });
+const styles = StyleSheet.create({
+  pauseAction: { alignItems: "center", justifyContent: "center", minHeight: 44, paddingHorizontal: spacing.sm }
+});

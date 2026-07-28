@@ -15,6 +15,9 @@ prisma/dev.db-journal
 prisma/dev.db-wal
 prisma/dev.db-shm
 *.log
+.playwright-mcp/
+apps/mobile/.env.local.bak
+prisma/dev.db.bak-*
 .superpowers/
 .worktrees/
 backups/
@@ -27,3 +30,4 @@ apps/mobile/ios/
 apps/mobile/android/
 apps/mobile/*.tsbuildinfo
 .expo/
+.gstack/

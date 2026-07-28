@@ -3,22 +3,36 @@ import { StyleSheet, View } from "react-native";
 import { spacing, useTheme } from "../theme/tokens";
 import { Text } from "./Text";
 
-export function Section({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
+export function Section({
+  title,
+  description,
+  action,
+  children
+}: {
+  title: string;
+  description?: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
   const { tokens } = useTheme();
 
   return (
     <View style={styles.section}>
       <View style={styles.header}>
-        <Text size="lg" weight="strong">{title}</Text>
+        <View style={styles.headerCopy}>
+          <Text size="sm" weight="strong" style={{ color: tokens.sage, letterSpacing: 0.6 }}>{title}</Text>
+          {description ? <Text size="sm" style={{ color: tokens.muted }}>{description}</Text> : null}
+        </View>
         {action ? <View>{action}</View> : null}
       </View>
-      <View style={[styles.body, { borderColor: tokens.line }]}>{children}</View>
+      <View style={styles.body}>{children}</View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  section: { gap: spacing.sm },
-  header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  body: { gap: spacing.sm }
+  body: { gap: spacing.md },
+  header: { alignItems: "center", flexDirection: "row", gap: spacing.md, justifyContent: "space-between" },
+  headerCopy: { flex: 1, gap: spacing.xs },
+  section: { gap: spacing.md }
 });

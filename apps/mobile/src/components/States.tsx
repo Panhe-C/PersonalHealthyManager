@@ -11,22 +11,12 @@ export function Spinner({ style, ...props }: ViewProps) {
   );
 }
 
-export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+export function EmptyState({ title, description }: { title: string; description?: string }) {
   const { tokens } = useTheme();
   return (
     <View style={styles.center}>
-      <ActivityIndicator color={tokens.danger} />
-      <Text style={{ color: tokens.danger, textAlign: "center" }}>{message}</Text>
-    </View>
-  );
-}
-
-export function EmptyState({ message, title, description }: { message?: string; title?: string; description?: string }) {
-  const { tokens } = useTheme();
-  return (
-    <View style={styles.center}>
-      {title ? <Text weight="strong" style={{ textAlign: "center" }}>{title}</Text> : null}
-      <Text size="sm" style={{ color: tokens.muted, textAlign: "center" }}>{description ?? message}</Text>
+      <Text weight="strong" style={{ textAlign: "center" }}>{title}</Text>
+      {description ? <Text size="sm" style={{ color: tokens.muted, textAlign: "center" }}>{description}</Text> : null}
     </View>
   );
 }

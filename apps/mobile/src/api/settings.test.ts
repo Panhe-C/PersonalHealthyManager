@@ -13,11 +13,11 @@ const tokenStore = vi.hoisted(() => ({
 
 vi.mock("../auth/tokenStore", () => tokenStore);
 
-import { saveSettings, type MobileSettings } from "./settings";
+import { providerModelDefaults, saveSettings, type MobileSettings } from "./settings";
 
 const settings: MobileSettings = {
   modelProvider: "openai",
-  modelName: "gpt-4o-mini",
+  modelName: "gpt-5.6-terra",
   modelBaseUrl: "https://api.openai.com/v1",
   hasApiKey: true,
   apiKeyHint: "sk-…1234",
@@ -38,7 +38,7 @@ describe("mobile settings API", () => {
     vi.stubGlobal("fetch", vi.fn());
   });
 
-  it("saves model and connection settings through the authenticated v1 API", async () => {
+  it("leaves the model identity to the server for a hosted provider", async () => {
     vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(settings), {
       status: 200,
       headers: { "Content-Type": "application/json" }
@@ -52,12 +52,42 @@ describe("mobile settings API", () => {
         method: "POST",
         body: JSON.stringify({
           modelProvider: settings.modelProvider,
-          modelName: settings.modelName,
-          modelBaseUrl: settings.modelBaseUrl,
           apiKey: "new-secret-key",
           dataMcpConnections: settings.dataMcpConnections
         })
       })
     );
+  });
+
+  it("sends the model identity for the custom provider", async () => {
+    const custom: MobileSettings = {
+      ...settings,
+      modelProvider: "custom",
+      modelName: "my-relay-model",
+      modelBaseUrl: "https://relay.example.test/v1"
+    };
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(custom), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    }));
+
+    await saveSettings(custom, "new-secret-key");
+
+    const [, requestInit] = vi.mocked(fetch).mock.calls.at(-1) ?? [];
+    expect(JSON.parse(String(requestInit?.body))).toEqual(
+      expect.objectContaining({
+        modelProvider: "custom",
+        modelName: "my-relay-model",
+        modelBaseUrl: "https://relay.example.test/v1"
+      })
+    );
+  });
+
+  it("mirrors the server's provider defaults so a switch previews the right model", () => {
+    expect(providerModelDefaults("kimi")).toEqual({
+      model: "kimi-k3",
+      baseUrl: "https://api.moonshot.ai/v1"
+    });
+    expect(providerModelDefaults("custom")).toEqual({ model: "", baseUrl: "" });
   });
 });

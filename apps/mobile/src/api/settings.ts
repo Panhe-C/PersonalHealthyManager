@@ -14,6 +14,7 @@ export const mobileSettingsSchema = z.object({
       enabled: z.boolean(),
       endpoint: z.string(),
       transport: z.enum(["http", "stdio"]).optional(),
+      corosRegion: z.enum(["china", "us", "eu"]).optional(),
       larkSessionHint: z.string().optional(),
       auth: z.object({
         type: z.enum(["none", "bearer", "api_key", "basic", "oauth2"]),
@@ -34,12 +35,86 @@ export function getSettings() {
   return api.get<MobileSettings>("/settings", mobileSettingsSchema);
 }
 
+/**
+ * The server derives the model name and base URL from the provider, so they are
+ * only sent for `custom`, the one provider it cannot resolve on its own.
+ */
 export function saveSettings(settings: MobileSettings, apiKey = "") {
   return api.post<MobileSettings>("/settings", {
     modelProvider: settings.modelProvider,
-    modelName: settings.modelName,
-    modelBaseUrl: settings.modelBaseUrl,
+    ...(providerNeedsManualModel(settings.modelProvider)
+      ? { modelName: settings.modelName, modelBaseUrl: settings.modelBaseUrl }
+      : {}),
     apiKey,
     dataMcpConnections: settings.dataMcpConnections
   }, mobileSettingsSchema);
+}
+
+export function providerNeedsManualModel(provider: MobileSettings["modelProvider"]): boolean {
+  return provider === "custom";
+}
+
+/**
+ * Mirrors the server's provider table so switching a provider can preview the
+ * model it resolves to before saving. The server stays authoritative: whatever
+ * it returns after a save overwrites these values.
+ */
+export const modelProviderOptions = [
+  { value: "openai", label: "OpenAI", model: "gpt-5.6-terra", baseUrl: "https://api.openai.com/v1" },
+  { value: "anthropic", label: "Anthropic", model: "claude-opus-5", baseUrl: "https://api.anthropic.com/v1" },
+  { value: "deepseek", label: "DeepSeek", model: "deepseek-v4-flash", baseUrl: "https://api.deepseek.com" },
+  { value: "minimax", label: "MiniMax", model: "MiniMax-M3", baseUrl: "https://api.minimax.io/v1" },
+  { value: "kimi", label: "Kimi", model: "kimi-k3", baseUrl: "https://api.moonshot.ai/v1" },
+  { value: "glm", label: "GLM", model: "glm-5.2", baseUrl: "https://open.bigmodel.cn/api/paas/v4" },
+  { value: "custom", label: "自定义", model: "", baseUrl: "" }
+] as const satisfies readonly {
+  value: MobileSettings["modelProvider"];
+  label: string;
+  model: string;
+  baseUrl: string;
+}[];
+
+export function providerModelDefaults(provider: MobileSettings["modelProvider"]): {
+  model: string;
+  baseUrl: string;
+} {
+  const entry = modelProviderOptions.find((option) => option.value === provider);
+  return { model: entry?.model ?? "", baseUrl: entry?.baseUrl ?? "" };
+}
+
+/**
+ * The URLs mirror the server's official region map and are shown for
+ * confirmation only; the server derives the endpoint it actually stores from
+ * the region, so it stays authoritative if COROS ever moves a host.
+ */
+export const corosRegions = [
+  { value: "china", label: "中国", url: "https://mcpcn.coros.com/mcp" },
+  { value: "us", label: "北美及其他", url: "https://mcpus.coros.com/mcp" },
+  { value: "eu", label: "欧洲", url: "https://mcpeu.coros.com/mcp" }
+] as const;
+
+export type CorosRegion = (typeof corosRegions)[number]["value"];
+
+export function regionEndpoint(region: CorosRegion): string {
+  return corosRegions.find((option) => option.value === region)?.url ?? "";
+}
+
+/** Pins the COROS region before the OAuth client is registered; the server resolves the endpoint. */
+export function prepareCorosConnection(corosRegion: CorosRegion) {
+  return api.post<{ ok: true }>("/settings/mcp/coros/prep", { corosRegion });
+}
+
+const oauthHandoffSchema = z.object({ url: z.string(), expiresInMs: z.number() });
+
+/**
+ * Returns a browser-openable start URL carrying a single-use handoff token. The
+ * app's Bearer token cannot travel with a browser navigation, so the server
+ * issues this instead.
+ */
+export function createOAuthHandoffUrl(connection: "coros" | "calendar" | "meal_menu") {
+  return api.post<z.infer<typeof oauthHandoffSchema>>(
+    `/settings/mcp/oauth/handoff?connection=${connection}`,
+    {},
+    oauthHandoffSchema
+  );
 }

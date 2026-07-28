@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import Svg, { Circle, Line, Path } from "react-native-svg";
 import { ChevronRight } from "lucide-react-native";
-import { spacing, useTheme } from "../theme/tokens";
+import { opacity, spacing, useTheme } from "../theme/tokens";
 import { Text } from "./Text";
 
 export function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
@@ -18,7 +18,7 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
   );
 }
 
-export function MetricStrip({ items }: { items: Array<{ label: string; value: string; icon?: ReactNode }> }) {
+export function MetricStrip({ items }: { items: { label: string; value: string; icon?: ReactNode }[] }) {
   const { tokens } = useTheme();
   return (
     <View style={styles.metricStrip}>
@@ -33,13 +33,14 @@ export function MetricStrip({ items }: { items: Array<{ label: string; value: st
   );
 }
 
-export function HairlineRow({ icon, title, subtitle, value, onPress, danger = false }: {
+export function HairlineRow({ icon, title, subtitle, value, onPress, danger = false, trailing }: {
   icon?: ReactNode;
   title: string;
   subtitle?: string;
   value?: string;
   onPress?: () => void;
   danger?: boolean;
+  trailing?: ReactNode;
 }) {
   const { tokens } = useTheme();
   const content = (
@@ -50,7 +51,8 @@ export function HairlineRow({ icon, title, subtitle, value, onPress, danger = fa
         {subtitle ? <Text size="sm" style={{ color: tokens.muted }}>{subtitle}</Text> : null}
       </View>
       {value ? <Text style={{ color: danger ? tokens.danger : tokens.sage }}>{value}</Text> : null}
-      {onPress ? <ChevronRight color={tokens.muted} size={18} strokeWidth={1.6} /> : null}
+      {trailing}
+      {onPress && !trailing ? <ChevronRight color={tokens.muted} size={18} strokeWidth={1.6} /> : null}
     </>
   );
   const sharedStyle = [styles.hairlineRow, { borderBottomColor: tokens.line }];
@@ -112,7 +114,7 @@ const styles = StyleSheet.create({
   metricItem: { alignItems: "center", flex: 1, gap: spacing.xs, minWidth: 0, paddingHorizontal: spacing.sm },
   metricStrip: { flexDirection: "row", marginHorizontal: -spacing.sm },
   pageHeader: { alignItems: "flex-start", flexDirection: "row", gap: spacing.md, justifyContent: "space-between" },
-  pressed: { opacity: 0.55 },
+  pressed: { opacity: opacity.pressed },
   ringWrap: { alignItems: "center", alignSelf: "center", height: 188, justifyContent: "center", width: 188 },
   rowCopy: { flex: 1, gap: 2 },
   rowIcon: { alignItems: "center", justifyContent: "center", width: 28 }

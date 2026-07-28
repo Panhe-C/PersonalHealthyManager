@@ -1,18 +1,24 @@
 import { useEffect, useState } from "react";
-import { Alert, StyleSheet, Switch, TextInput, View } from "react-native";
+import { StyleSheet, Switch, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { Screen } from "../../src/components/Screen";
 import { Text } from "../../src/components/Text";
 import { Button } from "../../src/components/Button";
-import { Card } from "../../src/components/Card";
-import { PageHeader } from "../../src/components/QuietHealth";
+import { ChoiceGroup } from "../../src/components/ChoiceGroup";
+import { useFeedback } from "../../src/components/Feedback";
+import { Section } from "../../src/components/Section";
+import { TextField } from "../../src/components/TextField";
+
 import { useSettingsQuery } from "../../src/api/hooks";
-import { saveSettings, type MobileMcpConnection, type MobileSettings } from "../../src/api/settings";
-import { radius, spacing, useTheme } from "../../src/theme/tokens";
+import { corosRegions, regionEndpoint, saveSettings, type CorosRegion, type MobileMcpConnection, type MobileSettings } from "../../src/api/settings";
+import { runCorosOAuth } from "../../src/corosOAuthSession";
+import { oauthConnectionDetail } from "../../src/settingsStatus";
+import { spacing, useTheme } from "../../src/theme/tokens";
 
 export default function ConnectionSettingsScreen() {
   const query = useSettingsQuery();
   const queryClient = useQueryClient();
+  const { notify } = useFeedback();
   const { tokens } = useTheme();
   const [draft, setDraft] = useState<MobileSettings | null>(null);
   const [busy, setBusy] = useState(false);
@@ -30,42 +36,161 @@ export default function ConnectionSettingsScreen() {
       const saved = await saveSettings(draft);
       setDraft(saved);
       queryClient.setQueryData(["settings"], saved);
-      Alert.alert("已保存", "数据连接配置已更新。");
+      notify({ title: "连接配置已保存", description: "数据同步会使用新的 Endpoint 和凭据。" });
     } catch (error) {
-      Alert.alert("保存失败", error instanceof Error ? error.message : "请稍后重试。");
+      notify({ tone: "danger", title: "保存失败", description: error instanceof Error ? error.message : "请稍后重试。" });
     } finally {
       setBusy(false);
     }
   }
 
-  if (!draft) return <Screen><PageHeader title="连接配置" subtitle={query.error ? "配置加载失败" : "正在读取服务器配置…"} /></Screen>;
-  const inputStyle = [styles.input, { backgroundColor: tokens.panelSoft, borderColor: tokens.line, color: tokens.inkStrong }];
+  /** OAuth writes the new tokens server-side, so the local draft has to be re-read. */
+  async function reloadSettings() {
+    await queryClient.invalidateQueries({ queryKey: ["settings"] });
+  }
+
+  if (!draft) {
+    return (
+      <Screen>
+        <Text style={{ color: tokens.muted }}>{query.error ? "配置加载失败" : "正在读取服务器配置…"}</Text>
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
-      <PageHeader title="连接配置" subtitle="令牌只会提交到服务端加密保存；留空保持现有令牌。" />
+      <Text style={{ color: tokens.muted }}>令牌只会提交到服务端加密保存；留空保持现有令牌。COROS 使用 OAuth，点击授权会打开浏览器登录。</Text>
+
       {draft.dataMcpConnections.map((connection) => (
-        <Card key={connection.id} style={styles.card}>
-          <View style={styles.heading}>
-            <View><Text size="xl" weight="strong">{connection.label}</Text><Text size="sm" style={{ color: tokens.muted }}>{connection.id}</Text></View>
-            <Switch value={connection.enabled} onValueChange={(enabled) => update(connection.id, { enabled })} trackColor={{ true: tokens.sage }} />
-          </View>
-          <Field label={`${connection.label} Endpoint`} value={connection.endpoint} onChange={(endpoint) => update(connection.id, { endpoint })} style={inputStyle} />
-          <Field label={`${connection.label} Bearer Token`} value={typeof connection.auth.token === "string" ? connection.auth.token : ""} onChange={(token) => update(connection.id, { auth: { ...connection.auth, type: "bearer", token } })} style={inputStyle} secure placeholder={connection.auth.tokenHint ? `已配置 ${connection.auth.tokenHint}；留空保持不变` : "可选 Bearer Token"} />
-        </Card>
+        <Section
+          key={connection.id}
+          title={connection.label}
+          description={connection.id}
+          action={
+            <Switch
+              value={connection.enabled}
+              onValueChange={(enabled) => update(connection.id, { enabled })}
+              trackColor={{ true: tokens.sage, false: tokens.line }}
+            />
+          }
+        >
+          {connection.id === "coros" ? (
+            <CorosAuthSection connection={connection} onAuthorized={reloadSettings} />
+          ) : (
+            <>
+              <TextField
+                label="Endpoint"
+                value={connection.endpoint}
+                onChange={(endpoint) => update(connection.id, { endpoint })}
+                placeholder="https://"
+              />
+              <CredentialField connection={connection} onChange={(auth) => update(connection.id, { auth })} />
+            </>
+          )}
+        </Section>
       ))}
+
       <Button title={busy ? "保存中…" : "保存连接配置"} disabled={busy} onPress={save} />
     </Screen>
   );
 }
 
-function Field({ label, value, onChange, style, secure, placeholder }: { label: string; value: string; onChange: (value: string) => void; style: object[]; secure?: boolean; placeholder?: string }) {
-  return <View style={styles.field}><Text weight="medium">{label}</Text><TextInput accessibilityLabel={label} autoCapitalize="none" autoCorrect={false} secureTextEntry={secure} placeholder={placeholder} value={value} onChangeText={onChange} style={style} /></View>;
+/**
+ * COROS authenticates over OAuth, so there is no secret to type here. The region
+ * decides which COROS MCP host the client registers against, which is why it has
+ * to be pinned before the browser leg starts.
+ */
+function CorosAuthSection({ connection, onAuthorized }: { connection: MobileMcpConnection; onAuthorized: () => Promise<void> }) {
+  const { notify } = useFeedback();
+  const { tokens } = useTheme();
+  const [region, setRegion] = useState<CorosRegion>(connection.corosRegion ?? "china");
+  const [busy, setBusy] = useState(false);
+
+  const authorized = connection.auth.type === "oauth2" && Boolean(connection.auth.accessTokenHint);
+
+  async function authorize() {
+    setBusy(true);
+    try {
+      const outcome = await runCorosOAuth(region);
+      if (outcome.status === "connected") {
+        await onAuthorized();
+        notify({ title: "COROS 已授权", description: "运动、睡眠和恢复数据现在可以同步了。" });
+      } else if (outcome.status === "failed") {
+        notify({ tone: "danger", title: "授权失败", description: outcome.message });
+      }
+    } catch (error) {
+      notify({ tone: "danger", title: "授权失败", description: error instanceof Error ? error.message : "请稍后重试。" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <View style={styles.block}>
+      <Text size="sm" style={{ color: tokens.muted }}>
+        {authorized ? oauthConnectionDetail(connection) : "尚未授权。选择账号所在区域后开始授权。"}
+      </Text>
+      <ChoiceGroup label="区域" options={corosRegions} value={region} onChange={setRegion} disabled={busy} />
+      <Text size="sm" style={{ color: tokens.muted }}>{regionEndpoint(region)}</Text>
+      <Button title={busy ? "授权中…" : authorized ? "重新授权" : "授权"} disabled={busy} onPress={authorize} />
+    </View>
+  );
+}
+
+/**
+ * Renders only the credential the connection actually uses. Writing a bearer
+ * token into an OAuth2 connection would rewrite auth.type on the server and
+ * discard the stored authorize/token URLs, client registration, and refresh
+ * token, so OAuth2 stays read-only here and points at the web flow instead.
+ */
+function CredentialField({ connection, onChange }: { connection: MobileMcpConnection; onChange: (auth: MobileMcpConnection["auth"]) => void }) {
+  const { tokens } = useTheme();
+  const { auth } = connection;
+
+  if (auth.type === "oauth2") {
+    return (
+      <View style={styles.block}>
+        <Text size="sm" style={{ color: tokens.muted }}>{oauthConnectionDetail(connection)}</Text>
+        <Text size="sm" style={{ color: tokens.muted }}>OAuth 授权需要在网页端完成，这里只显示状态。</Text>
+      </View>
+    );
+  }
+
+  if (auth.type === "api_key") {
+    return (
+      <TextField
+        label="API Key"
+        value={typeof auth.apiKey === "string" ? auth.apiKey : ""}
+        onChange={(apiKey) => onChange({ ...auth, type: "api_key", apiKey })}
+        secure
+        placeholder={auth.apiKeyHint ? `已配置 ${auth.apiKeyHint}；留空保持不变` : "输入 API Key"}
+      />
+    );
+  }
+
+  if (auth.type === "basic") {
+    return (
+      <TextField
+        label="密码"
+        value={typeof auth.password === "string" ? auth.password : ""}
+        onChange={(password) => onChange({ ...auth, type: "basic", password })}
+        secure
+        placeholder={auth.passwordHint ? `已配置 ${auth.passwordHint}；留空保持不变` : "输入密码"}
+      />
+    );
+  }
+
+  return (
+    <TextField
+      label="Bearer Token"
+      value={typeof auth.token === "string" ? auth.token : ""}
+      onChange={(token) => onChange({ ...auth, type: "bearer", token })}
+      secure
+      placeholder={auth.tokenHint ? `已配置 ${auth.tokenHint}；留空保持不变` : "可选 Bearer Token"}
+    />
+  );
 }
 
 const styles = StyleSheet.create({
-  card: { gap: spacing.lg },
-  field: { gap: spacing.sm },
-  heading: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  input: { borderRadius: radius.md, borderWidth: 1, fontSize: 16, minHeight: 52, paddingHorizontal: spacing.md }
+  block: { gap: spacing.sm }
 });

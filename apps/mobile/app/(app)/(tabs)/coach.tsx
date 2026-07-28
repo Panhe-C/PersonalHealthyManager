@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ElementRef } from "react";
-import { Alert, Animated, Easing, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
+import { Animated, Easing, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { ArrowDown, Brain, History, Leaf, Pencil, Send, SquarePen, Trash2 } from "lucide-react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text } from "../../../src/components/Text";
 import { Card } from "../../../src/components/Card";
 import { Button } from "../../../src/components/Button";
+import { ChoiceGroup } from "../../../src/components/ChoiceGroup";
+import { useFeedback } from "../../../src/components/Feedback";
 import { EmptyState, Spinner } from "../../../src/components/States";
 import {
   createAgentConversation,
@@ -18,9 +20,10 @@ import {
   type MemoryDraft
 } from "../../../src/api/agent";
 import { useAgentMemoriesQuery, useConversationDetailQuery, useConversationsQuery } from "../../../src/api/hooks";
-import { formatCoachMessage, getRecentMessagesForChat, mergeConversationMessages } from "../../../src/coachMessages";
+import { RichMessage } from "../../../src/components/RichMessage";
+import { getRecentMessagesForChat, mergeConversationMessages } from "../../../src/coachMessages";
 import { formatDateLabel } from "../../../src/ui/format";
-import { radius, spacing, useTheme } from "../../../src/theme/tokens";
+import { opacity, radius, spacing, useTheme } from "../../../src/theme/tokens";
 import type { AgentAdjustment, AgentMessage, Conversation, Memory } from "../../../src/api/schemas";
 
 const fallbackSuggestions = [
@@ -37,9 +40,24 @@ const suggestionGroups = {
   replan: ["按恢复状态调整本周计划", "把高强度训练挪到哪天？", "重新生成更保守的计划"]
 };
 
-const memoryKindOptions = ["fact", "preference", "routine", "constraint"];
-const memoryCategoryOptions = ["training", "nutrition", "recovery", "schedule", "general"];
+const memoryKindOptions = [
+  { value: "fact", label: "事实" },
+  { value: "preference", label: "偏好" },
+  { value: "routine", label: "习惯" },
+  { value: "constraint", label: "限制" }
+];
+const memoryCategoryOptions = [
+  { value: "training", label: "训练" },
+  { value: "nutrition", label: "饮食" },
+  { value: "recovery", label: "恢复" },
+  { value: "schedule", label: "日程" },
+  { value: "general", label: "通用" }
+];
 const emptyMemoryDraft: MemoryDraft = { kind: "preference", category: "general", content: "" };
+
+function memoryLabel(options: { value: string; label: string }[], value: string) {
+  return options.find((option) => option.value === value)?.label ?? value;
+}
 
 function uniqueSuggestions(items: string[]) {
   return Array.from(new Set(items)).slice(0, 3);
@@ -67,6 +85,7 @@ export default function CoachTab() {
   const queryClient = useQueryClient();
   const conversationsQuery = useConversationsQuery();
   const memoriesQuery = useAgentMemoriesQuery();
+  const { confirm } = useFeedback();
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const { width: viewportWidth } = useWindowDimensions();
@@ -223,11 +242,17 @@ export default function CoachTab() {
     sendMutation.mutate({ conversationId: selectedConversationId, message: content });
   }
 
-  function confirmDeleteConversation(conversation: Conversation) {
-    Alert.alert("删除会话", `确定删除「${conversation.title}」吗？`, [
-      { text: "取消", style: "cancel" },
-      { text: "删除", style: "destructive", onPress: () => deleteConversationMutation.mutate(conversation.id) }
-    ]);
+  /** The drawer is a Modal, so it closes before the confirm sheet opens to avoid stacked modals. */
+  function requestDeleteConversation(conversation: Conversation) {
+    closeConversationDrawer(async () => {
+      const confirmed = await confirm({
+        title: `删除「${conversation.title}」？`,
+        description: "这个会话里的消息会一起删除，教练记忆不受影响。",
+        confirmLabel: "删除",
+        destructive: true
+      });
+      if (confirmed) deleteConversationMutation.mutate(conversation.id);
+    });
   }
 
   function startEditMemory(memory: Memory) {
@@ -248,14 +273,16 @@ export default function CoachTab() {
     });
   }
 
-  function closeConversationDrawer() {
+  function closeConversationDrawer(onClosed?: () => void) {
     Animated.timing(drawerProgress, {
       toValue: 0,
       duration: 180,
       easing: Easing.in(Easing.cubic),
       useNativeDriver: true
     }).start(({ finished }) => {
-      if (finished) setShowConversationDrawer(false);
+      if (!finished) return;
+      setShowConversationDrawer(false);
+      onClosed?.();
     });
   }
 
@@ -430,7 +457,7 @@ export default function CoachTab() {
         </Pressable>
       </Modal>
 
-      <Modal visible={showConversationDrawer} transparent animationType="none" onRequestClose={closeConversationDrawer}>
+      <Modal visible={showConversationDrawer} transparent animationType="none" onRequestClose={() => closeConversationDrawer()}>
         <View style={styles.drawerBackdrop}>
           <Animated.View
             style={[
@@ -494,7 +521,12 @@ export default function CoachTab() {
                           {formatDateLabel(conversation.updatedAt)}
                         </Text>
                       </View>
-                      <Pressable accessibilityRole="button" onPress={() => confirmDeleteConversation(conversation)} style={styles.drawerDeleteButton}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`删除 ${conversation.title}`}
+                        onPress={() => requestDeleteConversation(conversation)}
+                        style={styles.drawerDeleteButton}
+                      >
                         <Trash2 color={selected ? "#fff" : tokens.danger} size={16} />
                       </Pressable>
                     </Pressable>
@@ -503,7 +535,7 @@ export default function CoachTab() {
               </ScrollView>
             )}
           </Animated.View>
-          <Pressable style={styles.drawerScrim} onPress={closeConversationDrawer} />
+          <Pressable style={styles.drawerScrim} onPress={() => closeConversationDrawer()} />
         </View>
       </Modal>
     </>
@@ -521,7 +553,7 @@ function MessageBubble({ message, onUndo }: { message: AgentMessage; onUndo: (ad
           <Leaf color={tokens.sage} size={19} strokeWidth={1.6} />
         </View>
         <View style={styles.assistantContent}>
-          <Text style={{ color: tokens.ink }}>{formatCoachMessage(message.content)}</Text>
+          <RichMessage content={message.content} />
           {message.adjustments?.map((adjustment) => (
             <AdjustmentProposal key={adjustment.id} adjustment={adjustment} onUndo={onUndo} />
           ))}
@@ -541,7 +573,7 @@ function MessageBubble({ message, onUndo }: { message: AgentMessage; onUndo: (ad
           }
         ]}
       >
-        <Text style={{ color: tokens.ink }}>{formatCoachMessage(message.content)}</Text>
+        <Text style={{ color: tokens.ink }}>{message.content}</Text>
       </View>
     </View>
   );
@@ -590,15 +622,17 @@ function MemoryEditor({
   const { tokens } = useTheme();
   return (
     <Card style={styles.memoryEditor}>
-      <OptionRow
+      <ChoiceGroup
+        label="类型"
         options={memoryKindOptions}
-        selected={draft.kind}
-        onSelect={(kind) => onChange({ ...draft, kind })}
+        value={draft.kind}
+        onChange={(kind) => onChange({ ...draft, kind })}
       />
-      <OptionRow
+      <ChoiceGroup
+        label="分类"
         options={memoryCategoryOptions}
-        selected={draft.category}
-        onSelect={(category) => onChange({ ...draft, category })}
+        value={draft.category}
+        onChange={(category) => onChange({ ...draft, category })}
       />
       <TextInput
         multiline
@@ -642,7 +676,7 @@ function MemoryRow({
   return (
     <Card style={styles.memoryCard}>
       <View style={styles.memoryText}>
-        <Text size="xs" weight="medium" style={{ color: tokens.sage }}>{memory.kind} · {memory.category}</Text>
+        <Text size="xs" weight="medium" style={{ color: tokens.sage }}>{memoryLabel(memoryKindOptions, memory.kind)} · {memoryLabel(memoryCategoryOptions, memory.category)}</Text>
         <Text>{memory.content}</Text>
         <Text size="xs" style={{ color: tokens.muted }}>{memory.source} · {Math.round(memory.confidence * 100)}%</Text>
       </View>
@@ -655,30 +689,6 @@ function MemoryRow({
         </Pressable>
       </View>
     </Card>
-  );
-}
-
-function OptionRow({ options, selected, onSelect }: { options: string[]; selected: string; onSelect: (value: string) => void }) {
-  const { tokens } = useTheme();
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.optionRow}>
-      {options.map((option) => {
-        const active = option === selected;
-        return (
-          <Pressable
-            accessibilityRole="button"
-            key={option}
-            onPress={() => onSelect(option)}
-            style={[
-              styles.optionChip,
-              { backgroundColor: active ? tokens.sage : tokens.panelSoft, borderColor: active ? tokens.sage : tokens.line }
-            ]}
-          >
-            <Text size="sm" style={{ color: active ? "#fff" : tokens.ink }}>{option}</Text>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
   );
 }
 
@@ -720,7 +730,6 @@ const styles = StyleSheet.create({
   drawerScrim: { backgroundColor: "rgba(0, 0, 0, 0.28)", flex: 1 },
   drawerTitleBlock: { gap: spacing.xs },
   drawerTitleRow: { alignItems: "center", flexDirection: "row", gap: spacing.md, justifyContent: "space-between" },
-  errorCard: { paddingVertical: spacing.md },
   headerLayer: { borderBottomWidth: 1, paddingBottom: spacing.sm, paddingHorizontal: spacing.lg },
   iconButton: { alignItems: "center", justifyContent: "center", minHeight: 36, minWidth: 36 },
   inlineError: { borderWidth: 1, borderLeftWidth: 0, borderRightWidth: 0, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
@@ -745,12 +754,10 @@ const styles = StyleSheet.create({
   messageRow: { flexDirection: "row" },
   messageScroll: { flex: 1 },
   messageStage: { flex: 1 },
-  optionChip: { borderRadius: radius.sm, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  optionRow: { gap: spacing.sm },
   planArrow: { alignSelf: "center" },
   planComparison: { gap: spacing.md },
   planRow: { alignItems: "flex-start", flexDirection: "row", gap: spacing.md },
-  pressed: { opacity: 0.84 },
+  pressed: { opacity: opacity.pressed },
   proposalAction: { borderRadius: radius.md, minHeight: 50, justifyContent: "center", paddingHorizontal: spacing.lg },
   proposalCard: { borderTopWidth: 1, gap: spacing.lg, paddingTop: spacing.lg },
   rowActions: { flexDirection: "row", gap: spacing.sm },

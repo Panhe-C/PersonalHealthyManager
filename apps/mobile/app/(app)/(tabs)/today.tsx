@@ -1,16 +1,17 @@
 import { useState } from "react";
-import { Alert, Pressable, StyleSheet, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { Check, Circle, Footprints, HeartPulse, Moon } from "lucide-react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Screen } from "../../../src/components/Screen";
 import { Text } from "../../../src/components/Text";
 import { Button } from "../../../src/components/Button";
+import { useFeedback } from "../../../src/components/Feedback";
 import { EmptyState, Spinner } from "../../../src/components/States";
 import { MetricStrip, PageHeader, ReadinessRing } from "../../../src/components/QuietHealth";
 import { useTodayOverviewQuery } from "../../../src/api/hooks";
 import { completeTrainingTask } from "../../../src/api/training";
 import { formatDateLabel, formatDuration, formatTaskWindow, percentLabel } from "../../../src/ui/format";
-import { radius, spacing, useTheme } from "../../../src/theme/tokens";
+import { opacity, radius, spacing, useTheme } from "../../../src/theme/tokens";
 import type { TodayOverview } from "../../../src/api/schemas";
 
 type TodayTask = TodayOverview["todayTasks"][number];
@@ -46,9 +47,10 @@ export default function TodayTab() {
               {focusTask ? `${focusTask.title} · ${focusTask.durationMinutes} 分钟` : "留出恢复空间"}
             </Text>
             <Text style={{ color: tokens.muted }}>
-              {focusTask ? `${formatTaskWindow(focusTask.scheduledStart, focusTask.scheduledEnd)} · ${focusTask.intensity}` : data.primaryGoal?.title ?? "今天没有安排训练任务"}
+              {focusTask
+                ? `${formatTaskWindow(focusTask.scheduledStart, focusTask.scheduledEnd)} · ${focusTask.intensity} · ${focusTask.trainingType}`
+                : data.primaryGoal?.title ?? "今天没有安排训练任务"}
             </Text>
-            {focusTask ? <Button title="开始训练" onPress={() => Alert.alert(focusTask.title, `${focusTask.durationMinutes} 分钟 · ${focusTask.trainingType}`)} /> : null}
           </View>
 
           {focusTask ? <TodayChecklist task={focusTask} /> : (
@@ -70,6 +72,7 @@ function nextChecklistStatus(status: ChecklistStatus): ChecklistStatus {
 
 function TodayChecklist({ task }: { task: TodayTask }) {
   const queryClient = useQueryClient();
+  const { notify } = useFeedback();
   const { tokens } = useTheme();
   const [actualLoad, setActualLoad] = useState("");
   const [statuses, setStatuses] = useState<Record<string, ChecklistStatus>>(
@@ -84,9 +87,9 @@ function TodayChecklist({ task }: { task: TodayTask }) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["today"] });
       void queryClient.invalidateQueries({ queryKey: ["plan", "active"] });
-      Alert.alert("已记录", "训练完成情况已同步。");
+      notify({ title: "已记录", description: "训练完成情况已同步到计划。" });
     },
-    onError: (err) => Alert.alert("提交失败", err instanceof Error ? err.message : "请稍后重试。")
+    onError: (err) => notify({ tone: "danger", title: "提交失败", description: err instanceof Error ? err.message : "请稍后重试。" })
   });
 
   return (
@@ -132,6 +135,6 @@ const styles = StyleSheet.create({
   emptyLine: { borderTopWidth: 1, paddingTop: spacing.lg },
   focusSection: { gap: spacing.sm, marginTop: spacing.sm },
   loadInput: { borderRadius: radius.md, borderWidth: 1, flex: 1, minHeight: 48, paddingHorizontal: spacing.md },
-  pressed: { opacity: 0.55 },
+  pressed: { opacity: opacity.pressed },
   readinessRing: { paddingVertical: spacing.xs }
 });

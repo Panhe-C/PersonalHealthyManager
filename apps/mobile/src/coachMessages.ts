@@ -18,16 +18,3 @@ export function mergeConversationMessages(persisted: AgentMessage[], current: Ag
 export function getRecentMessagesForChat(messages: AgentMessage[], limit = 8) {
   return messages.slice(-limit);
 }
-
-export function formatCoachMessage(content: string) {
-  return content
-    .replace(/\*\*/g, "")
-    .replace(/^#{1,6}\s+/gm, "")
-    .replace(/^\s*\|?[-:\s|]+\|?\s*$/gm, "")
-    .replace(/^\s*\|\s?/gm, "")
-    .replace(/\s?\|\s*$/gm, "")
-    .replace(/\s*\|\s*/g, " · ")
-    .replace(/^\s*-\s+/gm, "• ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}

@@ -18,10 +18,14 @@ async function main() {
   }
   const passwordHash = hashPassword(password);
 
+  // Provisioning happens out of band by someone with shell access, so the
+  // address counts as confirmed and skips the self-service email flow.
+  const emailVerifiedAt = new Date();
+
   const account = await prisma.user.upsert({
     where: { email },
-    update: { passwordHash, timezone },
-    create: { email, passwordHash, timezone },
+    update: { passwordHash, timezone, emailVerifiedAt },
+    create: { email, passwordHash, timezone, emailVerifiedAt },
     select: { email: true, timezone: true }
   });
 

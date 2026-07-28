@@ -185,4 +185,44 @@ describe("agent response shell", () => {
     expect(response.message).toContain("Custom returned HTTP 404");
     expect(response.message).toContain("using local guidance instead");
   });
+
+  it("names the platform that issues a working key when the provider rejects it", async () => {
+    vi.mocked(loadModelRuntimeConfig).mockResolvedValue({
+      provider: "kimi",
+      providerLabel: "Kimi / Moonshot",
+      modelName: "kimi-k3",
+      baseUrl: "https://api.moonshot.ai/v1",
+      apiKey: "sk-kim-wrong-product"
+    });
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({ error: { message: "Invalid Authentication" } })
+    } as never);
+
+    const response = await createAgentResponseForUser("user-1", "你好");
+
+    expect(response.error).toContain("Invalid Authentication");
+    expect(response.error).toContain("platform.kimi.ai");
+    expect(response.error).toContain("Kimi Code");
+  });
+
+  it("leaves a non-auth provider error unannotated", async () => {
+    vi.mocked(loadModelRuntimeConfig).mockResolvedValue({
+      provider: "kimi",
+      providerLabel: "Kimi / Moonshot",
+      modelName: "kimi-k3",
+      baseUrl: "https://api.moonshot.ai/v1",
+      apiKey: "sk-configured"
+    });
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      status: 429,
+      json: async () => ({ error: { message: "Rate limit reached" } })
+    } as never);
+
+    const response = await createAgentResponseForUser("user-1", "你好");
+
+    expect(response.error).toBe("Rate limit reached");
+  });
 });

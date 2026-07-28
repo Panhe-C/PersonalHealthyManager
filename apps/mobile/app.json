@@ -26,6 +26,7 @@
       "expo-router",
       "expo-notifications",
       "expo-secure-store",
+      "expo-web-browser",
       [
         "@kingstinct/react-native-healthkit",
         {

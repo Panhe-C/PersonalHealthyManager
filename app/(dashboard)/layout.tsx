@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { AppNavigation } from "@/components/AppNavigation";
+import { AppNavigation, MobileTabBar } from "@/components/AppNavigation";
 import { getCurrentUser } from "@/src/auth/session";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -15,6 +15,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <AppNavigation />
       </header>
       {children}
+      <MobileTabBar />
     </div>
   );
 }

@@ -3,6 +3,8 @@ import { GET as OAUTH_CALLBACK_GET } from "@/app/api/settings/mcp/oauth/callback
 import { GET as OAUTH_START_GET } from "@/app/api/settings/mcp/oauth/start/route";
 import { GET, POST } from "@/app/api/settings/route";
 import { POST as TEST_POST } from "@/app/api/settings/test/route";
+import { consumeOAuthHandoffToken } from "@/src/auth/oauthHandoff";
+import { getCurrentUser } from "@/src/auth/session";
 import {
   createMcpOAuthAuthorizationUrl,
   handleMcpOAuthCallback,
@@ -19,7 +21,20 @@ vi.mock("@/src/auth/api", () => ({
       handler({ id: "user-1", timezone: "Asia/Shanghai" }, request)
 }));
 
-vi.mock("@/src/settings/service", () => ({
+// The OAuth start route is entered by a browser navigation, so it resolves the
+// user itself instead of going through withUser.
+vi.mock("@/src/auth/session", () => ({
+  getCurrentUser: vi.fn(async () => ({ id: "user-1", timezone: "Asia/Shanghai" }))
+}));
+
+vi.mock("@/src/auth/oauthHandoff", () => ({
+  consumeOAuthHandoffToken: vi.fn()
+}));
+
+vi.mock("@/src/settings/service", async (importOriginal) => ({
+  // buildOAuthReturnUrl is a pure URL builder, so the routes are asserted
+  // against the real redirect targets rather than a stub.
+  buildOAuthReturnUrl: ((await importOriginal()) as typeof import("@/src/settings/service")).buildOAuthReturnUrl,
   createMcpOAuthAuthorizationUrl: vi.fn(),
   handleMcpOAuthCallback: vi.fn(),
   resolveMcpOAuthState: vi.fn(),
@@ -86,7 +101,46 @@ describe("settings API", () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("https://login.example.test/oauth/authorize?state=state-1");
-    expect(createMcpOAuthAuthorizationUrl).toHaveBeenCalledWith("user-1", "coros", "http://localhost");
+    expect(createMcpOAuthAuthorizationUrl).toHaveBeenCalledWith("user-1", "coros", "http://localhost", "web");
+  });
+
+  it("starts MCP OAuth from the app by spending a single-use handoff token", async () => {
+    vi.mocked(consumeOAuthHandoffToken).mockResolvedValue({ id: "user-app" } as never);
+    vi.mocked(createMcpOAuthAuthorizationUrl).mockResolvedValue(new URL("https://login.example.test/oauth/authorize?state=state-2"));
+
+    const response = await OAUTH_START_GET(
+      new Request("http://localhost/api/settings/mcp/oauth/start?connection=coros&handoff=handoff-1")
+    );
+
+    expect(response.status).toBe(307);
+    expect(consumeOAuthHandoffToken).toHaveBeenCalledWith("handoff-1");
+    // The cookie session must not be consulted for an app-initiated flow.
+    expect(getCurrentUser).not.toHaveBeenCalled();
+    expect(createMcpOAuthAuthorizationUrl).toHaveBeenCalledWith("user-app", "coros", "http://localhost", "app");
+  });
+
+  it("returns an expired handoff to the app deep link instead of the web settings page", async () => {
+    vi.mocked(consumeOAuthHandoffToken).mockResolvedValue(null);
+
+    const response = await OAUTH_START_GET(
+      new Request("http://localhost/api/settings/mcp/oauth/start?connection=coros&handoff=stale")
+    );
+
+    expect(response.status).toBe(307);
+    const location = response.headers.get("location") ?? "";
+    expect(location.startsWith("hbm://mcp-oauth")).toBe(true);
+    expect(location).toContain("auth=failed");
+    expect(createMcpOAuthAuthorizationUrl).not.toHaveBeenCalled();
+  });
+
+  it("rejects a browser start with no session at all", async () => {
+    vi.mocked(getCurrentUser).mockResolvedValueOnce(null as never);
+
+    const response = await OAUTH_START_GET(new Request("http://localhost/api/settings/mcp/oauth/start?connection=coros"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toContain("auth=failed");
+    expect(createMcpOAuthAuthorizationUrl).not.toHaveBeenCalled();
   });
 
   it("redirects OAuth start failures back to Settings with an error message", async () => {
@@ -101,7 +155,7 @@ describe("settings API", () => {
   });
 
   it("handles MCP OAuth callback and redirects back to the original origin", async () => {
-    vi.mocked(resolveMcpOAuthState).mockResolvedValue({ userId: "user-1", returnOrigin: "http://localhost:3000" });
+    vi.mocked(resolveMcpOAuthState).mockResolvedValue({ userId: "user-1", returnOrigin: "http://localhost:3000", returnTarget: "web" });
     vi.mocked(handleMcpOAuthCallback).mockResolvedValue("coros");
 
     const response = await OAUTH_CALLBACK_GET(
@@ -116,6 +170,21 @@ describe("settings API", () => {
       state: "state-1",
       origin: "http://127.0.0.1"
     });
+  });
+
+  it("returns an app-initiated callback to the deep link so the in-app browser closes", async () => {
+    vi.mocked(resolveMcpOAuthState).mockResolvedValue({ userId: "user-1", returnOrigin: "http://localhost:3100", returnTarget: "app" });
+    vi.mocked(handleMcpOAuthCallback).mockResolvedValue("coros");
+
+    const response = await OAUTH_CALLBACK_GET(
+      new Request("http://127.0.0.1/api/settings/mcp/oauth/callback?code=code-1&state=state-1")
+    );
+
+    expect(response.status).toBe(307);
+    const location = response.headers.get("location") ?? "";
+    expect(location.startsWith("hbm://mcp-oauth")).toBe(true);
+    expect(location).toContain("auth=connected");
+    expect(location).toContain("mcp=coros");
   });
 
   it("redirects to Settings with an error when the OAuth state cannot be resolved", async () => {

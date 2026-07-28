@@ -110,7 +110,9 @@ async function getUserByCookie(): Promise<User | null> {
     include: { user: true }
   });
 
-  if (!session) return null;
+  // The cookie only ever holds a refresh token; pinning the kind stops other
+  // session kinds (access, OAuth handoff) from being replayed through it.
+  if (!session || session.kind !== "refresh") return null;
 
   if (session.expiresAt.getTime() <= Date.now()) {
     await prisma.session.deleteMany({ where: { tokenHash } });
