@@ -113,4 +113,15 @@ describe("iOS native mobile UI", () => {
       expect(read(`../app/(app)/(tabs)/${tab}/index.tsx`)).not.toContain("PageHeader");
     }
   });
+
+  it("floats a blurred tab bar at the system height", () => {
+    const source = read("../app/(app)/(tabs)/_layout.tsx");
+
+    expect(source).toContain("BlurView");
+    expect(source).toContain("tabBarBackground");
+    expect(source).toContain('position: "absolute"');
+    expect(source).toContain("isReduceTransparencyEnabled");
+    expect(source).toContain("reduceTransparencyChanged");
+    expect(source).not.toContain("height: 68");
+  });
 });
