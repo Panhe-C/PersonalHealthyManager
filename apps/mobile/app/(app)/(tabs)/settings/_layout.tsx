@@ -17,7 +17,9 @@ export default function SettingsLayout() {
 
   return (
     <Stack screenOptions={screenOptions}>
-      <Stack.Screen name="index" options={{ title: "我的" }} />
+      {/* The settings root draws the shared warm in-page header; the eight
+          detail pages keep their native inline headers for the back button. */}
+      <Stack.Screen name="index" options={{ title: "我的", headerShown: false }} />
       {detailScreens.map((screen) => (
         <Stack.Screen
           key={screen.name}

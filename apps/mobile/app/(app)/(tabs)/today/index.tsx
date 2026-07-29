@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -12,6 +12,7 @@ import { useFeedback } from "../../../../src/components/Feedback";
 import { EmptyState, Spinner } from "../../../../src/components/States";
 import { TextField } from "../../../../src/components/TextField";
 import { ReadinessRing } from "../../../../src/components/QuietHealth";
+import { WarmHeader, WarmHeaderButton } from "../../../../src/components/WarmHeader";
 import { useSleepQuery, useTodayOverviewQuery } from "../../../../src/api/hooks";
 import { completeTrainingTask } from "../../../../src/api/training";
 import {
@@ -69,24 +70,18 @@ export default function TodayTab() {
         <>
           {/* In-page header: the native header is hidden for this tab, so the
               safe-area top inset is applied manually via contentContainerStyle. */}
-          <View style={styles.headerRow}>
-            <View>
-              <Text size="footnote" color={tokens.labelSecondary}>
-                {`${formatDateLabel(data.date)} · ${weekdayLabel(data.date)}`}
-              </Text>
-              <Text size="title1" weight="strong" style={styles.pageTitle}>
-                今日
-              </Text>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="查看本周计划"
-              onPress={() => router.push("/(app)/(tabs)/plan")}
-              style={[styles.circleButton, { backgroundColor: tokens.surface }, shadow]}
-            >
-              <CalendarDays color={tokens.label} size={18} strokeWidth={1.8} />
-            </Pressable>
-          </View>
+          <WarmHeader
+            overline={`${formatDateLabel(data.date)} · ${weekdayLabel(data.date)}`}
+            title="今日"
+            actions={
+              <WarmHeaderButton
+                accessibilityLabel="查看本周计划"
+                onPress={() => router.push("/(app)/(tabs)/plan")}
+              >
+                <CalendarDays color={tokens.label} size={18} strokeWidth={1.8} />
+              </WarmHeaderButton>
+            }
+          />
 
           {/* Hero: readiness ring left, three metrics right, hairline between. */}
           <View style={[styles.heroCard, { backgroundColor: tokens.surface }, shadow]}>
@@ -293,19 +288,6 @@ const styles = StyleSheet.create({
   card: { borderRadius: radius.card, gap: 14, marginHorizontal: 20, padding: 18 },
   cardHeaderLeft: { alignItems: "center", flexDirection: "row", gap: 10 },
   cardHeaderRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  circleButton: {
-    alignItems: "center",
-    borderRadius: radius.pill,
-    height: 42,
-    justifyContent: "center",
-    width: 42
-  },
-  headerRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginHorizontal: 20
-  },
   heroCard: {
     alignItems: "center",
     borderRadius: radius.sheet, // the hero card uses the larger 32pt radius
@@ -338,6 +320,5 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
     paddingHorizontal: spacing.lg
   },
-  pageTitle: { fontSize: 30, letterSpacing: -0.5, lineHeight: 36, marginTop: 2 },
   rowDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: spacing.lg }
 });

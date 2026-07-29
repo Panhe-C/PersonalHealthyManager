@@ -1,16 +1,18 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { StyleSheet, View } from "react-native";
-import { Bell, Brain, CalendarDays, ChevronDown, ChevronUp, Cloud, Download, HeartPulse, KeyRound, Link, Ruler, Shield, Target, UserRound, Utensils, Watch } from "lucide-react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Bell, Brain, CalendarDays, ChevronDown, ChevronRight, ChevronUp, Cloud, Download, HeartPulse, KeyRound, Link, Ruler, Shield, Target, UserRound, Utensils, Watch } from "lucide-react-native";
 import { Screen } from "../../../../src/components/Screen";
 import { Text } from "../../../../src/components/Text";
 import { useFeedback } from "../../../../src/components/Feedback";
 import { InsetGroup } from "../../../../src/components/InsetGroup";
 import { Row } from "../../../../src/components/Row";
+import { WarmHeader } from "../../../../src/components/WarmHeader";
 import { useAccountQuery, useAutomationStatesQuery, useGoalsQuery, useProfileQuery, useSettingsQuery } from "../../../../src/api/hooks";
 import { useAuth } from "../../../../src/auth/AuthContext";
 import { mcpConnectionStatus } from "../../../../src/settingsStatus";
-import { useTheme } from "../../../../src/theme/tokens";
+import { cardShadow, radius, spacing, useTheme } from "../../../../src/theme/tokens";
 
 export default function SettingsTab() {
   const router = useRouter();
@@ -21,7 +23,9 @@ export default function SettingsTab() {
   const account = useAccountQuery();
   const settings = useSettingsQuery();
   const automations = useAutomationStatesQuery();
-  const { tokens } = useTheme();
+  const { tokens, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+  const shadow = cardShadow(isDark ? "dark" : "light");
   const [showAutomations, setShowAutomations] = useState(false);
   const iconProps = { color: tokens.tint, size: 20, strokeWidth: 1.8 } as const;
   const accountEmail = account.data?.email ?? "正在读取账户…";
@@ -45,15 +49,30 @@ export default function SettingsTab() {
   }
 
   return (
-    <Screen>
-      <InsetGroup>
-        <Row
-          icon={<View style={[styles.avatar, { backgroundColor: tokens.controlFill }]}><Text size="footnote" color={tokens.controlLabel}>{initials}</Text></View>}
-          title="个人健康空间"
-          subtitle={account.error ? "账户信息加载失败" : accountEmail}
-          onPress={() => router.push("/(app)/(tabs)/settings/profile-settings")}
-        />
-      </InsetGroup>
+    <Screen contentContainerStyle={{ paddingTop: insets.top + spacing.lg }}>
+      {/* In-page header: the native header is hidden for this tab, so the
+          safe-area top inset is applied manually via contentContainerStyle. */}
+      <WarmHeader overline="账户与偏好" title="我的" />
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="个人资料"
+        onPress={() => router.push("/(app)/(tabs)/settings/profile-settings")}
+        style={[styles.profileCard, { backgroundColor: tokens.surface }, shadow]}
+      >
+        <View style={[styles.profileAvatar, { backgroundColor: tokens.controlFill }]}>
+          <Text size="headline" color={tokens.controlLabel}>
+            {initials}
+          </Text>
+        </View>
+        <View style={styles.profileCopy}>
+          <Text size="headline">个人健康空间</Text>
+          <Text size="footnote" color={tokens.labelSecondary}>
+            {account.error ? "账户信息加载失败" : accountEmail}
+          </Text>
+        </View>
+        <ChevronRight color={tokens.labelTertiary} size={18} strokeWidth={2.2} />
+      </Pressable>
 
       <InsetGroup header="账户" insetSeparators>
         <Row icon={<UserRound {...iconProps} />} title="个人资料" subtitle="身体数据、限制和偏好" onPress={() => router.push("/(app)/(tabs)/settings/profile-settings")} />
@@ -118,5 +137,20 @@ export default function SettingsTab() {
 }
 
 const styles = StyleSheet.create({
-  avatar: { alignItems: "center", borderRadius: 14, height: 28, justifyContent: "center", width: 28 }
+  profileAvatar: {
+    alignItems: "center",
+    borderRadius: radius.pill,
+    height: 48,
+    justifyContent: "center",
+    width: 48
+  },
+  profileCard: {
+    alignItems: "center",
+    borderRadius: radius.card,
+    flexDirection: "row",
+    gap: spacing.md,
+    marginHorizontal: 20,
+    padding: 18
+  },
+  profileCopy: { flex: 1, gap: 2 }
 });

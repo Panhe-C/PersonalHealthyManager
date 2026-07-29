@@ -161,6 +161,7 @@ describe("warm card mobile UI", () => {
 
     const source = read("../app/(app)/(tabs)/today/index.tsx");
 
+    expect(source).toContain("WarmHeader");
     expect(source).toContain("ReadinessRing");
     expect(source).toContain("本周睡眠");
     expect(source).toContain("useSleepQuery");
@@ -179,13 +180,17 @@ describe("warm card mobile UI", () => {
     expect(source).not.toContain("<HairlineRow");
   });
 
-  it("builds Insights from a stat card, a chart card, and a grouped list", () => {
+  it("hides the native header and builds Insights from warm cards", () => {
+    expect(read("../app/(app)/(tabs)/insights/_layout.tsx")).toContain("headerShown: false");
+
     const source = read("../app/(app)/(tabs)/insights/index.tsx");
 
-    expect(source).toContain("<InsetGroup");
+    expect(source).toContain("WarmHeader");
+    expect(source).toContain("最近 8 天");
     expect(source).toContain("styles.statCard");
     expect(source).toContain("styles.chartCard");
-    expect(source).not.toContain("<HairlineRow");
+    expect(source).toContain("cardShadow");
+    expect(source).toContain("<InsetGroup");
   });
 
   it("builds the settings tree from grouped cards", () => {
@@ -241,5 +246,32 @@ describe("warm card mobile UI", () => {
     expect(() => read("./components/Section.tsx")).toThrow();
     expect(read("./components/QuietHealth.tsx")).not.toContain("PageHeader");
     expect(read("./components/QuietHealth.tsx")).not.toContain("HairlineRow");
+  });
+
+  it("shares one in-page warm header across the migrated tab roots", () => {
+    const source = read("./components/WarmHeader.tsx");
+
+    expect(source).toContain("export function WarmHeader");
+    expect(source).toContain("export function WarmHeaderButton");
+    expect(source).toContain('weight="strong"');
+    expect(source).toContain("fontSize: 30");
+    expect(source).toContain("cardShadow");
+    expect(source).toContain("borderRadius: radius.pill");
+
+    for (const tab of ["today", "insights", "settings"]) {
+      expect(read(`../app/(app)/(tabs)/${tab}/index.tsx`)).toContain("WarmHeader");
+    }
+  });
+
+  it("hides the native header and gives 我的 a warm profile card", () => {
+    expect(read("../app/(app)/(tabs)/settings/_layout.tsx")).toContain("headerShown: false");
+
+    const source = read("../app/(app)/(tabs)/settings/index.tsx");
+
+    expect(source).toContain("WarmHeader");
+    expect(source).toContain("账户与偏好");
+    expect(source).toContain("styles.profileCard");
+    expect(source).toContain("cardShadow");
+    expect(source).toContain("<InsetGroup");
   });
 });
