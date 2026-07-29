@@ -88,7 +88,7 @@ export default function GoalSettingsScreen() {
   }
 
   return (
-    <Screen>
+    <Screen contentContainerStyle={{ paddingTop: spacing.lg }}>
       <InsetGroup header={editing ? "编辑目标" : "新建目标"} footer="主目标会直接影响训练计划优先级。">
         <TextField label="目标名称" value={title} onChange={setTitle} placeholder="例如：完成半程马拉松" autoCapitalize="sentences" />
         <ChoiceGroup label="类型" options={types} value={type} onChange={setType} />

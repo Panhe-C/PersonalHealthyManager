@@ -56,7 +56,7 @@ export default function LoginScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <Text size="largeTitle" color={tokens.label}>登录</Text>
+        <Text size="title1" weight="strong" style={styles.pageTitle}>登录</Text>
         <Text size="subheadline" color={tokens.labelSecondary}>Healthy Body Manager</Text>
       </View>
 
@@ -87,5 +87,6 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   actions: { gap: spacing.md },
-  header: { gap: spacing.xs, paddingHorizontal: spacing.lg, paddingTop: spacing.xxl }
+  header: { gap: spacing.xs, paddingHorizontal: spacing.lg, paddingTop: spacing.xxl },
+  pageTitle: { fontSize: 30, letterSpacing: -0.5, lineHeight: 36, marginTop: 2 }
 });

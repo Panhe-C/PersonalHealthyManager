@@ -8,6 +8,7 @@ import { TextField } from "../../../../src/components/TextField";
 
 import { changePassword, deleteAccount } from "../../../../src/api/account";
 import { useAuth } from "../../../../src/auth/AuthContext";
+import { spacing } from "../../../../src/theme/tokens";
 
 const MIN_PASSWORD_LENGTH = 12;
 
@@ -64,7 +65,7 @@ export default function AccountSecurityScreen() {
   }
 
   return (
-    <Screen>
+    <Screen contentContainerStyle={{ paddingTop: spacing.lg }}>
       <InsetGroup header="修改密码" footer="修改密码后，Web 和其他设备都需要重新登录。">
         <TextField label="当前密码" value={currentPassword} onChange={setCurrentPassword} secure placeholder="••••••••" />
         <TextField

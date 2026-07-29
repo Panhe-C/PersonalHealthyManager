@@ -115,7 +115,7 @@ export default function ProfileSettingsScreen() {
   }
 
   return (
-    <Screen>
+    <Screen contentContainerStyle={{ paddingTop: spacing.lg }}>
       <InsetGroup header="身体数据" footer="这些资料决定训练强度上限和饮食建议。">
         <View style={styles.row}>
           <TextField label="身高 cm" value={draft.height} onChange={change("height")} keyboardType="decimal-pad" error={errors.height} />

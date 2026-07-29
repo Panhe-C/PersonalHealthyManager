@@ -52,14 +52,14 @@ export default function ConnectionSettingsScreen() {
 
   if (!draft) {
     return (
-      <Screen>
+      <Screen contentContainerStyle={{ paddingTop: spacing.lg }}>
         <Text style={{ color: tokens.labelSecondary }}>{query.error ? "配置加载失败" : "正在读取服务器配置…"}</Text>
       </Screen>
     );
   }
 
   return (
-    <Screen>
+    <Screen contentContainerStyle={{ paddingTop: spacing.lg }}>
       {draft.dataMcpConnections.map((connection) => (
         <InsetGroup
           key={connection.id}

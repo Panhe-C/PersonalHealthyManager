@@ -7,6 +7,7 @@ import { Row } from "../../../../src/components/Row";
 
 import { useActivePlanQuery } from "../../../../src/api/hooks";
 import { enableTrainingNotifications } from "../../../../src/notifications";
+import { spacing } from "../../../../src/theme/tokens";
 
 export default function NotificationSettingsScreen() {
   const plan = useActivePlanQuery();
@@ -31,7 +32,7 @@ export default function NotificationSettingsScreen() {
   }
 
   return (
-    <Screen>
+    <Screen contentContainerStyle={{ paddingTop: spacing.lg }}>
       <InsetGroup header="训练提醒" footer="训练开始前 30 分钟提醒；每次更新会与当前计划重新对齐。">
         <Row title="本地提醒" subtitle="无需服务器即可工作" value={reminders === null ? "尚未启用" : `${reminders} 条`} />
         <Row title="远程推送" subtitle="配置 EAS Project ID 后可用" value={remoteStatus ?? "尚未启用"} />

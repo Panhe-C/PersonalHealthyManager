@@ -8,6 +8,7 @@ import { InsetGroup } from "../../../../src/components/InsetGroup";
 import { Row } from "../../../../src/components/Row";
 
 import { exportAccountData } from "../../../../src/api/export";
+import { spacing } from "../../../../src/theme/tokens";
 
 export default function DataExportScreen() {
   const { notify } = useFeedback();
@@ -34,7 +35,7 @@ export default function DataExportScreen() {
   }
 
   return (
-    <Screen>
+    <Screen contentContainerStyle={{ paddingTop: spacing.lg }}>
       <InsetGroup header="包含内容" footer="生成不含密码、会话 token 和明文密钥的 JSON 文件。">
         <Row title="账户与健康资料" subtitle="账户资料、目标、健康记录与计划" />
         <Row title="教练与连接状态" subtitle="对话、记忆、脱敏设置和自动同步状态" />

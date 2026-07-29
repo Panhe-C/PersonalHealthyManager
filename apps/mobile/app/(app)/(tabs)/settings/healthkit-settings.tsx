@@ -6,6 +6,7 @@ import { InsetGroup } from "../../../../src/components/InsetGroup";
 import { Row } from "../../../../src/components/Row";
 
 import { syncHealthKit } from "../../../../src/healthKit";
+import { spacing } from "../../../../src/theme/tokens";
 
 export default function HealthKitSettingsScreen() {
   const { notify } = useFeedback();
@@ -26,7 +27,7 @@ export default function HealthKitSettingsScreen() {
   }
 
   return (
-    <Screen>
+    <Screen contentContainerStyle={{ paddingTop: spacing.lg }}>
       <InsetGroup header="上次同步" footer="只读取你明确授权的数据，最近 14 天数据会同步到个人健康空间。">
         <Row title="睡眠记录" value={imported ? `${imported.sleep} 条` : "尚未同步"} />
         <Row title="恢复记录" value={imported ? `${imported.recovery} 条` : "尚未同步"} />

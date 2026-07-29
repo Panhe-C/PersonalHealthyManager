@@ -65,7 +65,7 @@ export default function RegisterScreen() {
     return (
       <Screen>
         <View style={styles.header}>
-          <Text size="largeTitle" color={tokens.label}>请查收邮件</Text>
+          <Text size="title1" weight="strong" style={styles.pageTitle}>请查收邮件</Text>
           <Text size="subheadline" color={tokens.labelSecondary}>
             {`我们已向 ${sentTo} 发送验证链接，24 小时内有效。完成验证后即可返回登录。`}
           </Text>
@@ -82,7 +82,7 @@ export default function RegisterScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <Text size="largeTitle" color={tokens.label}>注册</Text>
+        <Text size="title1" weight="strong" style={styles.pageTitle}>注册</Text>
         <Text size="subheadline" color={tokens.labelSecondary}>验证邮箱后即可登录</Text>
       </View>
 
@@ -123,5 +123,6 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   actions: { gap: spacing.md },
-  header: { gap: spacing.xs, paddingHorizontal: spacing.lg, paddingTop: spacing.xxl }
+  header: { gap: spacing.xs, paddingHorizontal: spacing.lg, paddingTop: spacing.xxl },
+  pageTitle: { fontSize: 30, letterSpacing: -0.5, lineHeight: 36, marginTop: 2 }
 });

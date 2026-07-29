@@ -65,14 +65,14 @@ export default function ModelSettingsScreen() {
 
   if (!draft) {
     return (
-      <Screen>
+      <Screen contentContainerStyle={{ paddingTop: spacing.lg }}>
         <Text style={{ color: tokens.labelSecondary }}>{query.error ? "配置加载失败" : "正在读取服务器配置…"}</Text>
       </Screen>
     );
   }
 
   return (
-    <Screen>
+    <Screen contentContainerStyle={{ paddingTop: spacing.lg }}>
       <InsetGroup header="模型提供方">
         <ChoiceGroup options={modelProviderOptions} value={draft.modelProvider} onChange={selectProvider} />
       </InsetGroup>

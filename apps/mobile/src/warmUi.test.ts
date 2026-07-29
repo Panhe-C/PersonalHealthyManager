@@ -301,4 +301,23 @@ describe("warm card mobile UI", () => {
     expect(source).toContain("小时");
     expect(source).toContain("styles.submitWrap");
   });
+
+  it("aligns the settings detail pages with the in-page-header rhythm", () => {
+    for (const screen of detailScreens) {
+      const source = read(`../app/(app)/(tabs)/settings/${screen}.tsx`);
+
+      expect(source).toContain("contentContainerStyle={{ paddingTop: spacing.lg }}");
+    }
+  });
+
+  it("gives the auth screens the warm header metrics", () => {
+    for (const screen of ["login", "register"]) {
+      const source = read(`../app/(auth)/${screen}.tsx`);
+
+      expect(source).toContain('size="title1"');
+      expect(source).toContain('weight="strong"');
+      expect(source).toContain("fontSize: 30");
+      expect(source).not.toContain('size="largeTitle"');
+    }
+  });
 });
