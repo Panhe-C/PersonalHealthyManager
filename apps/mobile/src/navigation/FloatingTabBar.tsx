@@ -6,8 +6,8 @@ import { cardShadow, radius, useTheme } from "../theme/tokens";
 
 /**
  * Index of the centre route (coach). Its capsule slot is a spacer: the raised
- * FAB sits on top of it and carries the navigation, which is why the FAB's
- * phase-1 placeholder action and the centre tab can be the same destination.
+ * FAB sits on top of it and carries the navigation, so the FAB navigates to
+ * the coach tab and doubles as the coach tab's selected-state indicator.
  */
 const FAB_ROUTE_INDEX = 2;
 

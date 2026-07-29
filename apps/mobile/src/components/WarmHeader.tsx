@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { cardShadow, radius, spacing, useTheme } from "../theme/tokens";
+import { cardShadow, opacity, radius, spacing, useTheme } from "../theme/tokens";
 import { Text } from "./Text";
 
 /**
@@ -61,7 +61,12 @@ export function WarmHeaderButton({
       accessibilityState={{ disabled: Boolean(disabled) }}
       disabled={disabled}
       onPress={onPress}
-      style={[styles.circleButton, { backgroundColor: tokens.surface }, cardShadow(isDark ? "dark" : "light")]}
+      style={({ pressed }) => [
+        styles.circleButton,
+        { backgroundColor: tokens.surface },
+        cardShadow(isDark ? "dark" : "light"),
+        pressed && { opacity: opacity.pressed }
+      ]}
     >
       {children}
     </Pressable>

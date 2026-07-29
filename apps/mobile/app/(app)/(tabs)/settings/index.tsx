@@ -56,7 +56,6 @@ export default function SettingsTab() {
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="个人资料"
         onPress={() => router.push("/(app)/(tabs)/settings/profile-settings")}
         style={[styles.profileCard, { backgroundColor: tokens.surface }, shadow]}
       >
