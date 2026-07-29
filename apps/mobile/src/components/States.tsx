@@ -6,7 +6,7 @@ export function Spinner({ style, ...props }: ViewProps) {
   const { tokens } = useTheme();
   return (
     <View style={[styles.center, style]} {...props}>
-      <ActivityIndicator color={tokens.sage} />
+      <ActivityIndicator color={tokens.tint} />
     </View>
   );
 }
@@ -16,7 +16,7 @@ export function EmptyState({ title, description }: { title: string; description?
   return (
     <View style={styles.center}>
       <Text weight="strong" style={{ textAlign: "center" }}>{title}</Text>
-      {description ? <Text size="sm" style={{ color: tokens.muted, textAlign: "center" }}>{description}</Text> : null}
+      {description ? <Text size="subheadline" style={{ color: tokens.labelSecondary, textAlign: "center" }}>{description}</Text> : null}
     </View>
   );
 }

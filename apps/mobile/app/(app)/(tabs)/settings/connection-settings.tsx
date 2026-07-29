@@ -53,7 +53,7 @@ export default function ConnectionSettingsScreen() {
   if (!draft) {
     return (
       <Screen>
-        <Text style={{ color: tokens.muted }}>{query.error ? "配置加载失败" : "正在读取服务器配置…"}</Text>
+        <Text style={{ color: tokens.labelSecondary }}>{query.error ? "配置加载失败" : "正在读取服务器配置…"}</Text>
       </Screen>
     );
   }
@@ -132,11 +132,11 @@ function CorosAuthSection({ connection, onAuthorized }: { connection: MobileMcpC
 
   return (
     <View style={styles.block}>
-      <Text size="sm" style={{ color: tokens.muted }}>
+      <Text size="subheadline" style={{ color: tokens.labelSecondary }}>
         {authorized ? oauthConnectionDetail(connection) : "尚未授权。选择账号所在区域后开始授权。"}
       </Text>
       <ChoiceGroup label="区域" options={corosRegions} value={region} onChange={setRegion} disabled={busy} />
-      <Text size="sm" style={{ color: tokens.muted }}>{regionEndpoint(region)}</Text>
+      <Text size="subheadline" style={{ color: tokens.labelSecondary }}>{regionEndpoint(region)}</Text>
       <Button title={busy ? "授权中…" : authorized ? "重新授权" : "授权"} disabled={busy} onPress={authorize} />
     </View>
   );
@@ -155,8 +155,8 @@ function CredentialField({ connection, onChange }: { connection: MobileMcpConnec
   if (auth.type === "oauth2") {
     return (
       <View style={styles.block}>
-        <Text size="sm" style={{ color: tokens.muted }}>{oauthConnectionDetail(connection)}</Text>
-        <Text size="sm" style={{ color: tokens.muted }}>OAuth 授权需要在网页端完成，这里只显示状态。</Text>
+        <Text size="subheadline" style={{ color: tokens.labelSecondary }}>{oauthConnectionDetail(connection)}</Text>
+        <Text size="subheadline" style={{ color: tokens.labelSecondary }}>OAuth 授权需要在网页端完成，这里只显示状态。</Text>
       </View>
     );
   }

@@ -59,7 +59,7 @@ export function TextField({
         />
       </View>
       {error ? (
-        <Text size="footnote" color={tokens.danger}>
+        <Text size="footnote" color={tokens.red}>
           {error}
         </Text>
       ) : null}

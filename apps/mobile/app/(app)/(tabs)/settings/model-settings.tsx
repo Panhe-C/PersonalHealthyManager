@@ -66,7 +66,7 @@ export default function ModelSettingsScreen() {
   if (!draft) {
     return (
       <Screen>
-        <Text style={{ color: tokens.muted }}>{query.error ? "配置加载失败" : "正在读取服务器配置…"}</Text>
+        <Text style={{ color: tokens.labelSecondary }}>{query.error ? "配置加载失败" : "正在读取服务器配置…"}</Text>
       </Screen>
     );
   }
@@ -94,9 +94,9 @@ export default function ModelSettingsScreen() {
             />
           </>
         ) : (
-          <View style={[styles.readOnly, { backgroundColor: tokens.panel, borderColor: tokens.line }]}>
+          <View style={[styles.readOnly, { backgroundColor: tokens.surface, borderColor: tokens.separator }]}>
             <Text weight="medium">{draft.modelName}</Text>
-            <Text size="sm" style={{ color: tokens.muted }}>{draft.modelBaseUrl}</Text>
+            <Text size="subheadline" style={{ color: tokens.labelSecondary }}>{draft.modelBaseUrl}</Text>
           </View>
         )}
       </InsetGroup>

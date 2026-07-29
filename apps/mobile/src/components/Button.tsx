@@ -2,29 +2,12 @@ import { Pressable, StyleSheet, type PressableProps } from "react-native";
 import { radius, spacing, useTheme } from "../theme/tokens";
 import { Text } from "./Text";
 
-type Variant =
-  | "filled"
-  | "tinted"
-  | "plain"
-  | "destructive"
-  | "primary"
-  | "ghost"
-  | "danger";
+type Variant = "filled" | "tinted" | "plain" | "destructive";
 
 type ButtonProps = PressableProps & {
   label?: string;
   title?: string;
   variant?: Variant;
-};
-
-const variantAliases: Record<Variant, "filled" | "tinted" | "plain" | "destructive"> = {
-  filled: "filled",
-  tinted: "tinted",
-  plain: "plain",
-  destructive: "destructive",
-  primary: "filled",
-  ghost: "plain",
-  danger: "destructive"
 };
 
 export function Button({
@@ -36,19 +19,18 @@ export function Button({
   ...props
 }: ButtonProps) {
   const { tokens } = useTheme();
-  const resolvedVariant = variantAliases[variant];
   const backgroundColor =
-    resolvedVariant === "filled"
+    variant === "filled"
       ? tokens.controlFill
-      : resolvedVariant === "destructive"
+      : variant === "destructive"
         ? tokens.destructiveFill
-        : resolvedVariant === "tinted"
+        : variant === "tinted"
           ? tokens.fill
           : "transparent";
   const color =
-    resolvedVariant === "filled"
+    variant === "filled"
       ? tokens.controlLabel
-      : resolvedVariant === "destructive"
+      : variant === "destructive"
         ? tokens.destructiveLabel
         : tokens.tint;
   const buttonLabel = label ?? title ?? "";

@@ -48,32 +48,8 @@ const darkBase: BaseTokens = {
   destructiveLabel: "#000000"
 };
 
-/**
- * Deprecated Quiet Health names, mapped onto the iOS palette so screens can
- * migrate one at a time. Deleted in Task 11 once no call sites remain.
- */
-function withLegacyAliases(base: BaseTokens) {
-  return {
-    ...base,
-    panel: base.surface,
-    panelSoft: base.surfaceAlt,
-    ink: base.label,
-    inkStrong: base.label,
-    muted: base.labelSecondary,
-    line: base.separator,
-    lineStrong: base.separatorOpaque,
-    sage: base.tint,
-    sageStrong: base.tint,
-    sageSoft: base.fill,
-    clay: base.tint,
-    claySoft: base.fill,
-    danger: base.red,
-    dangerSoft: base.redFill
-  };
-}
-
-export const lightTokens = withLegacyAliases(lightBase);
-export const darkTokens = withLegacyAliases(darkBase);
+export const lightTokens = lightBase;
+export const darkTokens = darkBase;
 
 export const spacing = {
   xs: 4,
@@ -89,10 +65,7 @@ export const radius = {
   card: 10,
   md: 12,
   sheet: 16,
-  bubble: 20,
-  // Deprecated Quiet Health radii, removed in Task 11.
-  lg: 16,
-  xl: 22
+  bubble: 20
 } as const;
 
 export const opacity = {
@@ -113,20 +86,10 @@ export const textStyles = {
   footnote: { fontSize: 13, lineHeight: 18 },
   caption: { fontSize: 12, lineHeight: 16 },
   caption2: { fontSize: 11, lineHeight: 13 },
-  metric: { fontSize: 40, lineHeight: 44 },
-  // Deprecated Quiet Health scale, mapped to the nearest iOS style. Removed in
-  // Task 11 once every call site uses a semantic name.
-  xs: { fontSize: 12, lineHeight: 16 },
-  sm: { fontSize: 15, lineHeight: 20 },
-  md: { fontSize: 17, lineHeight: 22 },
-  lg: { fontSize: 20, lineHeight: 25 },
-  xl: { fontSize: 22, lineHeight: 28 },
-  xxl: { fontSize: 28, lineHeight: 34 },
-  display: { fontSize: 34, lineHeight: 41 },
-  hero: { fontSize: 34, lineHeight: 41 }
+  metric: { fontSize: 40, lineHeight: 44 }
 } as const;
 
-export type ThemeTokens = { [K in keyof ReturnType<typeof withLegacyAliases>]: string };
+export type ThemeTokens = { [K in keyof BaseTokens]: string };
 
 export function useTheme(): { tokens: ThemeTokens; isDark: boolean } {
   const scheme = useColorScheme();

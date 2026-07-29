@@ -168,4 +168,22 @@ describe("iOS native mobile UI", () => {
   it("leaves no Card users behind in coach", () => {
     expect(read("../app/(app)/(tabs)/coach/index.tsx")).not.toContain("components/Card");
   });
+
+  it("keeps no Quiet Health compatibility layer", () => {
+    const tokens = read("./theme/tokens.ts");
+
+    expect(tokens).not.toContain("withLegacyAliases");
+    expect(tokens).not.toContain("sage");
+    expect(tokens).not.toContain("clay");
+    expect(tokens).not.toContain("muted");
+    expect(tokens).not.toContain("display:");
+    expect(read("./components/Button.tsx")).not.toContain("aliases");
+  });
+
+  it("retires the primitives the grouped list replaced", () => {
+    expect(() => read("./components/Card.tsx")).toThrow();
+    expect(() => read("./components/Section.tsx")).toThrow();
+    expect(read("./components/QuietHealth.tsx")).not.toContain("PageHeader");
+    expect(read("./components/QuietHealth.tsx")).not.toContain("HairlineRow");
+  });
 });

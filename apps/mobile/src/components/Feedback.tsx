@@ -90,7 +90,7 @@ function NoticeBanner({ notice, onDismiss }: { notice: NoticeRequest; onDismiss:
     return () => clearTimeout(timer);
   }, [progress]);
 
-  const accent = notice.tone === "danger" ? tokens.danger : notice.tone === "neutral" ? tokens.lineStrong : tokens.sage;
+  const accent = notice.tone === "danger" ? tokens.red : notice.tone === "neutral" ? tokens.separatorOpaque : tokens.tint;
 
   return (
     <Animated.View
@@ -110,14 +110,14 @@ function NoticeBanner({ notice, onDismiss }: { notice: NoticeRequest; onDismiss:
         onPress={onDismiss}
         style={({ pressed }) => [
           styles.notice,
-          { backgroundColor: tokens.panel, borderColor: tokens.line },
+          { backgroundColor: tokens.surface, borderColor: tokens.separator },
           pressed && { opacity: opacity.pressed }
         ]}
       >
         <View style={[styles.noticeAccent, { backgroundColor: accent }]} />
         <View style={styles.noticeCopy}>
-          <Text weight="medium" style={{ color: tokens.inkStrong }}>{notice.title}</Text>
-          {notice.description ? <Text size="sm" style={{ color: tokens.muted }}>{notice.description}</Text> : null}
+          <Text weight="medium" style={{ color: tokens.label }}>{notice.title}</Text>
+          {notice.description ? <Text size="subheadline" style={{ color: tokens.labelSecondary }}>{notice.description}</Text> : null}
         </View>
       </Pressable>
     </Animated.View>
@@ -134,22 +134,22 @@ function ConfirmSheet({ request, onSettle }: { request: PendingConfirm | null; o
         <Pressable
           style={[
             styles.sheet,
-            { backgroundColor: tokens.panel, borderColor: tokens.line, paddingBottom: Math.max(insets.bottom, spacing.lg) }
+            { backgroundColor: tokens.surface, borderColor: tokens.separator, paddingBottom: Math.max(insets.bottom, spacing.lg) }
           ]}
           onPress={(event) => event.stopPropagation()}
         >
-          <View style={[styles.sheetHandle, { backgroundColor: tokens.lineStrong }]} />
+          <View style={[styles.sheetHandle, { backgroundColor: tokens.separatorOpaque }]} />
           <View style={styles.sheetCopy}>
-            <Text size="xl" weight="strong" style={{ color: tokens.inkStrong }}>{request?.title}</Text>
-            {request?.description ? <Text style={{ color: tokens.muted }}>{request.description}</Text> : null}
+            <Text size="title2" weight="strong" style={{ color: tokens.label }}>{request?.title}</Text>
+            {request?.description ? <Text style={{ color: tokens.labelSecondary }}>{request.description}</Text> : null}
           </View>
           <View style={styles.sheetActions}>
             <Button
               title={request?.confirmLabel ?? "确认"}
-              variant={request?.destructive ? "danger" : "primary"}
+              variant={request?.destructive ? "destructive" : "filled"}
               onPress={() => onSettle(true)}
             />
-            <Button title={request?.cancelLabel ?? "取消"} variant="ghost" onPress={() => onSettle(false)} />
+            <Button title={request?.cancelLabel ?? "取消"} variant="plain" onPress={() => onSettle(false)} />
           </View>
         </Pressable>
       </Pressable>
@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
   host: { flex: 1 },
   notice: {
     alignItems: "center",
-    borderRadius: radius.lg,
+    borderRadius: radius.sheet,
     borderWidth: 1,
     flexDirection: "row",
     gap: spacing.md,
@@ -172,8 +172,8 @@ const styles = StyleSheet.create({
   noticeCopy: { flex: 1, gap: 2 },
   noticeLayer: { left: 0, paddingHorizontal: spacing.lg, position: "absolute", right: 0, top: 0 },
   sheet: {
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
     borderWidth: 1,
     gap: spacing.lg,
     paddingHorizontal: spacing.lg,

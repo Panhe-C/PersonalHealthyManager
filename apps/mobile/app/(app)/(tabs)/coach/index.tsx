@@ -336,7 +336,7 @@ export default function CoachTab() {
       <View style={[styles.screen, { backgroundColor: tokens.bg }]}>
         <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === "ios" ? "padding" : undefined}>
           {error ? (
-            <View style={[styles.inlineError, { backgroundColor: tokens.dangerSoft, borderColor: tokens.red }]}>
+            <View style={[styles.inlineError, { backgroundColor: tokens.redFill, borderColor: tokens.red }]}>
               <Text size="subheadline" color={tokens.red}>{error}</Text>
             </View>
           ) : null}
@@ -416,19 +416,19 @@ export default function CoachTab() {
           <Pressable
             style={[
               styles.memorySheet,
-              { backgroundColor: tokens.panel, borderColor: tokens.line, paddingBottom: Math.max(insets.bottom, spacing.lg) }
+              { backgroundColor: tokens.surface, borderColor: tokens.separator, paddingBottom: Math.max(insets.bottom, spacing.lg) }
             ]}
             onPress={(event) => event.stopPropagation()}
           >
-            <View style={[styles.sheetHandle, { backgroundColor: tokens.lineStrong }]} />
+            <View style={[styles.sheetHandle, { backgroundColor: tokens.separatorOpaque }]} />
             <View style={styles.memoryTrayHeader}>
               <View style={styles.cardText}>
-                <Text size="xl" weight="strong">教练记忆</Text>
-                <Text size="sm" style={{ color: tokens.muted }}>管理 Coach 用来理解你的偏好与约束。</Text>
+                <Text size="title2" weight="strong">教练记忆</Text>
+                <Text size="subheadline" style={{ color: tokens.labelSecondary }}>管理 Coach 用来理解你的偏好与约束。</Text>
               </View>
               <Button
                 title={addingMemory ? "取消" : "新增"}
-                variant="ghost"
+                variant="plain"
                 onPress={() => {
                   setAddingMemory((value) => !value);
                   setMemoryDraft(emptyMemoryDraft);
@@ -472,8 +472,8 @@ export default function CoachTab() {
             style={[
               styles.conversationDrawer,
               {
-                backgroundColor: tokens.panel,
-                borderColor: tokens.line,
+                backgroundColor: tokens.surface,
+                borderColor: tokens.separator,
                 paddingTop: Math.max(insets.top + spacing.md, spacing.xxl),
                 paddingBottom: Math.max(insets.bottom + spacing.lg, spacing.xl),
                 transform: [{ translateX: drawerTranslateX }],
@@ -484,7 +484,7 @@ export default function CoachTab() {
             <View style={styles.drawerHeader}>
               <View style={styles.drawerTitleBlock}>
                 <View style={styles.drawerTitleRow}>
-                  <Text size="xl" weight="strong" numberOfLines={1}>历史对话</Text>
+                  <Text size="title2" weight="strong" numberOfLines={1}>历史对话</Text>
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="新建历史对话"
@@ -492,14 +492,14 @@ export default function CoachTab() {
                     disabled={createConversationMutation.isPending}
                     style={({ pressed }) => [
                       styles.drawerNewButton,
-                      { borderColor: tokens.line, backgroundColor: tokens.panelSoft },
+                      { borderColor: tokens.separator, backgroundColor: tokens.surfaceAlt },
                       pressed && styles.pressed
                     ]}
                   >
-                    <SquarePen color={createConversationMutation.isPending ? tokens.muted : tokens.sage} size={17} />
+                    <SquarePen color={createConversationMutation.isPending ? tokens.labelSecondary : tokens.tint} size={17} />
                   </Pressable>
                 </View>
-                <Text size="sm" numberOfLines={2} style={{ color: tokens.muted }}>
+                <Text size="subheadline" numberOfLines={2} style={{ color: tokens.labelSecondary }}>
                   从侧边栏切换，不占用教练页顶部空间。
                 </Text>
               </View>
@@ -518,15 +518,15 @@ export default function CoachTab() {
                       }}
                       style={({ pressed }) => [
                         styles.drawerConversationItem,
-                        { backgroundColor: selected ? tokens.sage : tokens.panelSoft, borderColor: selected ? tokens.sage : tokens.line },
+                        { backgroundColor: selected ? tokens.tint : tokens.surfaceAlt, borderColor: selected ? tokens.tint : tokens.separator },
                         pressed && styles.pressed
                       ]}
                     >
                       <View style={styles.drawerConversationText}>
-                        <Text size="md" weight="strong" numberOfLines={1} style={{ color: selected ? "#fff" : tokens.ink }}>
+                        <Text size="body" weight="strong" numberOfLines={1} style={{ color: selected ? "#fff" : tokens.label }}>
                           {conversation.title}
                         </Text>
-                        <Text size="xs" style={{ color: selected ? "#eef7ef" : tokens.muted }}>
+                        <Text size="caption" style={{ color: selected ? "#eef7ef" : tokens.labelSecondary }}>
                           {formatDateLabel(conversation.updatedAt)}
                         </Text>
                       </View>
@@ -536,7 +536,7 @@ export default function CoachTab() {
                         onPress={() => requestDeleteConversation(conversation)}
                         style={styles.drawerDeleteButton}
                       >
-                        <Trash2 color={selected ? "#fff" : tokens.danger} size={16} />
+                        <Trash2 color={selected ? "#fff" : tokens.red} size={16} />
                       </Pressable>
                     </Pressable>
                   );
@@ -588,23 +588,23 @@ function MessageBubble({ message, onUndo }: { message: AgentMessage; onUndo: (ad
 function AdjustmentProposal({ adjustment, onUndo }: { adjustment: AgentAdjustment; onUndo: (adjustment: AgentAdjustment) => void }) {
   const { tokens } = useTheme();
   return (
-    <View style={[styles.proposalCard, { borderTopColor: tokens.line }]}>
-      <Text size="lg" weight="strong" style={{ color: tokens.inkStrong }}>调整今日训练</Text>
+    <View style={[styles.proposalCard, { borderTopColor: tokens.separator }]}>
+      <Text size="title3" weight="strong" style={{ color: tokens.label }}>调整今日训练</Text>
       <View style={styles.planComparison}>
         <View style={styles.planRow}>
-          <Text size="sm" style={{ color: tokens.muted, width: 58 }}>调整前</Text>
-          <Text size="sm" style={{ color: tokens.ink, flex: 1 }}>本次对话前的计划</Text>
+          <Text size="subheadline" style={{ color: tokens.labelSecondary, width: 58 }}>调整前</Text>
+          <Text size="subheadline" style={{ color: tokens.label, flex: 1 }}>本次对话前的计划</Text>
         </View>
-        <ArrowDown color={tokens.sage} size={24} strokeWidth={1.6} style={styles.planArrow} />
+        <ArrowDown color={tokens.tint} size={24} strokeWidth={1.6} style={styles.planArrow} />
         <View style={styles.planRow}>
-          <Text size="sm" style={{ color: tokens.sage, width: 58 }}>调整后</Text>
-          <Text weight="medium" style={{ color: tokens.inkStrong, flex: 1 }}>{adjustment.label}</Text>
+          <Text size="subheadline" style={{ color: tokens.tint, width: 58 }}>调整后</Text>
+          <Text weight="medium" style={{ color: tokens.label, flex: 1 }}>{adjustment.label}</Text>
         </View>
       </View>
       {adjustment.undoneAt ? (
-        <Text style={{ color: tokens.muted, textAlign: "center" }}>调整已撤销</Text>
+        <Text style={{ color: tokens.labelSecondary, textAlign: "center" }}>调整已撤销</Text>
       ) : (
-        <Pressable accessibilityRole="button" onPress={() => onUndo(adjustment)} style={({ pressed }) => [styles.proposalAction, { backgroundColor: tokens.clay }, pressed && styles.pressed]}>
+        <Pressable accessibilityRole="button" onPress={() => onUndo(adjustment)} style={({ pressed }) => [styles.proposalAction, { backgroundColor: tokens.tint }, pressed && styles.pressed]}>
           <Text weight="medium" style={{ color: "#fff", textAlign: "center" }}>撤销调整</Text>
         </Pressable>
       )}
@@ -650,7 +650,7 @@ function MemoryEditor({
       />
       <View style={styles.rowActions}>
         <Button title={submitLabel} onPress={onSubmit} disabled={!draft.content.trim()} />
-        <Button title="取消" variant="ghost" onPress={onCancel} />
+        <Button title="取消" variant="plain" onPress={onCancel} />
       </View>
     </InsetGroup>
   );
@@ -715,8 +715,8 @@ const styles = StyleSheet.create({
   },
   conversationDrawer: {
     borderRightWidth: 1,
-    borderTopRightRadius: radius.lg,
-    borderBottomRightRadius: radius.lg,
+    borderTopRightRadius: radius.sheet,
+    borderBottomRightRadius: radius.sheet,
     gap: spacing.md,
     height: "100%",
     paddingHorizontal: spacing.lg,
@@ -725,7 +725,7 @@ const styles = StyleSheet.create({
   drawerBackdrop: { flex: 1, flexDirection: "row" },
   drawerConversationItem: {
     alignItems: "center",
-    borderRadius: radius.lg,
+    borderRadius: radius.sheet,
     borderWidth: 1,
     flexDirection: "row",
     gap: spacing.md,
@@ -758,7 +758,7 @@ const styles = StyleSheet.create({
   },
   memoryActions: { alignItems: "center", flexDirection: "row", gap: spacing.xs },
   memoryList: { gap: spacing.sm, paddingBottom: spacing.md },
-  memorySheet: { borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, borderWidth: 1, gap: spacing.md, maxHeight: "78%", paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
+  memorySheet: { borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, borderWidth: 1, gap: spacing.md, maxHeight: "78%", paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   memoryTrayHeader: { alignItems: "center", flexDirection: "row", gap: spacing.md },
   messageBubble: { borderRadius: radius.bubble, gap: spacing.xs, maxWidth: "88%", padding: spacing.md },
   messageList: { flexGrow: 1, gap: spacing.md, justifyContent: "flex-end", padding: spacing.md },
@@ -776,7 +776,7 @@ const styles = StyleSheet.create({
   sendButton: { alignItems: "center", borderRadius: 16, height: 32, justifyContent: "center", width: 32 },
   sheetBackdrop: { backgroundColor: "rgba(18, 24, 20, 0.34)", flex: 1, justifyContent: "flex-end" },
   sheetHandle: { alignSelf: "center", borderRadius: 2, height: 4, marginBottom: spacing.sm, width: 40 },
-  suggestionCard: { borderRadius: radius.lg, borderWidth: 1, maxWidth: 240, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  suggestionCard: { borderRadius: radius.sheet, borderWidth: 1, maxWidth: 240, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   suggestionList: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   suggestionStrip: { flexGrow: 0 },
   userBubble: { borderRadius: radius.bubble, maxWidth: "82%", paddingHorizontal: spacing.md, paddingVertical: spacing.sm },

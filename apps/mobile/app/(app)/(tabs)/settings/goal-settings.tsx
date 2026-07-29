@@ -99,7 +99,7 @@ export default function GoalSettingsScreen() {
           disabled={mutation.isPending || !title.trim()}
           onPress={() => mutation.mutate()}
         />
-        {editing ? <Button title="取消编辑" variant="ghost" onPress={reset} /> : null}
+        {editing ? <Button title="取消编辑" variant="plain" onPress={reset} /> : null}
       </InsetGroup>
 
       <InsetGroup header="现有目标" footer="点击一行进行编辑。">
@@ -118,7 +118,7 @@ export default function GoalSettingsScreen() {
                 onPress={() => pause(goal)}
                 style={({ pressed }) => [styles.pauseAction, pressed && { opacity: opacity.pressed }]}
               >
-                <Text size="sm" style={{ color: tokens.danger }}>暂停</Text>
+                <Text size="subheadline" style={{ color: tokens.red }}>暂停</Text>
               </Pressable>
             }
           />
