@@ -1,10 +1,10 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ElementRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ElementRef } from "react";
 import { Animated, Easing, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { ArrowDown, Brain, History, Leaf, Pencil, Send, SquarePen, Trash2 } from "lucide-react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigation } from "expo-router";
-import { BottomTabBarHeightContext } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { FLOATING_TAB_BAR_CLEARANCE } from "../../../../src/navigation/tabBarMetrics";
 import { Text } from "../../../../src/components/Text";
 import { Button } from "../../../../src/components/Button";
 import { ChoiceGroup } from "../../../../src/components/ChoiceGroup";
@@ -92,7 +92,6 @@ export default function CoachTab() {
   const { confirm } = useFeedback();
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
   const { width: viewportWidth } = useWindowDimensions();
   const [selectedConversationId, setSelectedConversationId] = useState<string | undefined>();
   const [messages, setMessages] = useState<AgentMessage[]>([]);
@@ -381,7 +380,7 @@ export default function CoachTab() {
             ) : null}
           </View>
 
-          <View style={[styles.composerDock, { backgroundColor: tokens.bg, borderTopColor: tokens.separator, paddingBottom: spacing.sm + tabBarHeight }]}>
+          <View style={[styles.composerDock, { backgroundColor: tokens.bg, borderTopColor: tokens.separator, paddingBottom: spacing.sm + insets.bottom + FLOATING_TAB_BAR_CLEARANCE }]}>
             <TextInput
               multiline
               value={draft}
