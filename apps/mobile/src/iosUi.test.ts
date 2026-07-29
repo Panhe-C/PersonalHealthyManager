@@ -142,4 +142,13 @@ describe("iOS native mobile UI", () => {
     expect(source).toContain("headerRight");
     expect(source).not.toContain("<HairlineRow");
   });
+
+  it("builds Insights from a stat card, a chart card, and a grouped list", () => {
+    const source = read("../app/(app)/(tabs)/insights/index.tsx");
+
+    expect(source).toContain("<InsetGroup");
+    expect(source).toContain("styles.statCard");
+    expect(source).toContain("styles.chartCard");
+    expect(source).not.toContain("<HairlineRow");
+  });
 });
