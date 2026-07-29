@@ -1,41 +1,53 @@
-import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import Svg, { Circle, Line, Path } from "react-native-svg";
-import { spacing, useTheme } from "../theme/tokens";
+import { useTheme } from "../theme/tokens";
 import { Text } from "./Text";
 
-export function MetricStrip({ items }: { items: { label: string; value: string; icon?: ReactNode }[] }) {
-  const { tokens } = useTheme();
-  return (
-    <View style={styles.metricStrip}>
-      {items.map((item, index) => (
-        <View key={item.label} style={[styles.metricItem, index > 0 && { borderLeftColor: tokens.separator, borderLeftWidth: 1 }]}>
-          {item.icon}
-          <Text size="caption" color={tokens.labelSecondary}>{item.label}</Text>
-          <Text size="title3" color={tokens.label} tabularNums>{item.value}</Text>
-        </View>
-      ))}
-    </View>
-  );
-}
+// Readiness ring geometry (spec: 116pt ring, 10pt stroke). Named once so the
+// arc math below stays readable.
+const RING_SIZE = 116;
+const RING_STROKE = 10;
+const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
+const RING_CENTER = RING_SIZE / 2;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 export function ReadinessRing({ value, label = "准备就绪" }: { value: number; label?: string }) {
   const { tokens } = useTheme();
   const safeValue = Math.max(0, Math.min(100, value));
-  const circumference = 2 * Math.PI * 72;
+
   return (
     <View style={styles.ringWrap}>
-      <Svg width={188} height={188} viewBox="0 0 188 188" style={StyleSheet.absoluteFill}>
-        <Circle cx="94" cy="94" r="72" fill="none" stroke={tokens.separator} strokeWidth="3" />
+      <Svg width={RING_SIZE} height={RING_SIZE}>
         <Circle
-          cx="94" cy="94" r="72" fill="none" stroke={tokens.tintFill} strokeWidth="5" strokeLinecap="round"
-          strokeDasharray={`${circumference} ${circumference}`}
-          strokeDashoffset={circumference * (1 - safeValue / 100)}
-          rotation="-90" origin="94, 94"
+          cx={RING_CENTER}
+          cy={RING_CENTER}
+          r={RING_RADIUS}
+          fill="none"
+          stroke={tokens.fill}
+          strokeWidth={RING_STROKE}
+        />
+        <Circle
+          cx={RING_CENTER}
+          cy={RING_CENTER}
+          r={RING_RADIUS}
+          fill="none"
+          stroke={tokens.tint}
+          strokeWidth={RING_STROKE}
+          strokeLinecap="round"
+          strokeDasharray={`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
+          strokeDashoffset={RING_CIRCUMFERENCE * (1 - safeValue / 100)}
+          rotation="-90"
+          origin={`${RING_CENTER}, ${RING_CENTER}`}
         />
       </Svg>
-      <Text size="metric" color={tokens.label} tabularNums>{safeValue}</Text>
-      <Text size="subheadline" color={tokens.labelSecondary}>{label}</Text>
+      <View style={styles.ringCenter}>
+        <Text size="title1" weight="strong" tabularNums>
+          {safeValue}
+        </Text>
+        <Text size="caption2" color={tokens.labelSecondary}>
+          {label}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -67,7 +79,6 @@ export function TrendChart({ values }: { values: number[] }) {
 
 const styles = StyleSheet.create({
   chartWrap: { width: "100%" },
-  metricItem: { alignItems: "center", flex: 1, gap: spacing.xs, minWidth: 0, paddingHorizontal: spacing.sm },
-  metricStrip: { flexDirection: "row", marginHorizontal: -spacing.sm },
-  ringWrap: { alignItems: "center", alignSelf: "center", height: 188, justifyContent: "center", width: 188 }
+  ringCenter: { alignItems: "center", position: "absolute" },
+  ringWrap: { alignItems: "center", height: RING_SIZE, justifyContent: "center", width: RING_SIZE }
 });

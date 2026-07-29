@@ -156,13 +156,18 @@ describe("warm card mobile UI", () => {
     expect(bar).toContain("borderRadius: radius.pill");
   });
 
-  it("builds Today from grouped cards including the training checklist", () => {
+  it("hides the native header and builds Today from warm cards", () => {
+    expect(read("../app/(app)/(tabs)/today/_layout.tsx")).toContain("headerShown: false");
+
     const source = read("../app/(app)/(tabs)/today/index.tsx");
 
-    expect(source).toContain("<InsetGroup");
-    expect(source).toContain("<CheckRow");
-    expect(source).toContain("styles.heroCard");
-    expect(source).not.toContain("<HairlineRow");
+    expect(source).toContain("ReadinessRing");
+    expect(source).toContain("本周睡眠");
+    expect(source).toContain("useSleepQuery");
+    expect(source).toContain("训练清单");
+    expect(source).toContain("CheckRow");
+    expect(source).toContain("cardShadow");
+    expect(source).toContain("查看本周计划");
   });
 
   it("builds Plan from grouped cards with a card week strip", () => {

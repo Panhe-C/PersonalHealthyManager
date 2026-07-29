@@ -1,66 +1,187 @@
 import { useState } from "react";
-import { StyleSheet, View } from "react-native";
-import { Footprints, HeartPulse, Moon } from "lucide-react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { CalendarDays, Footprints, Moon } from "lucide-react-native";
 import { Screen } from "../../../../src/components/Screen";
 import { Text } from "../../../../src/components/Text";
 import { Button } from "../../../../src/components/Button";
 import { CheckRow } from "../../../../src/components/CheckRow";
 import { useFeedback } from "../../../../src/components/Feedback";
-import { InsetGroup } from "../../../../src/components/InsetGroup";
-import { Row } from "../../../../src/components/Row";
 import { EmptyState, Spinner } from "../../../../src/components/States";
 import { TextField } from "../../../../src/components/TextField";
-import { MetricStrip, ReadinessRing } from "../../../../src/components/QuietHealth";
-import { useTodayOverviewQuery } from "../../../../src/api/hooks";
+import { ReadinessRing } from "../../../../src/components/QuietHealth";
+import { useSleepQuery, useTodayOverviewQuery } from "../../../../src/api/hooks";
 import { completeTrainingTask } from "../../../../src/api/training";
-import { formatDateLabel, formatDuration, formatTaskWindow, percentLabel } from "../../../../src/ui/format";
-import { radius, spacing, useTheme } from "../../../../src/theme/tokens";
+import {
+  APP_TIME_ZONE,
+  formatDateLabel,
+  formatDuration,
+  percentLabel
+} from "../../../../src/ui/format";
+import { cardShadow, radius, spacing, useTheme } from "../../../../src/theme/tokens";
 import type { TodayOverview } from "../../../../src/api/schemas";
 
 type TodayTask = TodayOverview["todayTasks"][number];
 type ChecklistStatus = TodayTask["checklistItems"][number]["status"];
 
+// Sleep bar geometry: bars scale against the longest night shown instead of
+// the prototype's `hours * 7` multiplier.
+const BAR_MAX_HEIGHT = 72;
+const BAR_MIN_HEIGHT = 6;
+const BAR_WIDTH = 18;
+const BAR_RADIUS = 6;
+
+const weekdayFormat = new Intl.DateTimeFormat("zh-CN", {
+  timeZone: APP_TIME_ZONE,
+  weekday: "short"
+});
+
+function weekdayLabel(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : weekdayFormat.format(date);
+}
+
 export default function TodayTab() {
   const { data, isLoading, error } = useTodayOverviewQuery();
-  const { tokens } = useTheme();
+  const sleep = useSleepQuery(7);
+  const { tokens, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const shadow = cardShadow(isDark ? "dark" : "light");
   const recovery = typeof data?.latestRecovery?.recoveryPercent === "number" ? data.latestRecovery.recoveryPercent : 0;
   const sleepMinutes = typeof data?.latestSleep?.durationMinutes === "number" ? data.latestSleep.durationMinutes : null;
   const activityMinutes = data?.todayTasks.reduce((sum, task) => sum + task.durationMinutes, 0) ?? 0;
   const focusTask = data?.todayTasks[0];
+  // The API returns the newest night first; the card renders oldest to newest.
+  const weekSleep = [...(sleep.data ?? [])].slice(0, 7).reverse();
+  const maxSleep = Math.max(...weekSleep.map((record) => record.durationMinutes), 1);
+  const averageSleep = weekSleep.length
+    ? Math.round(weekSleep.reduce((sum, record) => sum + record.durationMinutes, 0) / weekSleep.length)
+    : null;
 
   return (
-    <Screen>
+    <Screen contentContainerStyle={{ gap: spacing.lg, paddingTop: insets.top + spacing.lg }}>
       {isLoading ? <Spinner /> : error ? (
         <EmptyState title="今日数据加载失败" description="请确认后端和登录状态仍然可用。" />
       ) : data ? (
         <>
-          <View style={[styles.heroCard, { backgroundColor: tokens.surface }]}>
-            <Text size="footnote" color={tokens.labelSecondary}>{formatDateLabel(data.date)}</Text>
-            <ReadinessRing value={recovery} label={recovery >= 75 ? "准备就绪" : recovery >= 50 ? "适度训练" : "优先恢复"} />
-            <View style={[styles.heroDivider, { backgroundColor: tokens.separator }]} />
-            <MetricStrip items={[
-              { label: "睡眠", value: formatDuration(sleepMinutes), icon: <Moon color={tokens.labelSecondary} size={18} strokeWidth={1.8} /> },
-              { label: "恢复", value: percentLabel(recovery), icon: <HeartPulse color={tokens.labelSecondary} size={18} strokeWidth={1.8} /> },
-              { label: "活动", value: activityMinutes ? `${activityMinutes} 分` : "—", icon: <Footprints color={tokens.labelSecondary} size={18} strokeWidth={1.8} /> }
-            ]} />
+          {/* In-page header: the native header is hidden for this tab, so the
+              safe-area top inset is applied manually via contentContainerStyle. */}
+          <View style={styles.headerRow}>
+            <View>
+              <Text size="footnote" color={tokens.labelSecondary}>
+                {`${formatDateLabel(data.date)} · ${weekdayLabel(data.date)}`}
+              </Text>
+              <Text size="title1" weight="strong" style={styles.pageTitle}>
+                今日
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="查看本周计划"
+              onPress={() => router.push("/(app)/(tabs)/plan")}
+              style={[styles.circleButton, { backgroundColor: tokens.surface }, shadow]}
+            >
+              <CalendarDays color={tokens.label} size={18} strokeWidth={1.8} />
+            </Pressable>
           </View>
 
-          <InsetGroup header="今日重点">
-            <Row
-              title={focusTask ? focusTask.title : "留出恢复空间"}
-              subtitle={focusTask
-                ? `${formatTaskWindow(focusTask.scheduledStart, focusTask.scheduledEnd)} · ${focusTask.intensity}`
-                : data.primaryGoal?.title ?? "今天没有安排训练任务"}
-              value={focusTask ? `${focusTask.durationMinutes} 分` : undefined}
+          {/* Hero: readiness ring left, three metrics right, hairline between. */}
+          <View style={[styles.heroCard, { backgroundColor: tokens.surface }, shadow]}>
+            <ReadinessRing
+              value={recovery}
+              label={recovery >= 75 ? "准备就绪" : recovery >= 50 ? "适度训练" : "优先恢复"}
             />
-            {focusTask ? <Row title="训练类型" value={focusTask.trainingType} /> : null}
-          </InsetGroup>
+            <View style={[styles.heroDivider, { backgroundColor: tokens.separator }]} />
+            <View style={styles.heroMetrics}>
+              {[
+                { label: "睡眠", value: formatDuration(sleepMinutes) },
+                { label: "恢复", value: percentLabel(recovery) },
+                { label: "活动", value: activityMinutes ? `${activityMinutes} 分` : "—" }
+              ].map((metric, index) => (
+                <View
+                  key={metric.label}
+                  style={[
+                    styles.heroMetricRow,
+                    index > 0
+                      ? { borderTopColor: tokens.separator, borderTopWidth: StyleSheet.hairlineWidth }
+                      : null
+                  ]}
+                >
+                  <Text size="footnote" color={tokens.labelSecondary}>
+                    {metric.label}
+                  </Text>
+                  <Text size="body" weight="strong">
+                    {metric.value}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
 
-          {focusTask ? <TodayChecklist task={focusTask} /> : (
-            <InsetGroup>
-              <Row title={data.activePlanId ? "当前周计划已连接" : "尚未生成计划"} subtitle={data.activePlanId ? undefined : "生成计划后，今日重点会显示在这里"} />
-            </InsetGroup>
+          {/* Weekly sleep bars, newest night on the right in controlFill. */}
+          <View style={[styles.card, { backgroundColor: tokens.surface }, shadow]}>
+            <View style={styles.cardHeaderRow}>
+              <View style={styles.cardHeaderLeft}>
+                <View style={[styles.iconTile, { backgroundColor: tokens.fill }]}>
+                  <Moon color={tokens.label} size={16} strokeWidth={1.8} />
+                </View>
+                <Text size="callout" weight="semibold">
+                  本周睡眠
+                </Text>
+              </View>
+              <Text size="footnote" color={tokens.labelSecondary}>
+                {averageSleep === null ? "暂无记录" : `平均 ${formatDuration(averageSleep)}`}
+              </Text>
+            </View>
+            {weekSleep.length ? (
+              <View style={styles.barRow}>
+                {weekSleep.map((record, index) => (
+                  <View key={record.id} style={styles.barCol}>
+                    <View
+                      style={[
+                        styles.bar,
+                        {
+                          backgroundColor:
+                            index === weekSleep.length - 1 ? tokens.controlFill : tokens.fill,
+                          height: Math.max(
+                            BAR_MIN_HEIGHT,
+                            Math.round((record.durationMinutes / maxSleep) * BAR_MAX_HEIGHT)
+                          )
+                        }
+                      ]}
+                    />
+                    <Text size="caption2" color={tokens.labelSecondary}>
+                      {weekdayLabel(record.date).replace("周", "")}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text size="footnote" color={tokens.labelSecondary}>
+                同步 Apple 健康后展示最近几晚的睡眠。
+              </Text>
+            )}
+          </View>
+
+          {focusTask ? <TodayChecklist task={focusTask} shadow={shadow} /> : (
+            <View style={[styles.card, { backgroundColor: tokens.surface }, shadow]}>
+              <View style={styles.cardHeaderRow}>
+                <View style={styles.cardHeaderLeft}>
+                  <View style={[styles.iconTile, { backgroundColor: tokens.fill }]}>
+                    <Footprints color={tokens.orange} size={16} strokeWidth={1.8} />
+                  </View>
+                  <Text size="callout" weight="semibold">
+                    训练清单
+                  </Text>
+                </View>
+              </View>
+              <Text size="footnote" color={tokens.labelSecondary}>
+                {data.activePlanId ? "今天没有安排训练任务。" : "生成计划后，今日训练会显示在这里。"}
+              </Text>
+            </View>
           )}
         </>
       ) : null}
@@ -74,7 +195,14 @@ function nextChecklistStatus(status: ChecklistStatus): ChecklistStatus {
   return "pending";
 }
 
-function TodayChecklist({ task }: { task: TodayTask }) {
+function TodayChecklist({
+  task,
+  shadow
+}: {
+  task: TodayTask;
+  shadow: ReturnType<typeof cardShadow>;
+}) {
+  const { tokens } = useTheme();
   const queryClient = useQueryClient();
   const { notify } = useFeedback();
   const [actualLoad, setActualLoad] = useState("");
@@ -82,6 +210,9 @@ function TodayChecklist({ task }: { task: TodayTask }) {
     () => Object.fromEntries(task.checklistItems.map((item) => [item.id, item.status])) as Record<string, ChecklistStatus>
   );
   const alreadyRecorded = task.status !== "planned" && task.status !== "pending";
+  const completedCount = task.checklistItems.filter(
+    (item) => (statuses[item.id] ?? item.status) === "completed"
+  ).length;
   const completionMutation = useMutation({
     mutationFn: () => completeTrainingTask(task.id, {
       actualLoad: actualLoad.trim() ? Number(actualLoad) : undefined,
@@ -97,19 +228,37 @@ function TodayChecklist({ task }: { task: TodayTask }) {
 
   return (
     <>
-      <InsetGroup header="训练清单" footer={alreadyRecorded ? "本次训练已记录。" : "点按可在完成、跳过、待办之间切换。"}>
-        {task.checklistItems.map((item) => (
-          <CheckRow
-            key={item.id}
-            label={item.label}
-            status={statuses[item.id] ?? item.status}
-            disabled={alreadyRecorded || completionMutation.isPending}
-            onPress={() => setStatuses((items) => ({
-              ...items,
-              [item.id]: nextChecklistStatus(statuses[item.id] ?? item.status)
-            }))}
-          />
+      <View style={[styles.listCard, { backgroundColor: tokens.surface }, shadow]}>
+        <View style={styles.listCardHeader}>
+          <View style={styles.cardHeaderLeft}>
+            <View style={[styles.iconTile, { backgroundColor: tokens.fill }]}>
+              <Footprints color={tokens.orange} size={16} strokeWidth={1.8} />
+            </View>
+            <Text size="callout" weight="semibold">
+              训练清单
+            </Text>
+          </View>
+          <Text size="footnote" color={tokens.labelSecondary}>
+            {completedCount}/{task.checklistItems.length}
+          </Text>
+        </View>
+        {task.checklistItems.map((item, index) => (
+          <View key={item.id}>
+            {index > 0 ? <View style={[styles.rowDivider, { backgroundColor: tokens.separator }]} /> : null}
+            <CheckRow
+              label={item.label}
+              status={statuses[item.id] ?? item.status}
+              disabled={alreadyRecorded || completionMutation.isPending}
+              onPress={() =>
+                setStatuses((items) => ({
+                  ...items,
+                  [item.id]: nextChecklistStatus(statuses[item.id] ?? item.status)
+                }))
+              }
+            />
+          </View>
         ))}
+        <View style={[styles.rowDivider, { backgroundColor: tokens.separator }]} />
         <TextField
           label="实际负荷"
           value={actualLoad}
@@ -118,7 +267,10 @@ function TodayChecklist({ task }: { task: TodayTask }) {
           keyboardType="number-pad"
           editable={!alreadyRecorded && !completionMutation.isPending}
         />
-      </InsetGroup>
+        <Text size="footnote" color={tokens.labelSecondary} style={styles.listCardFooter}>
+          {alreadyRecorded ? "本次训练已记录。" : "点按可在完成、跳过、待办之间切换。"}
+        </Text>
+      </View>
 
       <Button
         title={alreadyRecorded ? "已记录" : completionMutation.isPending ? "提交中" : "提交完成"}
@@ -130,13 +282,62 @@ function TodayChecklist({ task }: { task: TodayTask }) {
 }
 
 const styles = StyleSheet.create({
+  bar: { borderRadius: BAR_RADIUS, width: BAR_WIDTH },
+  barCol: { alignItems: "center", gap: 6 },
+  barRow: {
+    alignItems: "flex-end",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.xs
+  },
+  card: { borderRadius: radius.card, gap: 14, marginHorizontal: 20, padding: 18 },
+  cardHeaderLeft: { alignItems: "center", flexDirection: "row", gap: 10 },
+  cardHeaderRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  circleButton: {
+    alignItems: "center",
+    borderRadius: radius.pill,
+    height: 42,
+    justifyContent: "center",
+    width: 42
+  },
+  headerRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginHorizontal: 20
+  },
   heroCard: {
     alignItems: "center",
-    borderRadius: radius.md,
-    gap: spacing.md,
-    marginHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
-    paddingTop: spacing.lg
+    borderRadius: radius.sheet, // the hero card uses the larger 32pt radius
+    flexDirection: "row",
+    gap: 20,
+    marginHorizontal: 20,
+    padding: 18
   },
-  heroDivider: { alignSelf: "stretch", height: StyleSheet.hairlineWidth }
+  heroDivider: { alignSelf: "stretch", width: StyleSheet.hairlineWidth },
+  heroMetricRow: {
+    alignItems: "baseline",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 10
+  },
+  heroMetrics: { flex: 1 },
+  iconTile: {
+    alignItems: "center",
+    borderRadius: 10,
+    height: 32,
+    justifyContent: "center",
+    width: 32
+  },
+  listCard: { borderRadius: radius.card, marginHorizontal: 20, paddingVertical: spacing.lg },
+  listCardFooter: { paddingHorizontal: spacing.lg, paddingTop: spacing.xs },
+  listCardHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.lg
+  },
+  pageTitle: { fontSize: 30, letterSpacing: -0.5, lineHeight: 36, marginTop: 2 },
+  rowDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: spacing.lg }
 });
