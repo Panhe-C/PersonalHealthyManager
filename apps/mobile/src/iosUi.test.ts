@@ -133,4 +133,13 @@ describe("iOS native mobile UI", () => {
     expect(source).toContain("styles.heroCard");
     expect(source).not.toContain("<HairlineRow");
   });
+
+  it("builds Plan from grouped cards with a card week strip", () => {
+    const source = read("../app/(app)/(tabs)/plan/index.tsx");
+
+    expect(source).toContain("<InsetGroup");
+    expect(source).toContain("styles.weekStrip");
+    expect(source).toContain("headerRight");
+    expect(source).not.toContain("<HairlineRow");
+  });
 });

@@ -7,14 +7,15 @@ import { Screen } from "../../../../src/components/Screen";
 import { Text } from "../../../../src/components/Text";
 import { Button } from "../../../../src/components/Button";
 import { useFeedback } from "../../../../src/components/Feedback";
+import { InsetGroup } from "../../../../src/components/InsetGroup";
+import { Row } from "../../../../src/components/Row";
 import { EmptyState, Spinner } from "../../../../src/components/States";
-import { HairlineRow } from "../../../../src/components/QuietHealth";
 import { ApiError } from "../../../../src/api/client";
 import { useActivePlanQuery, useCalendarDraftsQuery } from "../../../../src/api/hooks";
 import { generateActivePlan } from "../../../../src/api/training";
 import { confirmCalendarDraft } from "../../../../src/api/calendar";
 import { currentWeekStartIso, formatDateLabel, formatTaskWindow, parseJsonObject, weekDayNumbers } from "../../../../src/ui/format";
-import { spacing, useTheme } from "../../../../src/theme/tokens";
+import { radius, spacing, useTheme } from "../../../../src/theme/tokens";
 
 const weekNames = ["一", "二", "三", "四", "五", "六", "日"];
 
@@ -87,71 +88,84 @@ export default function PlanTab() {
 
   return (
     <Screen>
-      <View style={styles.weekStrip}>
+      <View style={[styles.weekStrip, { backgroundColor: tokens.surface }]}>
         {weekDays.map((day) => (
           <View key={day.name} style={styles.dayItem}>
-            <Text size="xs" style={{ color: tokens.muted }}>周{day.name}</Text>
-            <View style={[styles.dayCircle, day.active && { backgroundColor: tokens.sage }]}>
-              <Text size="lg" style={{ color: day.active ? "#fff" : tokens.inkStrong }}>{day.day}</Text>
+            <Text size="caption2" color={tokens.labelSecondary}>周{day.name}</Text>
+            <View style={[styles.dayCircle, day.active ? { backgroundColor: tokens.controlFill } : null]}>
+              <Text size="callout" color={day.active ? tokens.controlLabel : tokens.label} tabularNums>{day.day}</Text>
             </View>
           </View>
         ))}
       </View>
 
-      {isLoading ? <Spinner /> : error ? <EmptyState title="计划加载失败" description="请稍后重试或重新登录。" /> : data ? (
+      {isLoading ? <Spinner /> : error ? (
+        <EmptyState title="计划加载失败" description="请稍后重试或重新登录。" />
+      ) : data ? (
         <>
-          <View style={styles.primarySession}>
-            <Text size="lg" weight="medium" style={{ color: tokens.sage }}>星期一</Text>
+          <View style={[styles.primaryCard, { backgroundColor: tokens.surface }]}>
+            <Text size="footnote" color={tokens.tint}>星期一</Text>
             <View style={styles.sessionTitleRow}>
-              <View style={[styles.sessionIcon, { borderColor: tokens.sage }]}><Dumbbell color={tokens.sage} size={24} strokeWidth={1.5} /></View>
-              <View style={{ flex: 1, gap: spacing.xs }}>
-                <Text size="xxl" weight="strong" style={{ color: tokens.inkStrong }}>{primaryTask?.title ?? data.summary}</Text>
-                <Text size="lg" style={{ color: tokens.ink }}>{primaryTask ? `${primaryTask.durationMinutes} 分钟 · ${primaryTask.intensity}` : `${data.trainingTasks.length} 个训练任务`}</Text>
+              <View style={[styles.sessionIcon, { backgroundColor: tokens.fill }]}>
+                <Dumbbell color={tokens.tint} size={24} strokeWidth={1.8} />
+              </View>
+              <View style={styles.sessionCopy}>
+                <Text size="title2" color={tokens.label}>{primaryTask?.title ?? data.summary}</Text>
+                <Text size="subheadline" color={tokens.labelSecondary}>
+                  {primaryTask ? `${primaryTask.durationMinutes} 分钟 · ${primaryTask.intensity}` : `${data.trainingTasks.length} 个训练任务`}
+                </Text>
               </View>
             </View>
             {primaryTask ? <TrainingTimeline duration={primaryTask.durationMinutes} /> : null}
           </View>
 
-          <View>
-            <Text size="lg" weight="strong" style={[styles.sectionTitle, { color: tokens.sage }]}>训练安排</Text>
-            {data.trainingTasks.slice(1).map((task) => (
-              <View key={task.id}>
-                <HairlineRow
-                  title={task.title}
-                  subtitle={`${formatDateLabel(task.date)} · ${formatTaskWindow(task.scheduledStart, task.scheduledEnd)} · ${task.intensity}`}
-                  value={`${task.durationMinutes} 分`}
-                  onPress={() => setExpandedTaskId((current) => (current === task.id ? null : task.id))}
-                />
-                {expandedTaskId === task.id ? (
-                  <View style={[styles.taskDetail, { borderBottomColor: tokens.line }]}>
-                    {task.checklistItems.length ? task.checklistItems.map((item) => (
-                      <Text key={item.id} size="sm" style={{ color: tokens.muted }}>· {item.label}</Text>
-                    )) : <Text size="sm" style={{ color: tokens.muted }}>这个任务没有拆分步骤。</Text>}
-                  </View>
-                ) : null}
-              </View>
-            ))}
-          </View>
+          <InsetGroup header="训练安排">
+            {data.trainingTasks.slice(1).flatMap((task) => [
+              <Row
+                key={task.id}
+                title={task.title}
+                subtitle={`${formatDateLabel(task.date)} · ${formatTaskWindow(task.scheduledStart, task.scheduledEnd)} · ${task.intensity}`}
+                value={`${task.durationMinutes} 分`}
+                onPress={() => setExpandedTaskId((current) => (current === task.id ? null : task.id))}
+              />,
+              ...(expandedTaskId === task.id
+                ? task.checklistItems.length
+                  ? task.checklistItems.map((item) => (
+                    <Row key={`${task.id}-${item.id}`} title={item.label} />
+                  ))
+                  : [<Row key={`${task.id}-empty`} title="这个任务没有拆分步骤" />]
+                : [])
+            ])}
+          </InsetGroup>
 
-          <View>
-            <Text size="lg" weight="strong" style={[styles.sectionTitle, { color: tokens.sage }]}>饮食</Text>
-            <HairlineRow icon={<Utensils color={tokens.sage} size={21} strokeWidth={1.5} />} title="蛋白目标" subtitle={String(nutrition.carbohydrateGuidance)} value={typeof nutrition.proteinTargetGrams === "number" ? `${nutrition.proteinTargetGrams}g` : "未设置"} />
-            <HairlineRow title="热量目标" value={String(nutrition.calorieTarget)} />
-          </View>
+          <InsetGroup header="饮食" insetSeparators>
+            <Row
+              icon={<Utensils color={tokens.tint} size={20} strokeWidth={1.8} />}
+              title="蛋白目标"
+              subtitle={String(nutrition.carbohydrateGuidance)}
+              value={typeof nutrition.proteinTargetGrams === "number" ? `${nutrition.proteinTargetGrams}g` : "未设置"}
+            />
+            <Row
+              icon={<Utensils color={tokens.tint} size={20} strokeWidth={1.8} />}
+              title="热量目标"
+              value={String(nutrition.calorieTarget)}
+            />
+          </InsetGroup>
 
-          <View>
-            <Text size="lg" weight="strong" style={[styles.sectionTitle, { color: tokens.sage }]}>日历草稿</Text>
+          <InsetGroup header="日历草稿" insetSeparators>
             {drafts.data?.length ? drafts.data.map((draft) => (
-              <HairlineRow
+              <Row
                 key={draft.id}
-                icon={<CalendarCheck color={draft.status === "failed" ? tokens.danger : tokens.sage} size={21} strokeWidth={1.5} />}
+                icon={<CalendarCheck color={draft.status === "failed" ? tokens.red : tokens.tint} size={20} strokeWidth={1.8} />}
                 title={draft.title}
                 subtitle={`${formatTaskWindow(draft.startsAt, draft.endsAt)}${draft.failureReason ? ` · ${draft.failureReason}` : ""}`}
-                value={confirmMutation.isPending && confirmMutation.variables === draft.id ? "写入中" : draft.status === "failed" ? "重试" : draft.operation === "cancel" ? "确认取消" : "确认"}
+                value={confirmMutation.isPending && confirmMutation.variables === draft.id
+                  ? "写入中"
+                  : draft.status === "failed" ? "重试" : draft.operation === "cancel" ? "确认取消" : "确认"}
                 onPress={() => confirmMutation.mutate(draft.id)}
               />
-            )) : <Text size="sm" style={{ color: tokens.muted }}>没有待确认的日历变更。</Text>}
-          </View>
+            )) : <Row title="没有待确认的日历变更" />}
+          </InsetGroup>
         </>
       ) : (
         <View style={styles.emptyPlan}>
@@ -169,33 +183,37 @@ function TrainingTimeline({ duration }: { duration: number }) {
   const cooldown = 5;
   const steady = Math.max(5, duration - warmup - cooldown);
   return (
-    <View style={styles.timeline}>
+      <View style={styles.timeline}>
       <View style={styles.timelineTrack}>
-        <View style={[styles.trackLine, { backgroundColor: tokens.sage }]} />
-        {[0, 1, 2].map((index) => <View key={index} style={[styles.trackDot, { borderColor: tokens.sage, backgroundColor: tokens.bg }]} />)}
+        <View style={[styles.trackLine, { backgroundColor: tokens.tint }]} />
+        {[0, 1, 2].map((index) => <View key={index} style={[styles.trackDot, { borderColor: tokens.tint, backgroundColor: tokens.surface }]} />)}
       </View>
       <View style={styles.timelineLabels}>
-        <View><Text>热身</Text><Text size="sm" style={{ color: tokens.sage }}>{warmup} 分</Text></View>
-        <View style={{ alignItems: "center" }}><Text>主体</Text><Text size="sm" style={{ color: tokens.sage }}>{steady} 分</Text></View>
-        <View style={{ alignItems: "flex-end" }}><Text>放松</Text><Text size="sm" style={{ color: tokens.sage }}>{cooldown} 分</Text></View>
+        <View><Text size="footnote" color={tokens.label}>热身</Text><Text size="caption" color={tokens.labelSecondary}>{warmup} 分</Text></View>
+        <View style={{ alignItems: "center" }}><Text size="footnote" color={tokens.label}>主体</Text><Text size="caption" color={tokens.labelSecondary}>{steady} 分</Text></View>
+        <View style={{ alignItems: "flex-end" }}><Text size="footnote" color={tokens.label}>放松</Text><Text size="caption" color={tokens.labelSecondary}>{cooldown} 分</Text></View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  dayCircle: { alignItems: "center", borderRadius: 22, height: 44, justifyContent: "center", width: 38 },
-  dayItem: { alignItems: "center", flex: 1, gap: spacing.sm },
+  dayCircle: { alignItems: "center", borderRadius: 16, height: 32, justifyContent: "center", width: 32 },
+  dayItem: { alignItems: "center", flex: 1, gap: spacing.xs },
   emptyPlan: { gap: spacing.lg },
-  primarySession: { gap: spacing.xl },
-  sectionTitle: { marginBottom: spacing.xs },
-  sessionIcon: { alignItems: "center", borderRadius: 34, borderWidth: 1, height: 64, justifyContent: "center", width: 64 },
-  sessionTitleRow: { alignItems: "center", flexDirection: "row", gap: spacing.lg },
-  taskDetail: { borderBottomWidth: 1, gap: spacing.xs, paddingBottom: spacing.md, paddingLeft: spacing.lg },
+  primaryCard: { borderRadius: radius.md, gap: spacing.lg, marginHorizontal: spacing.lg, padding: spacing.lg },
+  sessionCopy: { flex: 1, gap: spacing.xs },
+  sessionIcon: { alignItems: "center", borderRadius: 24, height: 48, justifyContent: "center", width: 48 },
+  sessionTitleRow: { alignItems: "center", flexDirection: "row", gap: spacing.md },
   timeline: { gap: spacing.sm },
   timelineLabels: { flexDirection: "row", justifyContent: "space-between" },
   timelineTrack: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", paddingHorizontal: spacing.md },
-  trackDot: { borderRadius: 8, borderWidth: 2, height: 16, width: 16, zIndex: 1 },
-  trackLine: { height: 2, left: spacing.md, position: "absolute", right: spacing.md },
-  weekStrip: { flexDirection: "row", marginHorizontal: -spacing.sm, paddingBottom: spacing.sm }
+  trackDot: { borderRadius: 6, borderWidth: 2, height: 12, width: 12 },
+  trackLine: { height: 2, left: 0, position: "absolute", right: 0 },
+  weekStrip: {
+    borderRadius: radius.md,
+    flexDirection: "row",
+    marginHorizontal: spacing.lg,
+    paddingVertical: spacing.md
+  }
 });
