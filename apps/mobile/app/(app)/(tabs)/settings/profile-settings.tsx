@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
-import { Screen } from "../../src/components/Screen";
-import { Text } from "../../src/components/Text";
-import { Button } from "../../src/components/Button";
-import { ChoiceGroup } from "../../src/components/ChoiceGroup";
-import { useFeedback } from "../../src/components/Feedback";
-import { Section } from "../../src/components/Section";
-import { TextField } from "../../src/components/TextField";
+import { Screen } from "../../../../src/components/Screen";
+import { Text } from "../../../../src/components/Text";
+import { Button } from "../../../../src/components/Button";
+import { ChoiceGroup } from "../../../../src/components/ChoiceGroup";
+import { useFeedback } from "../../../../src/components/Feedback";
+import { Section } from "../../../../src/components/Section";
+import { TextField } from "../../../../src/components/TextField";
 
-import { useProfileQuery } from "../../src/api/hooks";
-import { saveProfile } from "../../src/api/profile";
-import { spacing, useTheme } from "../../src/theme/tokens";
+import { useProfileQuery } from "../../../../src/api/hooks";
+import { saveProfile } from "../../../../src/api/profile";
+import { spacing, useTheme } from "../../../../src/theme/tokens";
 
 type Sex = "male" | "female" | "other";
 type Experience = "beginner" | "intermediate" | "advanced";

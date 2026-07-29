@@ -2,17 +2,17 @@ import { useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { Check, Circle, Footprints, HeartPulse, Moon } from "lucide-react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Screen } from "../../../src/components/Screen";
-import { Text } from "../../../src/components/Text";
-import { Button } from "../../../src/components/Button";
-import { useFeedback } from "../../../src/components/Feedback";
-import { EmptyState, Spinner } from "../../../src/components/States";
-import { MetricStrip, PageHeader, ReadinessRing } from "../../../src/components/QuietHealth";
-import { useTodayOverviewQuery } from "../../../src/api/hooks";
-import { completeTrainingTask } from "../../../src/api/training";
-import { formatDateLabel, formatDuration, formatTaskWindow, percentLabel } from "../../../src/ui/format";
-import { opacity, radius, spacing, useTheme } from "../../../src/theme/tokens";
-import type { TodayOverview } from "../../../src/api/schemas";
+import { Screen } from "../../../../src/components/Screen";
+import { Text } from "../../../../src/components/Text";
+import { Button } from "../../../../src/components/Button";
+import { useFeedback } from "../../../../src/components/Feedback";
+import { EmptyState, Spinner } from "../../../../src/components/States";
+import { MetricStrip, ReadinessRing } from "../../../../src/components/QuietHealth";
+import { useTodayOverviewQuery } from "../../../../src/api/hooks";
+import { completeTrainingTask } from "../../../../src/api/training";
+import { formatDateLabel, formatDuration, formatTaskWindow, percentLabel } from "../../../../src/ui/format";
+import { opacity, radius, spacing, useTheme } from "../../../../src/theme/tokens";
+import type { TodayOverview } from "../../../../src/api/schemas";
 
 type TodayTask = TodayOverview["todayTasks"][number];
 type ChecklistStatus = TodayTask["checklistItems"][number]["status"];
@@ -27,7 +27,9 @@ export default function TodayTab() {
 
   return (
     <Screen>
-      <PageHeader title="早上好" subtitle={data ? formatDateLabel(data.date) : "正在读取今日状态"} />
+      <Text size="footnote" color={tokens.labelSecondary} style={{ paddingHorizontal: spacing.lg }}>
+        {data ? formatDateLabel(data.date) : "正在读取今日状态"}
+      </Text>
 
       {isLoading ? <Spinner /> : error ? <EmptyState title="今日数据加载失败" description="请确认后端和登录状态仍然可用。" /> : data ? (
         <>

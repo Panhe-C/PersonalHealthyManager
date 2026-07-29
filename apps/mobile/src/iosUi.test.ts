@@ -5,6 +5,19 @@ function read(relativePath: string) {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
 }
 
+const tabs = ["today", "plan", "coach", "insights", "settings"];
+
+const detailScreens = [
+  "profile-settings",
+  "account-security",
+  "healthkit-settings",
+  "model-settings",
+  "connection-settings",
+  "notification-settings",
+  "goal-settings",
+  "data-export"
+];
+
 describe("iOS native mobile UI", () => {
   it("uses the explicit iOS palette and accessible control pairs in both schemes", () => {
     const source = read("./theme/tokens.ts");
@@ -65,5 +78,39 @@ describe("iOS native mobile UI", () => {
     expect(read("./components/TextField.tsx")).toContain("minHeight: 44");
     expect(read("./components/TextField.tsx")).toContain("useWindowDimensions");
     expect(read("./components/TextField.tsx")).toContain("fontScale >= 1.4");
+  });
+
+  it("gives every tab its own native stack with a large title", () => {
+    for (const tab of tabs) {
+      const source = read(`../app/(app)/(tabs)/${tab}/_layout.tsx`);
+
+      expect(source).toContain("useNativeHeaderOptions");
+      expect(source).toContain('name="index"');
+    }
+
+    expect(read("./navigation/headerOptions.ts")).toContain("headerLargeTitleEnabled: true");
+    expect(read("./navigation/headerOptions.ts")).toContain("headerBlurEffect");
+  });
+
+  it("pushes settings detail pages inside the settings tab so the tab bar stays", () => {
+    const layout = read("../app/(app)/(tabs)/settings/_layout.tsx");
+
+    for (const screen of detailScreens) {
+      expect(layout).toContain(`name: "${screen}"`);
+      expect(() => read(`../app/(app)/(tabs)/settings/${screen}.tsx`)).not.toThrow();
+    }
+
+    expect(layout).toContain("headerLargeTitleEnabled: false");
+    const settings = read("../app/(app)/(tabs)/settings/index.tsx");
+    for (const screen of detailScreens) {
+      expect(settings).toContain(`/(app)/(tabs)/settings/${screen}`);
+    }
+    expect(settings).not.toContain('router.push("./');
+  });
+
+  it("drops the hand-rolled page header now that titles are native", () => {
+    for (const tab of tabs) {
+      expect(read(`../app/(app)/(tabs)/${tab}/index.tsx`)).not.toContain("PageHeader");
+    }
   });
 });

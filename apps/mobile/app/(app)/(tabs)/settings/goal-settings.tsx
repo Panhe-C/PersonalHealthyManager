@@ -1,20 +1,20 @@
 import { useState } from "react";
 import { Pressable, StyleSheet } from "react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Screen } from "../../src/components/Screen";
-import { Text } from "../../src/components/Text";
-import { Button } from "../../src/components/Button";
-import { ChoiceGroup } from "../../src/components/ChoiceGroup";
-import { useFeedback } from "../../src/components/Feedback";
-import { HairlineRow } from "../../src/components/QuietHealth";
-import { Section } from "../../src/components/Section";
-import { EmptyState, Spinner } from "../../src/components/States";
-import { TextField } from "../../src/components/TextField";
+import { Screen } from "../../../../src/components/Screen";
+import { Text } from "../../../../src/components/Text";
+import { Button } from "../../../../src/components/Button";
+import { ChoiceGroup } from "../../../../src/components/ChoiceGroup";
+import { useFeedback } from "../../../../src/components/Feedback";
+import { HairlineRow } from "../../../../src/components/QuietHealth";
+import { Section } from "../../../../src/components/Section";
+import { EmptyState, Spinner } from "../../../../src/components/States";
+import { TextField } from "../../../../src/components/TextField";
 
-import { useGoalsQuery } from "../../src/api/hooks";
-import { createGoal, pauseGoal, updateGoal, type GoalInput } from "../../src/api/goals";
-import type { Goal } from "../../src/api/schemas";
-import { opacity, spacing, useTheme } from "../../src/theme/tokens";
+import { useGoalsQuery } from "../../../../src/api/hooks";
+import { createGoal, pauseGoal, updateGoal, type GoalInput } from "../../../../src/api/goals";
+import type { Goal } from "../../../../src/api/schemas";
+import { opacity, spacing, useTheme } from "../../../../src/theme/tokens";
 
 const types: readonly { value: Goal["type"]; label: string }[] = [
   { value: "primary", label: "主目标" },

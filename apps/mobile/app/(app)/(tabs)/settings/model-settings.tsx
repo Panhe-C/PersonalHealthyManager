@@ -1,23 +1,23 @@
 import { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
-import { Screen } from "../../src/components/Screen";
-import { Text } from "../../src/components/Text";
-import { Button } from "../../src/components/Button";
-import { ChoiceGroup } from "../../src/components/ChoiceGroup";
-import { useFeedback } from "../../src/components/Feedback";
-import { Section } from "../../src/components/Section";
-import { TextField } from "../../src/components/TextField";
+import { Screen } from "../../../../src/components/Screen";
+import { Text } from "../../../../src/components/Text";
+import { Button } from "../../../../src/components/Button";
+import { ChoiceGroup } from "../../../../src/components/ChoiceGroup";
+import { useFeedback } from "../../../../src/components/Feedback";
+import { Section } from "../../../../src/components/Section";
+import { TextField } from "../../../../src/components/TextField";
 
-import { useSettingsQuery } from "../../src/api/hooks";
+import { useSettingsQuery } from "../../../../src/api/hooks";
 import {
   modelProviderOptions,
   providerModelDefaults,
   providerNeedsManualModel,
   saveSettings,
   type MobileSettings
-} from "../../src/api/settings";
-import { radius, spacing, useTheme } from "../../src/theme/tokens";
+} from "../../../../src/api/settings";
+import { radius, spacing, useTheme } from "../../../../src/theme/tokens";
 
 export default function ModelSettingsScreen() {
   const query = useSettingsQuery();

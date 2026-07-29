@@ -1,19 +1,20 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigation } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
 import { CalendarCheck, Dumbbell, Utensils } from "lucide-react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Screen } from "../../../src/components/Screen";
-import { Text } from "../../../src/components/Text";
-import { Button } from "../../../src/components/Button";
-import { useFeedback } from "../../../src/components/Feedback";
-import { EmptyState, Spinner } from "../../../src/components/States";
-import { HairlineRow, PageHeader } from "../../../src/components/QuietHealth";
-import { ApiError } from "../../../src/api/client";
-import { useActivePlanQuery, useCalendarDraftsQuery } from "../../../src/api/hooks";
-import { generateActivePlan } from "../../../src/api/training";
-import { confirmCalendarDraft } from "../../../src/api/calendar";
-import { currentWeekStartIso, formatDateLabel, formatTaskWindow, parseJsonObject, weekDayNumbers } from "../../../src/ui/format";
-import { spacing, useTheme } from "../../../src/theme/tokens";
+import { Screen } from "../../../../src/components/Screen";
+import { Text } from "../../../../src/components/Text";
+import { Button } from "../../../../src/components/Button";
+import { useFeedback } from "../../../../src/components/Feedback";
+import { EmptyState, Spinner } from "../../../../src/components/States";
+import { HairlineRow } from "../../../../src/components/QuietHealth";
+import { ApiError } from "../../../../src/api/client";
+import { useActivePlanQuery, useCalendarDraftsQuery } from "../../../../src/api/hooks";
+import { generateActivePlan } from "../../../../src/api/training";
+import { confirmCalendarDraft } from "../../../../src/api/calendar";
+import { currentWeekStartIso, formatDateLabel, formatTaskWindow, parseJsonObject, weekDayNumbers } from "../../../../src/ui/format";
+import { spacing, useTheme } from "../../../../src/theme/tokens";
 
 const weekNames = ["一", "二", "三", "四", "五", "六", "日"];
 
@@ -24,6 +25,7 @@ export default function PlanTab() {
   const { notify } = useFeedback();
   const { tokens } = useTheme();
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const navigation = useNavigation();
   const generateMutation = useMutation({
     mutationFn: () => generateActivePlan(currentWeekStartIso()),
     onSuccess: (plan) => {
@@ -41,6 +43,23 @@ export default function PlanTab() {
       notify({ tone: "danger", title: "生成失败", description: err instanceof Error ? err.message : "请稍后重试。" });
     }
   });
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="生成或调整本周计划"
+          hitSlop={11}
+          onPress={() => generateMutation.mutate()}
+          disabled={generateMutation.isPending}
+        >
+          <Text size="body" color={tokens.tint}>
+            {generateMutation.isPending ? "生成中" : data ? "调整" : "生成"}
+          </Text>
+        </Pressable>
+      )
+    });
+  }, [data, generateMutation, navigation, tokens.tint]);
   const confirmMutation = useMutation({
     mutationFn: confirmCalendarDraft,
     onSuccess: (draft) => {
@@ -68,12 +87,6 @@ export default function PlanTab() {
 
   return (
     <Screen>
-      <PageHeader
-        title="本周计划"
-        subtitle={data ? `${formatDateLabel(data.weekStart)} – ${formatDateLabel(data.weekEnd)}` : "训练与饮食节奏"}
-        action={<Pressable onPress={() => generateMutation.mutate()} disabled={generateMutation.isPending}><Text weight="medium" style={{ color: tokens.clay }}>{generateMutation.isPending ? "生成中" : data ? "调整" : "生成"}</Text></Pressable>}
-      />
-
       <View style={styles.weekStrip}>
         {weekDays.map((day) => (
           <View key={day.name} style={styles.dayItem}>

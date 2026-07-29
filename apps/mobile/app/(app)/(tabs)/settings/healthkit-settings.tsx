@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { Screen } from "../../src/components/Screen";
-import { Button } from "../../src/components/Button";
-import { useFeedback } from "../../src/components/Feedback";
-import { HairlineRow } from "../../src/components/QuietHealth";
-import { Section } from "../../src/components/Section";
-import { Text } from "../../src/components/Text";
+import { Screen } from "../../../../src/components/Screen";
+import { Button } from "../../../../src/components/Button";
+import { useFeedback } from "../../../../src/components/Feedback";
+import { HairlineRow } from "../../../../src/components/QuietHealth";
+import { Section } from "../../../../src/components/Section";
+import { Text } from "../../../../src/components/Text";
 
-import { syncHealthKit } from "../../src/healthKit";
-import { useTheme } from "../../src/theme/tokens";
+import { syncHealthKit } from "../../../../src/healthKit";
+import { useTheme } from "../../../../src/theme/tokens";
 
 export default function HealthKitSettingsScreen() {
   const { notify } = useFeedback();

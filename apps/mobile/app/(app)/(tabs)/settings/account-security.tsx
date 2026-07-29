@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { Screen } from "../../src/components/Screen";
-import { Text } from "../../src/components/Text";
-import { Button } from "../../src/components/Button";
-import { useFeedback } from "../../src/components/Feedback";
-import { Section } from "../../src/components/Section";
-import { TextField } from "../../src/components/TextField";
+import { Screen } from "../../../../src/components/Screen";
+import { Text } from "../../../../src/components/Text";
+import { Button } from "../../../../src/components/Button";
+import { useFeedback } from "../../../../src/components/Feedback";
+import { Section } from "../../../../src/components/Section";
+import { TextField } from "../../../../src/components/TextField";
 
-import { changePassword, deleteAccount } from "../../src/api/account";
-import { useAuth } from "../../src/auth/AuthContext";
-import { radius, spacing, useTheme } from "../../src/theme/tokens";
+import { changePassword, deleteAccount } from "../../../../src/api/account";
+import { useAuth } from "../../../../src/auth/AuthContext";
+import { radius, spacing, useTheme } from "../../../../src/theme/tokens";
 
 const MIN_PASSWORD_LENGTH = 12;
 

@@ -1,14 +1,14 @@
 import { useState } from "react";
-import { Screen } from "../../src/components/Screen";
-import { Text } from "../../src/components/Text";
-import { Button } from "../../src/components/Button";
-import { useFeedback } from "../../src/components/Feedback";
-import { HairlineRow } from "../../src/components/QuietHealth";
-import { Section } from "../../src/components/Section";
+import { Screen } from "../../../../src/components/Screen";
+import { Text } from "../../../../src/components/Text";
+import { Button } from "../../../../src/components/Button";
+import { useFeedback } from "../../../../src/components/Feedback";
+import { HairlineRow } from "../../../../src/components/QuietHealth";
+import { Section } from "../../../../src/components/Section";
 
-import { useActivePlanQuery } from "../../src/api/hooks";
-import { enableTrainingNotifications } from "../../src/notifications";
-import { useTheme } from "../../src/theme/tokens";
+import { useActivePlanQuery } from "../../../../src/api/hooks";
+import { enableTrainingNotifications } from "../../../../src/notifications";
+import { useTheme } from "../../../../src/theme/tokens";
 
 export default function NotificationSettingsScreen() {
   const plan = useActivePlanQuery();

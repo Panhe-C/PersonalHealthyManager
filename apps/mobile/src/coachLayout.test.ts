@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 describe("coach layout", () => {
   it("uses a full-screen chat structure with a bottom-docked composer", () => {
-    const source = readFileSync(new URL("../app/(app)/(tabs)/coach.tsx", import.meta.url), "utf8");
+    const source = readFileSync(new URL("../app/(app)/(tabs)/coach/index.tsx", import.meta.url), "utf8");
 
     const headerIndex = source.indexOf("styles.headerLayer");
     const bodyIndex = source.indexOf("styles.chatBody");
@@ -33,7 +33,7 @@ describe("coach layout", () => {
   });
 
   it("renders recent messages inside an independently scrollable chat pane", () => {
-    const source = readFileSync(new URL("../app/(app)/(tabs)/coach.tsx", import.meta.url), "utf8");
+    const source = readFileSync(new URL("../app/(app)/(tabs)/coach/index.tsx", import.meta.url), "utf8");
 
     expect(source).toContain("messageScrollRef");
     expect(source).toContain("nestedScrollEnabled");
@@ -45,7 +45,7 @@ describe("coach layout", () => {
   });
 
   it("opens memory management in a bottom sheet instead of expanding the page", () => {
-    const source = readFileSync(new URL("../app/(app)/(tabs)/coach.tsx", import.meta.url), "utf8");
+    const source = readFileSync(new URL("../app/(app)/(tabs)/coach/index.tsx", import.meta.url), "utf8");
 
     expect(source).toContain('accessibilityLabel="教练记忆"');
     expect(source).toContain("visible={showCoachTools}");
@@ -55,7 +55,7 @@ describe("coach layout", () => {
   });
 
   it("uses icon-only top actions and slides conversation history in from the left", () => {
-    const source = readFileSync(new URL("../app/(app)/(tabs)/coach.tsx", import.meta.url), "utf8");
+    const source = readFileSync(new URL("../app/(app)/(tabs)/coach/index.tsx", import.meta.url), "utf8");
 
     expect(source).toContain("History");
     expect(source).toContain("SquarePen");
@@ -70,7 +70,7 @@ describe("coach layout", () => {
   });
 
   it("keeps the history drawer header clear of the device safe area", () => {
-    const source = readFileSync(new URL("../app/(app)/(tabs)/coach.tsx", import.meta.url), "utf8");
+    const source = readFileSync(new URL("../app/(app)/(tabs)/coach/index.tsx", import.meta.url), "utf8");
 
     expect(source).toContain("useSafeAreaInsets");
     expect(source).toContain("paddingTop: Math.max(insets.top + spacing.md");
@@ -81,7 +81,7 @@ describe("coach layout", () => {
   });
 
   it("matches the approved action-oriented Coach demo", () => {
-    const source = readFileSync(new URL("../app/(app)/(tabs)/coach.tsx", import.meta.url), "utf8");
+    const source = readFileSync(new URL("../app/(app)/(tabs)/coach/index.tsx", import.meta.url), "utf8");
 
     expect(source).toContain("styles.coachHeader");
     expect(source).toContain("styles.chatToolbar");

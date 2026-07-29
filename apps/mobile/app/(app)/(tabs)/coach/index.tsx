@@ -3,12 +3,12 @@ import { Animated, Easing, KeyboardAvoidingView, Modal, Platform, Pressable, Scr
 import { ArrowDown, Brain, History, Leaf, Pencil, Send, SquarePen, Trash2 } from "lucide-react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { Text } from "../../../src/components/Text";
-import { Card } from "../../../src/components/Card";
-import { Button } from "../../../src/components/Button";
-import { ChoiceGroup } from "../../../src/components/ChoiceGroup";
-import { useFeedback } from "../../../src/components/Feedback";
-import { EmptyState, Spinner } from "../../../src/components/States";
+import { Text } from "../../../../src/components/Text";
+import { Card } from "../../../../src/components/Card";
+import { Button } from "../../../../src/components/Button";
+import { ChoiceGroup } from "../../../../src/components/ChoiceGroup";
+import { useFeedback } from "../../../../src/components/Feedback";
+import { EmptyState, Spinner } from "../../../../src/components/States";
 import {
   createAgentConversation,
   createAgentMemory,
@@ -18,13 +18,13 @@ import {
   undoAgentAdjustment,
   updateAgentMemory,
   type MemoryDraft
-} from "../../../src/api/agent";
-import { useAgentMemoriesQuery, useConversationDetailQuery, useConversationsQuery } from "../../../src/api/hooks";
-import { RichMessage } from "../../../src/components/RichMessage";
-import { getRecentMessagesForChat, mergeConversationMessages } from "../../../src/coachMessages";
-import { formatDateLabel } from "../../../src/ui/format";
-import { opacity, radius, spacing, useTheme } from "../../../src/theme/tokens";
-import type { AgentAdjustment, AgentMessage, Conversation, Memory } from "../../../src/api/schemas";
+} from "../../../../src/api/agent";
+import { useAgentMemoriesQuery, useConversationDetailQuery, useConversationsQuery } from "../../../../src/api/hooks";
+import { RichMessage } from "../../../../src/components/RichMessage";
+import { getRecentMessagesForChat, mergeConversationMessages } from "../../../../src/coachMessages";
+import { formatDateLabel } from "../../../../src/ui/format";
+import { opacity, radius, spacing, useTheme } from "../../../../src/theme/tokens";
+import type { AgentAdjustment, AgentMessage, Conversation, Memory } from "../../../../src/api/schemas";
 
 const fallbackSuggestions = [
   "我昨晚没睡好，今天还适合跑吗？",

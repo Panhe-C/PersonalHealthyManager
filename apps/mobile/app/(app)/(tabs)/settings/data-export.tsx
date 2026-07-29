@@ -1,14 +1,14 @@
 import { useState } from "react";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
-import { Screen } from "../../src/components/Screen";
-import { Button } from "../../src/components/Button";
-import { useFeedback } from "../../src/components/Feedback";
-import { Section } from "../../src/components/Section";
-import { Text } from "../../src/components/Text";
+import { Screen } from "../../../../src/components/Screen";
+import { Button } from "../../../../src/components/Button";
+import { useFeedback } from "../../../../src/components/Feedback";
+import { Section } from "../../../../src/components/Section";
+import { Text } from "../../../../src/components/Text";
 
-import { exportAccountData } from "../../src/api/export";
-import { useTheme } from "../../src/theme/tokens";
+import { exportAccountData } from "../../../../src/api/export";
+import { useTheme } from "../../../../src/theme/tokens";
 
 export default function DataExportScreen() {
   const { notify } = useFeedback();

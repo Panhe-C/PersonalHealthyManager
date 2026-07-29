@@ -1,12 +1,12 @@
 import { StyleSheet, View } from "react-native";
 import { Activity, Dumbbell, Moon } from "lucide-react-native";
-import { Screen } from "../../../src/components/Screen";
-import { Text } from "../../../src/components/Text";
-import { EmptyState, Spinner } from "../../../src/components/States";
-import { HairlineRow, PageHeader, TrendChart } from "../../../src/components/QuietHealth";
-import { useActivitiesQuery, useRecoveryQuery, useSleepQuery } from "../../../src/api/hooks";
-import { formatDateLabel, formatDuration, numberLabel } from "../../../src/ui/format";
-import { spacing, useTheme } from "../../../src/theme/tokens";
+import { Screen } from "../../../../src/components/Screen";
+import { Text } from "../../../../src/components/Text";
+import { EmptyState, Spinner } from "../../../../src/components/States";
+import { HairlineRow, TrendChart } from "../../../../src/components/QuietHealth";
+import { useActivitiesQuery, useRecoveryQuery, useSleepQuery } from "../../../../src/api/hooks";
+import { formatDateLabel, formatDuration, numberLabel } from "../../../../src/ui/format";
+import { spacing, useTheme } from "../../../../src/theme/tokens";
 
 export default function InsightsTab() {
   const recovery = useRecoveryQuery(8);
@@ -24,8 +24,6 @@ export default function InsightsTab() {
 
   return (
     <Screen>
-      <PageHeader title="数据洞察" subtitle="最近 4 周" />
-
       {isLoading ? <Spinner /> : hasError ? <EmptyState title="数据加载失败" description="请确认登录状态和后端服务。" /> : (
         <>
           <View style={styles.insightLead}>
