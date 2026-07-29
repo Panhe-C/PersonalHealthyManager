@@ -124,4 +124,13 @@ describe("iOS native mobile UI", () => {
     expect(source).toContain("reduceTransparencyChanged");
     expect(source).not.toContain("height: 68");
   });
+
+  it("builds Today from grouped cards including the training checklist", () => {
+    const source = read("../app/(app)/(tabs)/today/index.tsx");
+
+    expect(source).toContain("<InsetGroup");
+    expect(source).toContain("<CheckRow");
+    expect(source).toContain("styles.heroCard");
+    expect(source).not.toContain("<HairlineRow");
+  });
 });
