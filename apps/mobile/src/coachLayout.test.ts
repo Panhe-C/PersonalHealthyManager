@@ -2,34 +2,16 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("coach layout", () => {
-  it("uses a full-screen chat structure with a bottom-docked composer", () => {
+  it("uses a native header instead of a hand-rolled one", () => {
     const source = readFileSync(new URL("../app/(app)/(tabs)/coach/index.tsx", import.meta.url), "utf8");
 
-    const headerIndex = source.indexOf("styles.headerLayer");
-    const bodyIndex = source.indexOf("styles.chatBody");
-    const messagesIndex = source.indexOf("styles.messageScroll");
-    const composerIndex = source.indexOf("styles.composerDock");
-    const drawerIndex = source.indexOf("styles.conversationDrawer");
-
-    expect(source).toContain("SafeAreaView");
-    expect(source).toContain("KeyboardAvoidingView");
-    expect(source).toContain("Platform.OS");
-    expect(source).toContain('edges={["top"]}');
-    expect(source).not.toContain("<Screen");
-    expect(source).not.toContain("styles.screenContent");
-    expect(source).not.toContain("styles.mobileChatShell");
-    expect(headerIndex).toBeGreaterThan(-1);
-    expect(bodyIndex).toBeGreaterThan(-1);
-    expect(messagesIndex).toBeGreaterThan(-1);
-    expect(composerIndex).toBeGreaterThan(-1);
-    expect(drawerIndex).toBeGreaterThan(-1);
-    expect(source).toContain("showConversationDrawer");
-    expect(source).not.toContain("styles.conversationRail");
-    expect(source).not.toContain('title="最近消息"');
-    expect(source).not.toContain('title="建议问题"');
-    expect(headerIndex).toBeLessThan(bodyIndex);
-    expect(bodyIndex).toBeLessThan(messagesIndex);
-    expect(messagesIndex).toBeLessThan(composerIndex);
+    expect(source).toContain("navigation.setOptions");
+    expect(source).toContain("headerLeft");
+    expect(source).toContain("headerRight");
+    expect(source).not.toContain("styles.headerLayer");
+    expect(source).not.toContain("styles.coachHeader");
+    expect(source).not.toContain("styles.chatToolbar");
+    expect(source).not.toContain('size="display"');
   });
 
   it("renders recent messages inside an independently scrollable chat pane", () => {
@@ -80,19 +62,18 @@ describe("coach layout", () => {
     expect(source).not.toContain("<Button title={createConversationMutation.isPending ? \"新建中\" : \"新建\"}");
   });
 
-  it("matches the approved action-oriented Coach demo", () => {
+  it("keeps the chat stage and composer docked below the header", () => {
     const source = readFileSync(new URL("../app/(app)/(tabs)/coach/index.tsx", import.meta.url), "utf8");
 
-    expect(source).toContain("styles.coachHeader");
-    expect(source).toContain("styles.chatToolbar");
-    expect(source).toContain("styles.assistantContent");
-    expect(source).toContain("styles.proposalCard");
-    expect(source).toContain("styles.planComparison");
-    expect(source).toContain("styles.sendButton");
-    expect(source).toContain("ArrowDown");
-    expect(source).toContain("Send");
-    expect(source).toContain('placeholder="问问你的教练…"');
-    expect(source).toContain("visibleMessages.length === 0");
-    expect(source).not.toContain('<PageHeader title="教练"');
+    const bodyIndex = source.indexOf("styles.chatBody");
+    const messagesIndex = source.indexOf("styles.messageScroll");
+    const composerIndex = source.indexOf("styles.composerDock");
+
+    expect(source).toContain("KeyboardAvoidingView");
+    expect(source).toContain("Platform.OS");
+    expect(source).toContain("showConversationDrawer");
+    expect(bodyIndex).toBeGreaterThan(-1);
+    expect(bodyIndex).toBeLessThan(messagesIndex);
+    expect(messagesIndex).toBeLessThan(composerIndex);
   });
 });

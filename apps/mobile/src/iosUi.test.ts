@@ -164,4 +164,8 @@ describe("iOS native mobile UI", () => {
       expect(source).not.toContain("<TextInput");
     }
   });
+
+  it("leaves no Card users behind in coach", () => {
+    expect(read("../app/(app)/(tabs)/coach/index.tsx")).not.toContain("components/Card");
+  });
 });
