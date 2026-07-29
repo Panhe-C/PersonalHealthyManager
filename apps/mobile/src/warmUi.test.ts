@@ -171,13 +171,19 @@ describe("warm card mobile UI", () => {
     expect(source).toContain("查看本周计划");
   });
 
-  it("builds Plan from grouped cards with a card week strip", () => {
+  it("hides the native header and builds Plan around warm cards", () => {
+    expect(read("../app/(app)/(tabs)/plan/_layout.tsx")).toContain("headerShown: false");
+
     const source = read("../app/(app)/(tabs)/plan/index.tsx");
 
-    expect(source).toContain("<InsetGroup");
+    expect(source).toContain("WarmHeader");
+    expect(source).toContain("Sparkles");
+    expect(source).toContain("生成或调整本周计划");
     expect(source).toContain("styles.weekStrip");
-    expect(source).toContain("headerRight");
-    expect(source).not.toContain("<HairlineRow");
+    expect(source).toContain("cardShadow");
+    expect(source).toContain("<InsetGroup");
+    expect(source).not.toContain("headerRight");
+    expect(source).not.toContain("useNavigation");
   });
 
   it("hides the native header and builds Insights from warm cards", () => {
@@ -258,7 +264,7 @@ describe("warm card mobile UI", () => {
     expect(source).toContain("cardShadow");
     expect(source).toContain("borderRadius: radius.pill");
 
-    for (const tab of ["today", "insights", "settings"]) {
+    for (const tab of ["today", "plan", "insights", "settings"]) {
       expect(read(`../app/(app)/(tabs)/${tab}/index.tsx`)).toContain("WarmHeader");
     }
   });

@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
-import { useNavigation } from "expo-router";
-import { Pressable, StyleSheet, View } from "react-native";
-import { CalendarCheck, Dumbbell, Utensils } from "lucide-react-native";
+import { useState } from "react";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CalendarCheck, Dumbbell, Sparkles, Utensils } from "lucide-react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Screen } from "../../../../src/components/Screen";
 import { Text } from "../../../../src/components/Text";
@@ -10,23 +10,34 @@ import { useFeedback } from "../../../../src/components/Feedback";
 import { InsetGroup } from "../../../../src/components/InsetGroup";
 import { Row } from "../../../../src/components/Row";
 import { EmptyState, Spinner } from "../../../../src/components/States";
+import { WarmHeader, WarmHeaderButton } from "../../../../src/components/WarmHeader";
 import { ApiError } from "../../../../src/api/client";
 import { useActivePlanQuery, useCalendarDraftsQuery } from "../../../../src/api/hooks";
 import { generateActivePlan } from "../../../../src/api/training";
 import { confirmCalendarDraft } from "../../../../src/api/calendar";
 import { currentWeekStartIso, formatDateLabel, formatTaskWindow, parseJsonObject, weekDayNumbers } from "../../../../src/ui/format";
-import { radius, spacing, useTheme } from "../../../../src/theme/tokens";
+import { cardShadow, radius, spacing, useTheme } from "../../../../src/theme/tokens";
 
 const weekNames = ["一", "二", "三", "四", "五", "六", "日"];
+
+// Week-of-year for the overline, derived from the plan's week start so the
+// header tracks the plan instead of the device clock.
+function planWeekLabel(weekStart: string | undefined): string {
+  const start = new Date(weekStart ?? currentWeekStartIso());
+  const yearStart = new Date(start.getFullYear(), 0, 1);
+  const week = Math.ceil(((start.getTime() - yearStart.getTime()) / 86400000 + yearStart.getDay() + 1) / 7);
+  return `第 ${week} 周`;
+}
 
 export default function PlanTab() {
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useActivePlanQuery();
   const drafts = useCalendarDraftsQuery();
   const { notify } = useFeedback();
-  const { tokens } = useTheme();
+  const { tokens, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+  const shadow = cardShadow(isDark ? "dark" : "light");
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
-  const navigation = useNavigation();
   const generateMutation = useMutation({
     mutationFn: () => generateActivePlan(currentWeekStartIso()),
     onSuccess: (plan) => {
@@ -44,23 +55,6 @@ export default function PlanTab() {
       notify({ tone: "danger", title: "生成失败", description: err instanceof Error ? err.message : "请稍后重试。" });
     }
   });
-  useEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="生成或调整本周计划"
-          hitSlop={11}
-          onPress={() => generateMutation.mutate()}
-          disabled={generateMutation.isPending}
-        >
-          <Text size="body" color={tokens.tint}>
-            {generateMutation.isPending ? "生成中" : data ? "调整" : "生成"}
-          </Text>
-        </Pressable>
-      )
-    });
-  }, [data, generateMutation, navigation, tokens.tint]);
   const confirmMutation = useMutation({
     mutationFn: confirmCalendarDraft,
     onSuccess: (draft) => {
@@ -87,8 +81,28 @@ export default function PlanTab() {
   }));
 
   return (
-    <Screen>
-      <View style={[styles.weekStrip, { backgroundColor: tokens.surface }]}>
+    <Screen contentContainerStyle={{ paddingTop: insets.top + spacing.lg }}>
+      {/* In-page header: the native header is hidden for this tab, so the
+          safe-area top inset is applied manually via contentContainerStyle. */}
+      <WarmHeader
+        overline={planWeekLabel(data?.weekStart)}
+        title="计划"
+        actions={
+          <WarmHeaderButton
+            accessibilityLabel="生成或调整本周计划"
+            disabled={generateMutation.isPending}
+            onPress={() => generateMutation.mutate()}
+          >
+            {generateMutation.isPending ? (
+              <ActivityIndicator color={tokens.tint} size="small" />
+            ) : (
+              <Sparkles color={tokens.label} size={18} strokeWidth={1.8} />
+            )}
+          </WarmHeaderButton>
+        }
+      />
+
+      <View style={[styles.weekStrip, { backgroundColor: tokens.surface }, shadow]}>
         {weekDays.map((day) => (
           <View key={day.name} style={styles.dayItem}>
             <Text size="caption2" color={tokens.labelSecondary}>周{day.name}</Text>
@@ -103,7 +117,7 @@ export default function PlanTab() {
         <EmptyState title="计划加载失败" description="请稍后重试或重新登录。" />
       ) : data ? (
         <>
-          <View style={[styles.primaryCard, { backgroundColor: tokens.surface }]}>
+          <View style={[styles.primaryCard, { backgroundColor: tokens.surface }, shadow]}>
             <Text size="footnote" color={tokens.tint}>星期一</Text>
             <View style={styles.sessionTitleRow}>
               <View style={[styles.sessionIcon, { backgroundColor: tokens.fill }]}>
@@ -201,7 +215,7 @@ const styles = StyleSheet.create({
   dayCircle: { alignItems: "center", borderRadius: 16, height: 32, justifyContent: "center", width: 32 },
   dayItem: { alignItems: "center", flex: 1, gap: spacing.xs },
   emptyPlan: { gap: spacing.lg },
-  primaryCard: { borderRadius: radius.md, gap: spacing.lg, marginHorizontal: spacing.lg, padding: spacing.lg },
+  primaryCard: { borderRadius: radius.card, gap: spacing.lg, marginHorizontal: 20, padding: 18 },
   sessionCopy: { flex: 1, gap: spacing.xs },
   sessionIcon: { alignItems: "center", borderRadius: 24, height: 48, justifyContent: "center", width: 48 },
   sessionTitleRow: { alignItems: "center", flexDirection: "row", gap: spacing.md },
@@ -211,9 +225,9 @@ const styles = StyleSheet.create({
   trackDot: { borderRadius: 6, borderWidth: 2, height: 12, width: 12 },
   trackLine: { height: 2, left: 0, position: "absolute", right: 0 },
   weekStrip: {
-    borderRadius: radius.md,
+    borderRadius: radius.card,
     flexDirection: "row",
-    marginHorizontal: spacing.lg,
+    marginHorizontal: 20,
     paddingVertical: spacing.md
   }
 });
