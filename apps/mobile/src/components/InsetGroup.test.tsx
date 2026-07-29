@@ -29,6 +29,18 @@ function rows(count: number) {
   return Array.from({ length: count }, (_, index) => createElement("View", { key: `row-${index}` }));
 }
 
+function collectStyles(node: unknown): unknown[] {
+  if (Array.isArray(node)) return node.flatMap(collectStyles);
+  if (!node || typeof node !== "object") return [];
+  const element = node as Node;
+  return [element.props?.style, ...collectStyles(element.props?.children)];
+}
+
+function flatten(style: unknown): Record<string, unknown> {
+  if (Array.isArray(style)) return Object.assign({}, ...style.map(flatten));
+  return (style ?? {}) as Record<string, unknown>;
+}
+
 describe("InsetGroup", () => {
   it("draws a separator between rows but never after the last one", () => {
     expect(collect(InsetGroup({ children: rows(3) }), "inset-separator")).toHaveLength(2);
@@ -53,5 +65,15 @@ describe("InsetGroup", () => {
     const [, dynamic] = separator.props?.style as [unknown, { marginLeft: number }];
 
     expect(dynamic.marginLeft).toBe(0);
+  });
+
+  it("lifts the card with the warm card shadow", () => {
+    const card = collectStyles(InsetGroup({ children: rows(1) }))
+      .map(flatten)
+      .find((style) => style.shadowColor !== undefined);
+
+    expect(card?.shadowColor).toBe("#6B675C");
+    expect(card?.shadowOpacity).toBe(0.14);
+    expect(card?.shadowRadius).toBe(24);
   });
 });

@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, type PressableProps } from "react-native";
-import { radius, spacing, useTheme } from "../theme/tokens";
+import { opacity, radius, spacing, useTheme } from "../theme/tokens";
 import { Text } from "./Text";
 
 type Variant = "filled" | "tinted" | "plain" | "destructive";
@@ -44,7 +44,7 @@ export function Button({
         styles.base,
         {
           backgroundColor,
-          opacity: disabled ? 0.45 : state.pressed ? 0.65 : 1
+          opacity: disabled ? opacity.disabled : state.pressed ? opacity.pressed : 1
         },
         typeof style === "function" ? style(state) : style
       ]}
@@ -60,9 +60,9 @@ export function Button({
 const styles = StyleSheet.create({
   base: {
     alignItems: "center",
-    borderRadius: radius.md,
+    borderRadius: radius.pill,
     justifyContent: "center",
-    marginHorizontal: spacing.md,
+    marginHorizontal: spacing.lg,
     minHeight: 50,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm

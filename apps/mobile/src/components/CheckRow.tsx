@@ -38,8 +38,8 @@ export function CheckRow({
         style={[
           styles.box,
           completed
-            ? { backgroundColor: tokens.controlFill, borderColor: tokens.controlFill }
-            : { borderColor: tokens.separatorOpaque }
+            ? { backgroundColor: tokens.tint, borderColor: tokens.tint }
+            : { borderColor: tokens.separator }
         ]}
       >
         {completed ? <Check color={tokens.controlLabel} size={15} strokeWidth={3} /> : null}

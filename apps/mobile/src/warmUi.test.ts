@@ -209,6 +209,26 @@ describe("warm card mobile UI", () => {
     expect(read("./components/Button.tsx")).not.toContain("aliases");
   });
 
+  it("renders filled controls as pills with token-driven feedback", () => {
+    const source = read("./components/Button.tsx");
+
+    expect(source).toContain("borderRadius: radius.pill");
+    expect(source).toContain("marginHorizontal: spacing.lg");
+    expect(source).toContain("opacity.pressed");
+    expect(source).toContain("opacity.disabled");
+    expect(source).not.toContain("0.65");
+    expect(source).not.toContain("0.45");
+  });
+
+  it("lifts grouped cards with the warm shadow and clears the floating capsule", () => {
+    expect(read("./components/InsetGroup.tsx")).toContain("cardShadow");
+    expect(read("./components/CheckRow.tsx")).toContain("tokens.tint");
+
+    const screen = read("./components/Screen.tsx");
+    expect(screen).toContain("bottomClearance");
+    expect(screen).toContain("FLOATING_TAB_BAR_CLEARANCE");
+  });
+
   it("retires the primitives the grouped list replaced", () => {
     expect(() => read("./components/Card.tsx")).toThrow();
     expect(() => read("./components/Section.tsx")).toThrow();

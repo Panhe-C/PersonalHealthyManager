@@ -33,7 +33,7 @@ describe("CheckRow", () => {
     const [box] = (element.props?.children as Node[]) ?? [];
 
     expect(types(element)).toContain("Check");
-    expect(flatten(box.props?.style).backgroundColor).toBe("#22221F");
+    expect(flatten(box.props?.style).backgroundColor).toBe("#3D7A55");
   });
 
   it("shows an empty outlined box when pending", () => {
