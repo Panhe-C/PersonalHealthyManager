@@ -1,7 +1,4 @@
 import { Tabs } from "expo-router";
-import { BlurView } from "expo-blur";
-import { useEffect, useState } from "react";
-import { AccessibilityInfo, StyleSheet, View } from "react-native";
 import {
   CalendarDays,
   ChartNoAxesColumnIncreasing,
@@ -9,44 +6,18 @@ import {
   Settings as SettingsIcon,
   Sun
 } from "lucide-react-native";
-import { useTheme } from "../../../src/theme/tokens";
+import { FloatingTabBar } from "../../../src/navigation/FloatingTabBar";
 
 export default function TabsLayout() {
-  const { tokens, isDark } = useTheme();
-  const [reduceTransparency, setReduceTransparency] = useState(false);
-
-  useEffect(() => {
-    void AccessibilityInfo.isReduceTransparencyEnabled().then(setReduceTransparency);
-    const subscription = AccessibilityInfo.addEventListener(
-      "reduceTransparencyChanged",
-      setReduceTransparency
-    );
-    return () => subscription.remove();
-  }, []);
-
   return (
     <Tabs
+      tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: tokens.tint,
-        tabBarInactiveTintColor: tokens.labelSecondary,
-        tabBarLabelStyle: { fontSize: 10, fontWeight: "500" },
-        tabBarStyle: {
-          backgroundColor: "transparent",
-          borderTopColor: tokens.separator,
-          borderTopWidth: StyleSheet.hairlineWidth,
-          position: "absolute"
-        },
-        tabBarBackground: () =>
-          reduceTransparency ? (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: tokens.surface }]} />
-          ) : (
-            <BlurView
-              intensity={100}
-              tint={isDark ? "systemChromeMaterialDark" : "systemChromeMaterialLight"}
-              style={StyleSheet.absoluteFill}
-            />
-          )
+        // Detach the bar from the layout flow so screen content scrolls under
+        // the floating capsule; FloatingTabBar positions itself above the home
+        // indicator and Screen reserves the clearance.
+        tabBarStyle: { position: "absolute" }
       }}
     >
       <Tabs.Screen

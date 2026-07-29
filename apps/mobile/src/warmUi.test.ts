@@ -143,15 +143,17 @@ describe("warm card mobile UI", () => {
     }
   });
 
-  it("floats a blurred tab bar at the system height", () => {
-    const source = read("../app/(app)/(tabs)/_layout.tsx");
+  it("floats a custom capsule tab bar with a raised FAB", () => {
+    const layout = read("../app/(app)/(tabs)/_layout.tsx");
 
-    expect(source).toContain("BlurView");
-    expect(source).toContain("tabBarBackground");
-    expect(source).toContain('position: "absolute"');
-    expect(source).toContain("isReduceTransparencyEnabled");
-    expect(source).toContain("reduceTransparencyChanged");
-    expect(source).not.toContain("height: 68");
+    expect(layout).toContain("tabBar={");
+    expect(layout).toContain("FloatingTabBar");
+    expect(layout).not.toContain("BlurView");
+
+    const bar = read("./navigation/FloatingTabBar.tsx");
+    expect(bar).toContain("BottomTabBarProps");
+    expect(bar).toContain('accessibilityLabel="快速记录"');
+    expect(bar).toContain("borderRadius: radius.pill");
   });
 
   it("builds Today from grouped cards including the training checklist", () => {
