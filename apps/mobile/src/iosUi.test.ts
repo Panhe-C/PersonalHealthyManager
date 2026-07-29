@@ -151,4 +151,17 @@ describe("iOS native mobile UI", () => {
     expect(source).toContain("styles.chartCard");
     expect(source).not.toContain("<HairlineRow");
   });
+
+  it("builds the settings tree from grouped cards", () => {
+    const files = ["index", ...detailScreens];
+
+    for (const file of files) {
+      const source = read(`../app/(app)/(tabs)/settings/${file}.tsx`);
+
+      expect(source).toContain("<InsetGroup");
+      expect(source).not.toContain("<Section");
+      expect(source).not.toContain("<HairlineRow");
+      expect(source).not.toContain("<TextInput");
+    }
+  });
 });

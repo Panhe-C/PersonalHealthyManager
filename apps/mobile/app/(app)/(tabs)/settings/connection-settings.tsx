@@ -6,7 +6,8 @@ import { Text } from "../../../../src/components/Text";
 import { Button } from "../../../../src/components/Button";
 import { ChoiceGroup } from "../../../../src/components/ChoiceGroup";
 import { useFeedback } from "../../../../src/components/Feedback";
-import { Section } from "../../../../src/components/Section";
+import { InsetGroup } from "../../../../src/components/InsetGroup";
+import { Row } from "../../../../src/components/Row";
 import { TextField } from "../../../../src/components/TextField";
 
 import { useSettingsQuery } from "../../../../src/api/hooks";
@@ -59,21 +60,25 @@ export default function ConnectionSettingsScreen() {
 
   return (
     <Screen>
-      <Text style={{ color: tokens.muted }}>令牌只会提交到服务端加密保存；留空保持现有令牌。COROS 使用 OAuth，点击授权会打开浏览器登录。</Text>
-
       {draft.dataMcpConnections.map((connection) => (
-        <Section
+        <InsetGroup
           key={connection.id}
-          title={connection.label}
-          description={connection.id}
-          action={
+          header={connection.label}
+          footer={connection.id === "coros"
+            ? "COROS 使用 OAuth，点击授权会打开浏览器登录。"
+            : "令牌只会提交到服务端加密保存；留空保持现有令牌。"}
+        >
+          <Row
+            title="启用连接"
+            value={connection.enabled ? "已启用" : "已停用"}
+            trailing={
             <Switch
               value={connection.enabled}
               onValueChange={(enabled) => update(connection.id, { enabled })}
-              trackColor={{ true: tokens.sage, false: tokens.line }}
+              trackColor={{ true: tokens.tint, false: tokens.separator }}
             />
           }
-        >
+          />
           {connection.id === "coros" ? (
             <CorosAuthSection connection={connection} onAuthorized={reloadSettings} />
           ) : (
@@ -87,7 +92,7 @@ export default function ConnectionSettingsScreen() {
               <CredentialField connection={connection} onChange={(auth) => update(connection.id, { auth })} />
             </>
           )}
-        </Section>
+        </InsetGroup>
       ))}
 
       <Button title={busy ? "保存中…" : "保存连接配置"} disabled={busy} onPress={save} />

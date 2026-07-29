@@ -2,16 +2,13 @@ import { useState } from "react";
 import { Screen } from "../../../../src/components/Screen";
 import { Button } from "../../../../src/components/Button";
 import { useFeedback } from "../../../../src/components/Feedback";
-import { HairlineRow } from "../../../../src/components/QuietHealth";
-import { Section } from "../../../../src/components/Section";
-import { Text } from "../../../../src/components/Text";
+import { InsetGroup } from "../../../../src/components/InsetGroup";
+import { Row } from "../../../../src/components/Row";
 
 import { syncHealthKit } from "../../../../src/healthKit";
-import { useTheme } from "../../../../src/theme/tokens";
 
 export default function HealthKitSettingsScreen() {
   const { notify } = useFeedback();
-  const { tokens } = useTheme();
   const [busy, setBusy] = useState(false);
   const [imported, setImported] = useState<{ sleep: number; recovery: number } | null>(null);
 
@@ -30,17 +27,15 @@ export default function HealthKitSettingsScreen() {
 
   return (
     <Screen>
-      <Text style={{ color: tokens.muted }}>只读取你明确授权的数据，最近 14 天数据会同步到个人健康空间。</Text>
+      <InsetGroup header="上次同步" footer="只读取你明确授权的数据，最近 14 天数据会同步到个人健康空间。">
+        <Row title="睡眠记录" value={imported ? `${imported.sleep} 条` : "尚未同步"} />
+        <Row title="恢复记录" value={imported ? `${imported.recovery} 条` : "尚未同步"} />
+      </InsetGroup>
 
-      <Section title="上次同步">
-        <HairlineRow title="睡眠记录" value={imported ? `${imported.sleep} 条` : "尚未同步"} />
-        <HairlineRow title="恢复记录" value={imported ? `${imported.recovery} 条` : "尚未同步"} />
-      </Section>
-
-      <Section title="读取范围">
-        <Text style={{ color: tokens.muted }}>身高、体重、体脂、静息心率、HRV 和睡眠。</Text>
-        <Text size="sm" style={{ color: tokens.muted }}>不会向 Apple 健康写入任何数据。</Text>
-      </Section>
+      <InsetGroup header="读取范围" footer="不会向 Apple 健康写入任何数据。">
+        <Row title="身体数据" value="身高 体重 体脂" />
+        <Row title="心脏与睡眠" value="静息心率 HRV 睡眠" />
+      </InsetGroup>
 
       <Button title={busy ? "同步中…" : "授权并同步"} disabled={busy} onPress={sync} />
     </Screen>

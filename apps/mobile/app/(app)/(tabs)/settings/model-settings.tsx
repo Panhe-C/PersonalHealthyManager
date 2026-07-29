@@ -6,7 +6,7 @@ import { Text } from "../../../../src/components/Text";
 import { Button } from "../../../../src/components/Button";
 import { ChoiceGroup } from "../../../../src/components/ChoiceGroup";
 import { useFeedback } from "../../../../src/components/Feedback";
-import { Section } from "../../../../src/components/Section";
+import { InsetGroup } from "../../../../src/components/InsetGroup";
 import { TextField } from "../../../../src/components/TextField";
 
 import { useSettingsQuery } from "../../../../src/api/hooks";
@@ -73,13 +73,11 @@ export default function ModelSettingsScreen() {
 
   return (
     <Screen>
-      <Text style={{ color: tokens.muted }}>选择服务商并填入 API Key 即可；模型与地址自动匹配。密钥由服务端加密保存，留空会保留现有密钥。</Text>
-
-      <Section title="服务商">
+      <InsetGroup header="模型提供方">
         <ChoiceGroup options={modelProviderOptions} value={draft.modelProvider} onChange={selectProvider} />
-      </Section>
+      </InsetGroup>
 
-      <Section title="模型">
+      <InsetGroup header="模型">
         {providerNeedsManualModel(draft.modelProvider) ? (
           <>
             <TextField
@@ -101,9 +99,12 @@ export default function ModelSettingsScreen() {
             <Text size="sm" style={{ color: tokens.muted }}>{draft.modelBaseUrl}</Text>
           </View>
         )}
-      </Section>
+      </InsetGroup>
 
-      <Section title="凭据">
+      <InsetGroup
+        header="凭据"
+        footer="密钥由服务端加密保存，留空会保留现有密钥；模型与地址会随提供方自动匹配。"
+      >
         <TextField
           label="API Key"
           value={apiKey}
@@ -111,7 +112,7 @@ export default function ModelSettingsScreen() {
           secure
           placeholder={draft.hasApiKey ? `已配置 ${draft.apiKeyHint ?? ""}；留空保持不变` : "输入 API Key"}
         />
-      </Section>
+      </InsetGroup>
 
       <Button title={busy ? "保存中…" : "保存模型配置"} disabled={busy} onPress={save} />
     </Screen>
