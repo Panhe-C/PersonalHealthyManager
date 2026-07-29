@@ -1,51 +1,53 @@
 import { useColorScheme } from "react-native";
 
-// Explicit iOS palette snapshots. Key names follow UIKit so the mapping stays auditable:
-// bg = systemGroupedBackground, surface = secondarySystemGroupedBackground,
-// surfaceAlt = tertiarySystemGroupedBackground, fill = secondarySystemFill.
-// `tint` is the accessible systemGreen for text and icons; `tintFill` preserves
-// the bright systemGreen for non-text fills. Text-bearing filled controls use
-// the explicit control/destructive foreground-background pairs below.
+// Warm neutral palette (spec 2026-07-29-warm-card-redesign-phase1-design.md).
+// Key names are unchanged from the iOS snapshot so every existing call site
+// keeps compiling; `orange` is the only new key. `tint` is the text-safe green;
+// `tintFill` is the brighter fill for rings and decorative arcs. Text-bearing
+// filled controls use the explicit control/destructive foreground-background
+// pairs below.
 const lightBase = {
-  bg: "#F2F2F7",
-  surface: "#FFFFFF",
-  surfaceAlt: "#F2F2F7",
-  label: "#000000",
-  labelSecondary: "rgba(60,60,67,0.6)",
-  labelTertiary: "rgba(60,60,67,0.3)",
-  separator: "rgba(60,60,67,0.29)",
-  separatorOpaque: "#C6C6C8",
-  tint: "#248A3D",
-  tintFill: "#34C759",
-  controlFill: "#237F3C",
-  controlLabel: "#FFFFFF",
-  fill: "rgba(120,120,128,0.12)",
-  red: "#FF3B30",
-  redFill: "rgba(255,59,48,0.12)",
-  destructiveFill: "#D70015",
-  destructiveLabel: "#FFFFFF"
+  bg: "#EFEEE9",
+  surface: "#FBFBF7",
+  surfaceAlt: "#EFEEE9",
+  label: "#1C1C1A",
+  labelSecondary: "#8B8B83",
+  labelTertiary: "rgba(139,139,131,0.6)",
+  separator: "#D8D6CE",
+  separatorOpaque: "#D8D6CE",
+  tint: "#3D7A55",
+  tintFill: "#4C9A6B",
+  controlFill: "#22221F",
+  controlLabel: "#FBFBF7",
+  fill: "#E3E1D9",
+  red: "#C4534A",
+  redFill: "rgba(196,83,74,0.12)",
+  destructiveFill: "#A8463E",
+  destructiveLabel: "#FBFBF7",
+  orange: "#E8823A"
 } as const;
 
 type BaseTokens = { [K in keyof typeof lightBase]: string };
 
 const darkBase: BaseTokens = {
-  bg: "#000000",
-  surface: "#1C1C1E",
-  surfaceAlt: "#2C2C2E",
-  label: "#FFFFFF",
-  labelSecondary: "rgba(235,235,245,0.6)",
-  labelTertiary: "rgba(235,235,245,0.3)",
-  separator: "rgba(84,84,88,0.6)",
-  separatorOpaque: "#38383A",
-  tint: "#30D158",
-  tintFill: "#30D158",
-  controlFill: "#30D158",
-  controlLabel: "#000000",
-  fill: "rgba(120,120,128,0.36)",
-  red: "#FF453A",
-  redFill: "rgba(255,69,58,0.18)",
-  destructiveFill: "#FF6961",
-  destructiveLabel: "#000000"
+  bg: "#1A1917",
+  surface: "#252421",
+  surfaceAlt: "#33322E",
+  label: "#F2F1EC",
+  labelSecondary: "#8B8B83",
+  labelTertiary: "rgba(139,139,131,0.6)",
+  separator: "#3A3934",
+  separatorOpaque: "#3A3934",
+  tint: "#5FA97E",
+  tintFill: "#5FA97E",
+  controlFill: "#F2F1EC",
+  controlLabel: "#1C1C1A",
+  fill: "#33322E",
+  red: "#D96A60",
+  redFill: "rgba(217,106,96,0.18)",
+  destructiveFill: "#D96A60",
+  destructiveLabel: "#1C1C1A",
+  orange: "#E8914F"
 };
 
 export const lightTokens = lightBase;
@@ -62,10 +64,11 @@ export const spacing = {
 
 export const radius = {
   sm: 8,
-  card: 10,
+  card: 28,
   md: 12,
-  sheet: 16,
-  bubble: 20
+  sheet: 32,
+  bubble: 20,
+  pill: 999
 } as const;
 
 export const opacity = {
@@ -73,7 +76,23 @@ export const opacity = {
   disabled: 0.5
 } as const;
 
-// iOS text styles at the default Dynamic Type size.
+/**
+ * The one sanctioned shadow of the warm card language. Spread it onto card
+ * surfaces; iOS clips shadows on views with `overflow: "hidden"`, so cards
+ * that need clipping split into a shadow-bearing outer view and a clipping
+ * inner view (see InsetGroup).
+ */
+export function cardShadow(scheme: "light" | "dark") {
+  return {
+    shadowColor: scheme === "dark" ? "#000000" : "#6B675C",
+    shadowOpacity: 0.14,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4
+  } as const;
+}
+
+// iOS text styles at the default Dynamic Type size; unchanged by the warm redesign.
 export const textStyles = {
   largeTitle: { fontSize: 34, lineHeight: 41 },
   title1: { fontSize: 28, lineHeight: 34 },

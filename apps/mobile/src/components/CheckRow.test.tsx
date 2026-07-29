@@ -33,7 +33,7 @@ describe("CheckRow", () => {
     const [box] = (element.props?.children as Node[]) ?? [];
 
     expect(types(element)).toContain("Check");
-    expect(flatten(box.props?.style).backgroundColor).toBe("#237F3C");
+    expect(flatten(box.props?.style).backgroundColor).toBe("#22221F");
   });
 
   it("shows an empty outlined box when pending", () => {
@@ -42,7 +42,7 @@ describe("CheckRow", () => {
 
     expect(types(element)).not.toContain("Check");
     expect(flatten(box.props?.style).backgroundColor).toBeUndefined();
-    expect(flatten(box.props?.style).borderColor).toBe("#C6C6C8");
+    expect(flatten(box.props?.style).borderColor).toBe("#D8D6CE");
   });
 
   it("strikes through a skipped label", () => {

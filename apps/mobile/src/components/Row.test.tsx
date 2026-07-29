@@ -53,7 +53,7 @@ describe("Row", () => {
   it("paints destructive rows with the system red", () => {
     const [title] = texts(Row({ title: "退出登录", destructive: true, onPress: () => undefined }));
 
-    expect(title.props?.color).toBe("#FF3B30");
+    expect(title.props?.color).toBe("#C4534A");
   });
 
   it("reports a disabled tappable row to assistive technology", () => {

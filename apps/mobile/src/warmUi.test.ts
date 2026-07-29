@@ -18,35 +18,64 @@ const detailScreens = [
   "data-export"
 ];
 
-describe("iOS native mobile UI", () => {
-  it("uses the explicit iOS palette and accessible control pairs in both schemes", () => {
+describe("warm card mobile UI", () => {
+  it("uses the warm neutral palette with accessible control pairs in both schemes", () => {
     const source = read("./theme/tokens.ts");
 
-    expect(source).toContain('bg: "#F2F2F7"');
-    expect(source).toContain('surface: "#FFFFFF"');
-    expect(source).toContain('label: "#000000"');
-    expect(source).toContain('labelSecondary: "rgba(60,60,67,0.6)"');
-    expect(source).toContain('separator: "rgba(60,60,67,0.29)"');
-    expect(source).toContain('tint: "#248A3D"');
-    expect(source).toContain('controlFill: "#237F3C"');
-    expect(source).toContain('controlLabel: "#FFFFFF"');
-    expect(source).toContain('red: "#FF3B30"');
-    expect(source).toContain('bg: "#000000"');
-    expect(source).toContain('surface: "#1C1C1E"');
-    expect(source).toContain('tint: "#30D158"');
-    expect(source).toContain('controlLabel: "#000000"');
+    expect(source).toContain('bg: "#EFEEE9"');
+    expect(source).toContain('surface: "#FBFBF7"');
+    expect(source).toContain('label: "#1C1C1A"');
+    expect(source).toContain('labelSecondary: "#8B8B83"');
+    expect(source).toContain('labelTertiary: "rgba(139,139,131,0.6)"');
+    expect(source).toContain('separator: "#D8D6CE"');
+    expect(source).toContain('tint: "#3D7A55"');
+    expect(source).toContain('tintFill: "#4C9A6B"');
+    expect(source).toContain('controlFill: "#22221F"');
+    expect(source).toContain('controlLabel: "#FBFBF7"');
+    expect(source).toContain('fill: "#E3E1D9"');
+    expect(source).toContain('red: "#C4534A"');
+    expect(source).toContain('orange: "#E8823A"');
+    expect(source).toContain('bg: "#1A1917"');
+    expect(source).toContain('surface: "#252421"');
+    expect(source).toContain('separator: "#3A3934"');
+    expect(source).toContain('tint: "#5FA97E"');
+    expect(source).toContain('tintFill: "#5FA97E"');
+    expect(source).toContain('controlFill: "#F2F1EC"');
+    expect(source).toContain('controlLabel: "#1C1C1A"');
+    expect(source).toContain('fill: "#33322E"');
+    expect(source).toContain('red: "#D96A60"');
+    expect(source).toContain('orange: "#E8914F"');
   });
 
-  it("retires the Quiet Health palette", () => {
+  it("retires the iOS palette", () => {
     const source = read("./theme/tokens.ts");
 
-    expect(source).not.toContain("#F6F4EE");
-    expect(source).not.toContain("#17231D");
-    expect(source).not.toContain("#718579");
-    expect(source).not.toContain("#C87958");
+    expect(source).not.toContain("#F2F2F7");
+    expect(source).not.toContain("#248A3D");
+    expect(source).not.toContain("#237F3C");
+    expect(source).not.toContain("#FF3B30");
   });
 
-  it("uses iOS text style metrics", () => {
+  it("uses the warm radius scale with a pill token", () => {
+    const source = read("./theme/tokens.ts");
+
+    expect(source).toContain("card: 28");
+    expect(source).toContain("sheet: 32");
+    expect(source).toContain("pill: 999");
+    expect(source).toContain("bubble: 20");
+  });
+
+  it("exports the card shadow recipe", () => {
+    const source = read("./theme/tokens.ts");
+
+    expect(source).toContain("export function cardShadow");
+    expect(source).toContain('"#6B675C"');
+    expect(source).toContain("shadowOpacity: 0.14");
+    expect(source).toContain("shadowRadius: 24");
+    expect(source).toContain("elevation: 4");
+  });
+
+  it("keeps the text style metrics unchanged", () => {
     const source = read("./theme/tokens.ts");
 
     expect(source).toContain("largeTitle: { fontSize: 34, lineHeight: 41 }");
@@ -73,7 +102,7 @@ describe("iOS native mobile UI", () => {
     expect(source).not.toContain("paddingHorizontal");
   });
 
-  it("uses iOS control metrics for buttons and inputs", () => {
+  it("uses the shared control metrics for buttons and inputs", () => {
     expect(read("./components/Button.tsx")).toContain("minHeight: 50");
     expect(read("./components/TextField.tsx")).toContain("minHeight: 44");
     expect(read("./components/TextField.tsx")).toContain("useWindowDimensions");
