@@ -44,6 +44,14 @@ function weekdayLabel(value: string): string {
   return Number.isNaN(date.getTime()) ? "" : weekdayFormat.format(date);
 }
 
+// VoiceOver reads each sleep bar as one unit, e.g. 周二睡眠 8 小时 35 分.
+function sleepBarLabel(record: { date: string; durationMinutes: number }): string {
+  const hours = Math.floor(record.durationMinutes / 60);
+  const rest = record.durationMinutes % 60;
+  const duration = rest > 0 ? `${hours} 小时 ${rest} 分` : `${hours} 小时`;
+  return `${weekdayLabel(record.date)}睡眠 ${duration}`;
+}
+
 export default function TodayTab() {
   const { data, isLoading, error } = useTodayOverviewQuery();
   const sleep = useSleepQuery(7);
@@ -134,7 +142,12 @@ export default function TodayTab() {
             {weekSleep.length ? (
               <View style={styles.barRow}>
                 {weekSleep.map((record, index) => (
-                  <View key={record.id} style={styles.barCol}>
+                  <View
+                    key={record.id}
+                    accessible
+                    accessibilityLabel={sleepBarLabel(record)}
+                    style={styles.barCol}
+                  >
                     <View
                       style={[
                         styles.bar,
@@ -267,11 +280,15 @@ function TodayChecklist({
         </Text>
       </View>
 
-      <Button
-        title={alreadyRecorded ? "已记录" : completionMutation.isPending ? "提交中" : "提交完成"}
-        disabled={alreadyRecorded || completionMutation.isPending}
-        onPress={() => completionMutation.mutate()}
-      />
+      {/* Button's global 16pt margin plus this 4pt wrap equals the 20pt card
+          margin, without changing Button for every other screen. */}
+      <View style={styles.submitWrap}>
+        <Button
+          title={alreadyRecorded ? "已记录" : completionMutation.isPending ? "提交中" : "提交完成"}
+          disabled={alreadyRecorded || completionMutation.isPending}
+          onPress={() => completionMutation.mutate()}
+        />
+      </View>
     </>
   );
 }
@@ -320,5 +337,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
     paddingHorizontal: spacing.lg
   },
-  rowDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: spacing.lg }
+  rowDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: spacing.lg },
+  submitWrap: { marginHorizontal: spacing.xs }
 });

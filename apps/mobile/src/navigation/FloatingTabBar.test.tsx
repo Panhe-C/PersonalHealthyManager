@@ -22,7 +22,9 @@ type Node = {
   props?: {
     accessibilityLabel?: string;
     accessibilityRole?: string;
+    accessibilityState?: { selected?: boolean };
     onPress?: () => void;
+    style?: unknown;
     children?: unknown;
   };
 };
@@ -33,6 +35,11 @@ function collect(node: unknown, predicate: (element: Node) => boolean): Node[] {
   const element = node as Node;
   const self = predicate(element) ? [element] : [];
   return [...self, ...collect(element.props?.children, predicate)];
+}
+
+function flatten(style: unknown): Record<string, unknown> {
+  if (Array.isArray(style)) return Object.assign({}, ...style.map(flatten));
+  return (style ?? {}) as Record<string, unknown>;
 }
 
 const tabNames = ["today", "plan", "coach", "insights", "settings"] as const;
@@ -101,7 +108,7 @@ describe("FloatingTabBar", () => {
     expect(navigation.navigate).toHaveBeenCalledWith("plan", undefined);
   });
 
-  it("sends the FAB to the coach tab as the phase-1 placeholder action", () => {
+  it("sends the FAB to the coach tab as the placeholder action", () => {
     const { navigation, props } = makeProps();
     const fab = buttons(FloatingTabBar(props)).find(
       (button) => button.props?.accessibilityLabel === "快速记录"
@@ -110,5 +117,28 @@ describe("FloatingTabBar", () => {
     fab?.props?.onPress?.();
 
     expect(navigation.navigate).toHaveBeenCalledWith("coach", undefined);
+  });
+
+  it("marks the FAB selected and tinted while the coach tab is focused", () => {
+    const { props } = makeProps();
+    const focusedProps = {
+      ...props,
+      state: { ...props.state, index: 2 }
+    } as unknown as BottomTabBarProps;
+    const fab = buttons(FloatingTabBar(focusedProps)).find(
+      (button) => button.props?.accessibilityLabel === "快速记录"
+    );
+
+    expect(fab?.props?.accessibilityState).toEqual({ selected: true });
+    expect(flatten(fab?.props?.style).backgroundColor).toBe("#3D7A55");
+  });
+
+  it("keeps the FAB unselected and dark on the other tabs", () => {
+    const fab = buttons(FloatingTabBar(makeProps().props)).find(
+      (button) => button.props?.accessibilityLabel === "快速记录"
+    );
+
+    expect(fab?.props?.accessibilityState).toEqual({ selected: false });
+    expect(flatten(fab?.props?.style).backgroundColor).toBe("#22221F");
   });
 });

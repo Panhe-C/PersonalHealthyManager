@@ -26,7 +26,7 @@ import { useAgentMemoriesQuery, useConversationDetailQuery, useConversationsQuer
 import { RichMessage } from "../../../../src/components/RichMessage";
 import { getRecentMessagesForChat, mergeConversationMessages } from "../../../../src/coachMessages";
 import { formatDateLabel } from "../../../../src/ui/format";
-import { opacity, radius, spacing, useTheme } from "../../../../src/theme/tokens";
+import { cardShadow, opacity, radius, spacing, useTheme } from "../../../../src/theme/tokens";
 import type { AgentAdjustment, AgentMessage, Conversation, Memory } from "../../../../src/api/schemas";
 
 const fallbackSuggestions = [
@@ -90,7 +90,7 @@ export default function CoachTab() {
   const conversationsQuery = useConversationsQuery();
   const memoriesQuery = useAgentMemoriesQuery();
   const { confirm } = useFeedback();
-  const { tokens } = useTheme();
+  const { tokens, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { width: viewportWidth } = useWindowDimensions();
   const [selectedConversationId, setSelectedConversationId] = useState<string | undefined>();
@@ -415,7 +415,8 @@ export default function CoachTab() {
           <Pressable
             style={[
               styles.memorySheet,
-              { backgroundColor: tokens.surface, borderColor: tokens.separator, paddingBottom: Math.max(insets.bottom, spacing.lg) }
+              { backgroundColor: tokens.surface, borderColor: tokens.separator, paddingBottom: Math.max(insets.bottom, spacing.lg) },
+              cardShadow(isDark ? "dark" : "light")
             ]}
             onPress={(event) => event.stopPropagation()}
           >
@@ -470,6 +471,7 @@ export default function CoachTab() {
           <Animated.View
             style={[
               styles.conversationDrawer,
+              cardShadow(isDark ? "dark" : "light"),
               {
                 backgroundColor: tokens.surface,
                 borderColor: tokens.separator,
@@ -551,7 +553,7 @@ export default function CoachTab() {
 }
 
 function MessageBubble({ message, onUndo }: { message: AgentMessage; onUndo: (adjustment: AgentAdjustment) => void }) {
-  const { tokens } = useTheme();
+  const { tokens, isDark } = useTheme();
   const isUser = message.role === "user";
 
   if (!isUser) {
@@ -560,7 +562,7 @@ function MessageBubble({ message, onUndo }: { message: AgentMessage; onUndo: (ad
         <View style={[styles.assistantAvatar, { borderColor: tokens.tint }]}>
           <Leaf color={tokens.tint} size={19} strokeWidth={1.6} />
         </View>
-        <View style={[styles.assistantContent, { backgroundColor: tokens.surface }]}>
+        <View style={[styles.assistantContent, { backgroundColor: tokens.surface }, cardShadow(isDark ? "dark" : "light")]}>
           <RichMessage content={message.content} />
           {message.adjustments?.map((adjustment) => (
             <AdjustmentProposal key={adjustment.id} adjustment={adjustment} onUndo={onUndo} />
@@ -772,7 +774,7 @@ const styles = StyleSheet.create({
   proposalCard: { borderTopWidth: 1, gap: spacing.lg, paddingTop: spacing.lg },
   rowActions: { flexDirection: "row", gap: spacing.sm },
   screen: { flex: 1 },
-  sendButton: { alignItems: "center", borderRadius: 16, height: 32, justifyContent: "center", width: 32 },
+  sendButton: { alignItems: "center", borderRadius: radius.pill, height: 32, justifyContent: "center", width: 32 },
   sheetBackdrop: { backgroundColor: "rgba(18, 24, 20, 0.34)", flex: 1, justifyContent: "flex-end" },
   sheetHandle: { alignSelf: "center", borderRadius: 2, height: 4, marginBottom: spacing.sm, width: 40 },
   suggestionCard: { borderRadius: radius.sheet, borderWidth: 1, maxWidth: 240, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },

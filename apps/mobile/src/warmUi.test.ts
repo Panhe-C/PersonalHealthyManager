@@ -280,4 +280,25 @@ describe("warm card mobile UI", () => {
     expect(source).toContain("cardShadow");
     expect(source).toContain("<InsetGroup");
   });
+
+  it("keeps the coach chrome native and finishes it with warm shadows", () => {
+    expect(read("../app/(app)/(tabs)/coach/_layout.tsx")).not.toContain("headerShown: false");
+
+    const source = read("../app/(app)/(tabs)/coach/index.tsx");
+
+    expect(source).toContain("navigation.setOptions");
+    expect(source).toContain("headerLeft");
+    expect(source).toContain("cardShadow");
+    expect(source).toContain("FLOATING_TAB_BAR_CLEARANCE");
+    expect(source).not.toContain("BottomTabBarHeightContext");
+  });
+
+  it("labels each Today sleep bar and aligns the submit button to the card margin", () => {
+    const source = read("../app/(app)/(tabs)/today/index.tsx");
+
+    expect(source).toContain("accessible");
+    expect(source).toContain("accessibilityLabel={sleepBarLabel(record)}");
+    expect(source).toContain("小时");
+    expect(source).toContain("styles.submitWrap");
+  });
 });

@@ -23,6 +23,9 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
   const insets = useSafeAreaInsets();
   const shadow = cardShadow(isDark ? "dark" : "light");
   const coachRoute = state.routes[FAB_ROUTE_INDEX];
+  // The coach capsule slot is a spacer, so the FAB doubles as the coach tab's
+  // selected indicator: VoiceOver gets `selected` and the fill turns to tint.
+  const coachFocused = state.index === FAB_ROUTE_INDEX;
 
   return (
     <View pointerEvents="box-none" style={[styles.dock, { bottom: insets.bottom + 16 }]}>
@@ -70,13 +73,14 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
 
       <Pressable
         accessibilityRole="button"
+        accessibilityState={{ selected: coachFocused }}
         accessibilityLabel="快速记录"
         onPress={() => {
           if (coachRoute) {
             navigation.navigate(coachRoute.name, coachRoute.params);
           }
         }}
-        style={[styles.fab, { backgroundColor: tokens.controlFill }, shadow]}
+        style={[styles.fab, { backgroundColor: coachFocused ? tokens.tint : tokens.controlFill }, shadow]}
       >
         <Plus color={tokens.controlLabel} size={26} strokeWidth={2.2} />
       </Pressable>
