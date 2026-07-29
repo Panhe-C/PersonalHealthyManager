@@ -36,7 +36,9 @@ export function Screen({
         {
           paddingBottom:
             bottomClearance ??
-            (tabBarHeight === undefined ? insets.bottom + spacing.xl : FLOATING_TAB_BAR_CLEARANCE)
+            (tabBarHeight === undefined
+              ? insets.bottom + spacing.xl
+              : insets.bottom + FLOATING_TAB_BAR_CLEARANCE)
         },
         contentContainerStyle
       ]}
