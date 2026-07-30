@@ -46,10 +46,6 @@ export default function InsightsTab() {
   const { tokens, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const shadow = cardShadow(isDark ? "dark" : "light");
-  const recoveryValues = [...(recovery.data ?? [])].reverse().map((item) => item.recoveryPercent ?? 0);
-  const latestRecovery = recoveryValues.at(-1) ?? 0;
-  const earliestRecovery = recoveryValues[0] ?? latestRecovery;
-  const recoveryDelta = latestRecovery - earliestRecovery;
   const averageSleep = sleep.data?.length ? Math.round(sleep.data.reduce((sum, item) => sum + item.durationMinutes, 0) / sleep.data.length) : null;
   const averageLoad = activities.data?.length ? Math.round(activities.data.reduce((sum, item) => sum + (item.trainingLoad ?? 0), 0) / activities.data.length) : null;
   const latestRecoveryRecord = recovery.data?.[0];
@@ -71,26 +67,6 @@ export default function InsightsTab() {
   const exerciseSessions = activityList.filter((item) => weekKeySet.has(localDateKey(item.startedAt, APP_TIME_ZONE))).length;
   const heatmapSessions = activityList.filter((item) => heatmapKeySet.has(localDateKey(item.startedAt, APP_TIME_ZONE))).length;
   const exerciseTotal = exerciseWeek.reduce((sum, day) => sum + day.value, 0);
-
-  // Daily recovery bars: reuse the same local-day bucketing by mapping the
-  // percent into the TimedSession shape (one record per day in practice).
-  const recoveryByDay = minutesByDay(
-    (recovery.data ?? []).map((record) => ({ startedAt: record.date, durationMinutes: record.recoveryPercent ?? 0 })),
-    APP_TIME_ZONE
-  );
-  const recoveryWeek = buildWeek(weekKeys, recoveryByDay);
-  const recordedRecoveryDays = recoveryWeek.filter((day) => day.value > 0);
-  const latestRecoveryKey = recordedRecoveryDays.at(-1)?.key;
-  const recoveryBars: WeekBar[] = recoveryWeek.map((day, index) => ({
-    key: day.key,
-    label: weekDayNames[index],
-    value: day.value,
-    tone: day.key === latestRecoveryKey ? "controlFill" : day.value > 0 ? "tintFill" : "fill",
-    valueLabel: day.value > 0 ? `${day.value}%` : undefined,
-    accessibilityLabel: day.value > 0
-      ? `周${weekDayNames[index]}恢复 ${day.value}%`
-      : `周${weekDayNames[index]}无恢复记录`
-  }));
   const exerciseBars: WeekBar[] = exerciseWeek.map((day, index) => {
     const intensity = intensityByDay.get(day.key);
     return {
@@ -136,82 +112,14 @@ export default function InsightsTab() {
     <Screen contentContainerStyle={{ paddingTop: insets.top + spacing.lg }}>
       {/* In-page header: the native header is hidden for this tab, so the
           safe-area top inset is applied manually via contentContainerStyle. */}
-      <WarmHeader overline="最近 8 天" title="数据" />
+      <WarmHeader overline={`近 ${HEATMAP_WEEKS} 周`} title="数据" />
 
       {isLoading ? <Spinner /> : hasError ? (
         <EmptyState title="数据加载失败" description="请确认登录状态和后端服务。" />
       ) : (
         <>
-          <View style={[styles.statCard, { backgroundColor: tokens.surface }, shadow]}>
-            <Text size="footnote" color={tokens.labelSecondary}>恢复趋势 · 最近 4 周</Text>
-            <Text size="metric" color={tokens.label} tabularNums>
-              {recoveryDelta >= 0 ? "+" : ""}{recoveryDelta}%
-            </Text>
-            <Text size="subheadline" color={recoveryDelta >= 0 ? tokens.tint : tokens.red}>
-              {recoveryDelta >= 0 ? "恢复状态正在上升" : "恢复状态需要关注"}
-            </Text>
-          </View>
-
-          {/* 每日恢复: bar height = recovery percent, latest day highlighted,
-              each recorded day labelled with its figure. */}
-          <View style={[styles.card, { backgroundColor: tokens.surface }, shadow]}>
-            <View style={styles.cardHeaderRow}>
-              <View style={styles.cardHeaderLeft}>
-                <View style={[styles.iconTile, { backgroundColor: tokens.fill }]}>
-                  <HeartPulse color={tokens.tint} size={16} strokeWidth={1.8} />
-                </View>
-                <Text size="callout" weight="semibold">
-                  每日恢复
-                </Text>
-              </View>
-              <Text size="footnote" color={tokens.labelSecondary}>
-                {recoveryValues.length ? `最新 ${latestRecovery}%` : ""}
-              </Text>
-            </View>
-            {recoveryValues.length ? <WeekBars bars={recoveryBars} /> : (
-              <EmptyState title="暂无恢复趋势" description="同步 COROS 后会显示趋势。" />
-            )}
-          </View>
-
-          {/* 本周运动: bar height = total minutes, colour = dominant intensity. */}
-          <View style={[styles.card, { backgroundColor: tokens.surface }, shadow]}>
-            <View style={styles.cardHeaderRow}>
-              <View style={styles.cardHeaderLeft}>
-                <View style={[styles.iconTile, { backgroundColor: tokens.fill }]}>
-                  <Footprints color={tokens.orange} size={16} strokeWidth={1.8} />
-                </View>
-                <Text size="callout" weight="semibold">
-                  本周运动
-                </Text>
-              </View>
-              <Text size="footnote" color={tokens.labelSecondary}>
-                {`本周 ${exerciseSessions} 次 · 共 ${formatDuration(exerciseTotal)}`}
-              </Text>
-            </View>
-            <WeekBars bars={exerciseBars} />
-          </View>
-
-          {/* 本周睡眠: latest recorded night highlighted in controlFill. */}
-          <View style={[styles.card, { backgroundColor: tokens.surface }, shadow]}>
-            <View style={styles.cardHeaderRow}>
-              <View style={styles.cardHeaderLeft}>
-                <View style={[styles.iconTile, { backgroundColor: tokens.fill }]}>
-                  <Moon color={tokens.label} size={16} strokeWidth={1.8} />
-                </View>
-                <Text size="callout" weight="semibold">
-                  本周睡眠
-                </Text>
-              </View>
-              <Text size="footnote" color={tokens.labelSecondary}>
-                {weekAverageSleep === null
-                  ? "暂无记录"
-                  : `平均 ${formatDuration(weekAverageSleep)}${averageQuality === null ? "" : ` · 质量均分 ${averageQuality}`}`}
-              </Text>
-            </View>
-            <WeekBars bars={sleepBars} />
-          </View>
-
-          {/* 运动频率: 12-week GitHub-style heatmap on the fixed scale. */}
+          {/* 运动频率: compact 12-week heatmap on top — a quick frequency
+              glance, not a detailed read. */}
           <View style={[styles.card, { backgroundColor: tokens.surface }, shadow]}>
             <View style={styles.cardHeaderRow}>
               <View style={styles.cardHeaderLeft}>
@@ -226,7 +134,42 @@ export default function InsightsTab() {
                 {`近 ${HEATMAP_WEEKS} 周 · ${heatmapSessions} 次`}
               </Text>
             </View>
-            <ActivityHeatmap weeks={weeks} minutesByDay={activityMinutes} todayKey={todayKey} />
+            <ActivityHeatmap weeks={weeks} minutesByDay={activityMinutes} todayKey={todayKey} compact />
+          </View>
+
+          {/* 本周运动 / 本周睡眠: half-width compact cards side by side. */}
+          <View style={styles.cardRow}>
+            <View style={[styles.card, styles.halfCard, { backgroundColor: tokens.surface }, shadow]}>
+              <View style={styles.cardHeaderLeft}>
+                <View style={[styles.iconTile, { backgroundColor: tokens.fill }]}>
+                  <Footprints color={tokens.orange} size={16} strokeWidth={1.8} />
+                </View>
+                <Text size="callout" weight="semibold">
+                  本周运动
+                </Text>
+              </View>
+              <Text size="footnote" color={tokens.labelSecondary}>
+                {`${exerciseSessions} 次 · 共 ${formatDuration(exerciseTotal)}`}
+              </Text>
+              <WeekBars bars={exerciseBars} compact />
+            </View>
+
+            <View style={[styles.card, styles.halfCard, { backgroundColor: tokens.surface }, shadow]}>
+              <View style={styles.cardHeaderLeft}>
+                <View style={[styles.iconTile, { backgroundColor: tokens.fill }]}>
+                  <Moon color={tokens.label} size={16} strokeWidth={1.8} />
+                </View>
+                <Text size="callout" weight="semibold">
+                  本周睡眠
+                </Text>
+              </View>
+              <Text size="footnote" color={tokens.labelSecondary}>
+                {weekAverageSleep === null
+                  ? "暂无记录"
+                  : `均 ${formatDuration(weekAverageSleep)}${averageQuality === null ? "" : ` · ${averageQuality} 分`}`}
+              </Text>
+              <WeekBars bars={sleepBars} compact />
+            </View>
           </View>
 
           <InsetGroup header="分析" insetSeparators>
@@ -271,17 +214,13 @@ const styles = StyleSheet.create({
   card: { borderRadius: radius.card, gap: 14, marginHorizontal: 20, padding: 18 },
   cardHeaderLeft: { alignItems: "center", flexDirection: "row", gap: 10 },
   cardHeaderRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  cardRow: { flexDirection: "row", gap: 12, marginHorizontal: 20 },
+  halfCard: { flex: 1, gap: 10, marginHorizontal: 0, padding: 14 },
   iconTile: {
     alignItems: "center",
     borderRadius: 10,
     height: 32,
     justifyContent: "center",
     width: 32
-  },
-  statCard: {
-    borderRadius: radius.card,
-    gap: spacing.xs,
-    marginHorizontal: 20,
-    padding: 18
   }
 });

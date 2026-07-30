@@ -192,10 +192,11 @@ describe("warm card mobile UI", () => {
     const source = read("../app/(app)/(tabs)/insights/index.tsx");
 
     expect(source).toContain("WarmHeader");
-    expect(source).toContain("最近 8 天");
-    expect(source).toContain("styles.statCard");
-    expect(source).toContain("每日恢复");
-    expect(source).toContain("recoveryBars");
+    expect(source).toContain("styles.cardRow");
+    expect(source).toContain("compact");
+    expect(source).not.toContain("statCard");
+    expect(source).not.toContain("每日恢复");
+    expect(source).not.toContain("recoveryBars");
     expect(source).not.toContain("TrendChart");
     expect(source).toContain("cardShadow");
     expect(source).toContain("<InsetGroup");

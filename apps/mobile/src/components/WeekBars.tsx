@@ -28,12 +28,14 @@ export type WeekBar = {
 /** Shared 7-bar chart for the weekly exercise and sleep cards. Dumb: values,
  *  colours and a11y labels all arrive via props. Empty days render as a short
  *  placeholder bar, so every column stays visible. */
-export function WeekBars({ bars }: { bars: WeekBar[] }) {
+export function WeekBars({ bars, compact = false }: { bars: WeekBar[]; compact?: boolean }) {
   const { tokens } = useTheme();
   const maxValue = Math.max(...bars.map((bar) => bar.value), 1);
   // Only reserve the figure row when a caller actually uses it, so the
   // exercise/sleep cards keep their original spacing.
   const showValues = bars.some((bar) => bar.valueLabel);
+  const maxHeight = compact ? 48 : BAR_MAX_HEIGHT;
+  const barWidth = compact ? 10 : BAR_WIDTH;
 
   return (
     <View style={styles.barRow}>
@@ -47,9 +49,10 @@ export function WeekBars({ bars }: { bars: WeekBar[] }) {
           <View
             style={[
               styles.bar,
+              { width: barWidth },
               {
                 backgroundColor: tokens[bar.tone],
-                height: Math.max(BAR_MIN_HEIGHT, Math.round((bar.value / maxValue) * BAR_MAX_HEIGHT))
+                height: Math.max(BAR_MIN_HEIGHT, Math.round((bar.value / maxValue) * maxHeight))
               }
             ]}
           />
