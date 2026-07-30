@@ -6,6 +6,11 @@ import { MessageSquare, Plus, Send, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ActionButton } from "@/components/ActionButton";
 import { AgentMemoryPanel } from "@/components/AgentMemoryPanel";
+import {
+  AGENT_STREAM_MEDIA_TYPE,
+  createAgentStreamParser,
+  type AgentStreamEvent
+} from "@hbm/contracts";
 
 type AdjustmentRef = { id: string; label: string; undoneAt: string | null };
 
@@ -14,6 +19,7 @@ type ChatMessage = {
   role: string;
   content: string;
   adjustments?: AdjustmentRef[];
+  streamComplete?: boolean;
 };
 
 type AgentConversationSummary = {
@@ -142,8 +148,8 @@ function isLikelyTruncatedAssistantContent(content: string) {
   return /以下是|分析|这一周|本周|建议|概览/.test(plain);
 }
 
-function RichMessageContent({ content }: { content: string }) {
-  if (isLikelyTruncatedAssistantContent(content)) {
+function RichMessageContent({ content, streaming = false }: { content: string; streaming?: boolean }) {
+  if (!streaming && isLikelyTruncatedAssistantContent(content)) {
     return (
       <div className="rich-message-content">
         <p className="rich-truncated">这条回复生成时被截断了，请重新发送问题以获取完整分析。</p>
@@ -295,6 +301,7 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const suggestions = useMemo(() => buildSuggestions(messages), [messages]);
   const selectedConversation = conversations.find((conversation) => conversation.id === selectedConversationId);
+  const lastMessageContent = messages.at(-1)?.content;
 
   async function undoAdjustment(messageId: string, adjustmentId: string) {
     const response = await fetch(`/api/agent/adjustments/${adjustmentId}/undo`, { method: "POST" });
@@ -328,7 +335,7 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
     } else {
       messagesElement.scrollTop = messagesElement.scrollHeight;
     }
-  }, [messages.length]);
+  }, [messages.length, lastMessageContent]);
 
   async function loadConversation(conversationId: string) {
     setLoadingConversation(true);
@@ -408,31 +415,79 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
     setError("");
     setMessage("");
     const optimisticId = `local-${Date.now()}`;
-    setMessages((items) => [...items, { id: optimisticId, role: "user", content }]);
-    const response = await fetch("/api/agent", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ conversationId: selectedConversationId, message: content })
-    });
-    const body = await response.json();
+    const assistantId = `${optimisticId}-assistant`;
+    setMessages((items) => [
+      ...items,
+      { id: optimisticId, role: "user", content },
+      { id: assistantId, role: "assistant", content: "" }
+    ]);
 
-    if (response.ok) {
-      setMessages((items) => [
-        ...items,
-        {
-          id: `${optimisticId}-assistant`,
-          role: "assistant",
-          content: body.message,
-          adjustments: Array.isArray(body.adjustments) ? body.adjustments : undefined
-        }
-      ]);
-      if (body.conversation) {
-        setConversations((items) => [body.conversation, ...items.filter((item) => item.id !== body.conversation.id)]);
+    try {
+      const response = await fetch("/api/agent", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: AGENT_STREAM_MEDIA_TYPE
+        },
+        body: JSON.stringify({ conversationId: selectedConversationId, message: content })
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error ?? "Message could not be sent.");
       }
-    } else {
-      setError(body.error ?? "Message could not be sent.");
+      if (!response.body) throw new Error("Agent response did not include a stream.");
+
+      const parser = createAgentStreamParser();
+      const reader = response.body.getReader();
+      const handleEvent = (event: AgentStreamEvent) => {
+        if (event.type === "delta") {
+          setMessages((items) => items.map((item) =>
+            item.id === assistantId
+              ? { ...item, content: `${item.content}${event.text}` }
+              : item
+          ));
+        }
+        if (event.type === "final") {
+          setMessages((items) => items.map((item) =>
+            item.id === assistantId
+              ? {
+                  ...item,
+                  content: event.message,
+                  adjustments: event.adjustments,
+                  streamComplete: true
+                }
+              : item
+          ));
+          setConversations((items) => [
+            event.conversation,
+            ...items.filter((item) => item.id !== event.conversation.id)
+          ]);
+        }
+        if (event.type === "error") throw new Error(event.error);
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parser.push(value).forEach(handleEvent);
+      }
+      parser.finish().forEach(handleEvent);
+    } catch (error) {
+      setMessages((items) => {
+        const assistant = items.find((item) => item.id === assistantId);
+        return assistant?.content ? items : items.filter((item) => item.id !== assistantId);
+      });
+      const message = error instanceof Error ? error.message : "Message could not be sent.";
+      setError(
+        message.includes("ended before a terminal event") ||
+        message.includes("did not include a stream")
+          ? "回复中断，请重试。"
+          : message
+      );
+    } finally {
+      setSending(false);
     }
-    setSending(false);
   }
 
   async function send(event: FormEvent<HTMLFormElement>) {
@@ -531,7 +586,15 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
                   {item.role === "user" ? "You" : "AI"}
                 </span>
                 <div className={item.role === "user" ? "chat-bubble chat-bubble-user" : "chat-bubble chat-bubble-assistant"}>
-                  {item.role === "assistant" ? <RichMessageContent content={item.content} /> : item.content}
+                  {item.role === "assistant" ? (
+                    <RichMessageContent
+                      content={item.content}
+                      streaming={
+                        item.streamComplete ||
+                        (sending && item.id.startsWith("local-"))
+                      }
+                    />
+                  ) : item.content}
                   {item.role === "assistant" && item.adjustments?.length
                     ? item.adjustments.map((adjustment) => (
                         <div className="agent-adjustment-row" key={adjustment.id}>

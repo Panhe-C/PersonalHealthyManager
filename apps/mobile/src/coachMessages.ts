@@ -1,4 +1,4 @@
-import type { AgentMessage } from "./api/schemas";
+import type { AgentAdjustment, AgentMessage } from "./api/schemas";
 
 function messageKey(message: AgentMessage) {
   return `${message.role}:${message.content}`;
@@ -17,4 +17,36 @@ export function mergeConversationMessages(persisted: AgentMessage[], current: Ag
 
 export function getRecentMessagesForChat(messages: AgentMessage[], limit = 8) {
   return messages.slice(-limit);
+}
+
+export function canSubmitCoachMessage(input: {
+  content: string;
+  conversationId?: string;
+  sending: boolean;
+  conversationMutationPending: boolean;
+}) {
+  return Boolean(
+    input.content.trim() &&
+    input.conversationId &&
+    !input.sending &&
+    !input.conversationMutationPending
+  );
+}
+
+export function appendAssistantDelta(messages: AgentMessage[], messageId: string, text: string) {
+  return messages.map((message) =>
+    message.id === messageId ? { ...message, content: `${message.content}${text}` } : message
+  );
+}
+
+export function finalizeAssistantMessage(
+  messages: AgentMessage[],
+  messageId: string,
+  final: { message: string; adjustments: AgentAdjustment[] }
+) {
+  return messages.map((message) =>
+    message.id === messageId
+      ? { ...message, content: final.message, adjustments: final.adjustments }
+      : message
+  );
 }

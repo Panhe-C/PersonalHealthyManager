@@ -1,10 +1,32 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createAgentResponse, createAgentResponseForUser } from "@/src/services/agent";
+import {
+  createAgentResponse,
+  createAgentResponseForUser,
+  createStreamingAgentResponseForUser
+} from "@/src/services/agent";
 import { loadModelRuntimeConfig } from "@/src/settings/service";
 
 vi.mock("@/src/settings/service", () => ({
   loadModelRuntimeConfig: vi.fn()
 }));
+
+const deepSeekConfig = {
+  provider: "deepseek" as const,
+  providerLabel: "DeepSeek",
+  modelName: "deepseek-chat",
+  baseUrl: "https://api.deepseek.com",
+  apiKey: "sk-configured"
+};
+
+function sseResponse(records: string[]) {
+  const encoder = new TextEncoder();
+  return new Response(new ReadableStream({
+    start(controller) {
+      records.forEach((record) => controller.enqueue(encoder.encode(record)));
+      controller.close();
+    }
+  }), { status: 200, headers: { "Content-Type": "text/event-stream" } });
+}
 
 describe("agent response shell", () => {
   beforeEach(() => {
@@ -224,5 +246,139 @@ describe("agent response shell", () => {
     const response = await createAgentResponseForUser("user-1", "你好");
 
     expect(response.error).toBe("Rate limit reached");
+  });
+
+  it("streams OpenAI-compatible deltas and retains private control blocks", async () => {
+    vi.mocked(loadModelRuntimeConfig).mockResolvedValue(deepSeekConfig);
+    vi.mocked(fetch).mockResolvedValue(sseResponse([
+      'data: {"choices":[{"delta":{"content":"<explanation>建议"}}]}\n\n',
+      'data: {"choices":[{"delta":{"content":"恢复跑。</explanation><actions>[]</actions>"},' +
+        '"finish_reason":"stop"}]}\n\n',
+      "data: [DONE]\n\n"
+    ]));
+    const deltas: string[] = [];
+
+    const result = await createStreamingAgentResponseForUser(
+      "user-1", "今天怎么练？", [], undefined, (text) => {
+        deltas.push(text);
+      }
+    );
+
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toMatchObject({
+      stream: true
+    });
+    expect(deltas.join("")).toBe("建议恢复跑。");
+    expect(result.message).toContain("<actions>[]</actions>");
+    expect(result.source).toBe("model");
+  });
+
+  it("streams Anthropic text deltas through the same visible contract", async () => {
+    vi.mocked(loadModelRuntimeConfig).mockResolvedValue({
+      provider: "anthropic",
+      providerLabel: "Anthropic",
+      modelName: "claude-sonnet",
+      baseUrl: "https://api.anthropic.com/v1",
+      apiKey: "sk-ant"
+    });
+    vi.mocked(fetch).mockResolvedValue(sseResponse([
+      'event: content_block_delta\ndata: {"type":"content_block_delta",' +
+        '"delta":{"type":"text_delta","text":"<explanation>先休息。"}}\n\n',
+      'event: content_block_delta\ndata: {"type":"content_block_delta",' +
+        '"delta":{"type":"text_delta","text":"</explanation>"}}\n\n',
+      'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}\n\n',
+      'event: message_stop\ndata: {"type":"message_stop"}\n\n'
+    ]));
+    const deltas: string[] = [];
+
+    const result = await createStreamingAgentResponseForUser(
+      "user-1", "今天怎么练？", [], undefined, (text) => {
+        deltas.push(text);
+      }
+    );
+
+    expect(deltas.join("")).toBe("先休息。");
+    expect(result).toMatchObject({ source: "model", modelProvider: "Anthropic" });
+  });
+
+  it("falls back without appending fallback text after a truncated partial delta", async () => {
+    vi.mocked(loadModelRuntimeConfig).mockResolvedValue(deepSeekConfig);
+    vi.mocked(fetch).mockResolvedValue(sseResponse([
+      'data: {"choices":[{"delta":{"content":"<explanation>不完整"},' +
+        '"finish_reason":"length"}]}\n\n',
+      "data: [DONE]\n\n"
+    ]));
+    const deltas: string[] = [];
+
+    const result = await createStreamingAgentResponseForUser(
+      "user-1", "分析本周训练", [], undefined, (text) => {
+        deltas.push(text);
+      }
+    );
+
+    expect(deltas.join("")).toBe("不完整");
+    expect(result.source).toBe("rules");
+    expect(result.error).toContain("cut off");
+    expect(deltas.join("")).not.toContain("using local guidance instead");
+  });
+
+  it("falls back when an OpenAI-compatible stream ends without DONE", async () => {
+    vi.mocked(loadModelRuntimeConfig).mockResolvedValue(deepSeekConfig);
+    vi.mocked(fetch).mockResolvedValue(sseResponse([
+      'data: {"choices":[{"delta":{"content":"<explanation>中断"}}]}\n\n'
+    ]));
+
+    const result = await createStreamingAgentResponseForUser(
+      "user-1", "分析本周训练", [], undefined, vi.fn()
+    );
+
+    expect(result.source).toBe("rules");
+    expect(result.error).toContain("ended before completion");
+  });
+
+  it("falls back when OpenAI sends DONE without a successful finish reason", async () => {
+    vi.mocked(loadModelRuntimeConfig).mockResolvedValue(deepSeekConfig);
+    vi.mocked(fetch).mockResolvedValue(sseResponse([
+      'data: {"choices":[{"delta":{"content":"<explanation>部分</explanation><actions>[]</actions>"}}]}\n\n',
+      "data: [DONE]\n\n"
+    ]));
+
+    const result = await createStreamingAgentResponseForUser(
+      "user-1", "分析本周训练", [], undefined, vi.fn()
+    );
+
+    expect(result.source).toBe("rules");
+    expect(result.error).toContain("completion reason");
+  });
+
+  it("falls back when Anthropic stops without a successful stop reason", async () => {
+    vi.mocked(loadModelRuntimeConfig).mockResolvedValue({
+      provider: "anthropic",
+      providerLabel: "Anthropic",
+      modelName: "claude-sonnet",
+      baseUrl: "https://api.anthropic.com/v1",
+      apiKey: "sk-ant"
+    });
+    vi.mocked(fetch).mockResolvedValue(sseResponse([
+      'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"<explanation>部分</explanation><memories>[]</memories>"}}\n\n',
+      'event: message_stop\ndata: {"type":"message_stop"}\n\n'
+    ]));
+
+    const result = await createStreamingAgentResponseForUser(
+      "user-1", "分析本周训练", [], undefined, vi.fn()
+    );
+
+    expect(result.source).toBe("rules");
+    expect(result.error).toContain("completion reason");
+  });
+
+  it("preserves AbortError instead of converting cancellation to fallback", async () => {
+    vi.mocked(loadModelRuntimeConfig).mockResolvedValue(deepSeekConfig);
+    vi.mocked(fetch).mockRejectedValue(new DOMException("aborted", "AbortError"));
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(createStreamingAgentResponseForUser(
+      "user-1", "分析本周训练", [], undefined, vi.fn(), controller.signal
+    )).rejects.toMatchObject({ name: "AbortError" });
   });
 });

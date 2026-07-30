@@ -64,6 +64,19 @@ async function refreshAccessToken(): Promise<string | null> {
   return refreshInFlight;
 }
 
+export function getV1ApiUrl(path: string) {
+  return path.startsWith("http") ? path : `${V1}${path}`;
+}
+
+export async function getValidAccessToken(forceRefresh = false) {
+  return forceRefresh ? refreshAccessToken() : getAccessToken();
+}
+
+export async function handleUnauthorized() {
+  await resetTokens();
+  onUnauthorized?.();
+}
+
 export interface RequestOptions {
   method?: "GET" | "POST" | "PATCH" | "DELETE";
   body?: unknown;
@@ -76,7 +89,7 @@ export interface RequestOptions {
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const url = path.startsWith("http") ? path : `${V1}${path}`;
+  const url = getV1ApiUrl(path);
   const accessToken = await getAccessToken();
 
   const headers: Record<string, string> = {
@@ -96,8 +109,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     if (newToken) {
       return request<T>(path, { ...options, _retried: true });
     }
-    await resetTokens();
-    onUnauthorized?.();
+    await handleUnauthorized();
     throw new ApiError("Unauthorized", 401, "unauthorized");
   }
 
@@ -109,8 +121,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       // ignore
     }
     if (response.status === 401 && !options.skipAuthRefresh) {
-      await resetTokens();
-      onUnauthorized?.();
+      await handleUnauthorized();
     }
     throw new ApiError(body.error ?? `Request failed with ${response.status}`, response.status, body.code);
   }

@@ -22,6 +22,54 @@ const conversations = [
   { id: "conv-2", title: "Calendar", updatedAt: "2026-06-20T01:00:00.000Z" }
 ];
 
+const finalConversation = {
+  id: "conv-1",
+  title: "训练建议",
+  updatedAt: "2026-07-30T01:00:00.000Z"
+};
+
+function controlledNdjsonResponse() {
+  const encoder = new TextEncoder();
+  let controller!: ReadableStreamDefaultController<Uint8Array>;
+  return {
+    response: new Response(new ReadableStream({
+      start(value) {
+        controller = value;
+      }
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/x-ndjson" }
+    }),
+    event(value: unknown) {
+      controller.enqueue(encoder.encode(`${JSON.stringify(value)}\n`));
+    },
+    close() {
+      controller.close();
+    }
+  };
+}
+
+function completedNdjsonResponse(message: string, conversation = finalConversation) {
+  const encoder = new TextEncoder();
+  const body = [
+    { type: "start", requestId: "req-complete" },
+    { type: "delta", text: message },
+    {
+      type: "final",
+      message,
+      intent: "general",
+      source: "model",
+      conversation,
+      adjustments: [],
+      appliedMemories: []
+    }
+  ].map((event) => `${JSON.stringify(event)}\n`).join("");
+  return new Response(encoder.encode(body), {
+    status: 200,
+    headers: { "Content-Type": "application/x-ndjson" }
+  });
+}
+
 describe("AgentPanel", () => {
   it("renders user and assistant messages with distinct row and avatar roles", () => {
     const { container } = render(
@@ -200,13 +248,11 @@ describe("AgentPanel", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       expect(String(input)).toBe("/api/agent");
       expect(JSON.parse(String(init?.body))).toEqual({ conversationId: "conv-1", message: "给我下周跑步安排" });
-      return {
-        ok: true,
-        json: async () => ({
-          message: "好的，下周安排已基于恢复状态调整。",
-          conversation: { id: "conv-1", title: "训练分析", updatedAt: "2026-06-21T02:00:00.000Z" }
-        })
-      };
+      return completedNdjsonResponse("好的，下周安排已基于恢复状态调整。", {
+        id: "conv-1",
+        title: "训练分析",
+        updatedAt: "2026-06-21T02:00:00.000Z"
+      });
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -362,19 +408,64 @@ describe("AgentPanel", () => {
     vi.unstubAllGlobals();
   });
 
+  it("renders deltas into one assistant message and reconciles final metadata", async () => {
+    const stream = controlledNdjsonResponse();
+    const fetchMock = vi.fn().mockResolvedValue(stream.response);
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <AgentPanel
+        initialConversations={conversations}
+        initialConversationId="conv-1"
+        initialMessages={[]}
+      />
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("Ask about training, recovery, calendar, or meals"), {
+      target: { value: "今天怎么练？" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/api/agent",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Accept: "application/x-ndjson" })
+      })
+    ));
+    stream.event({ type: "start", requestId: "req-1" });
+    stream.event({ type: "delta", text: "建议" });
+    await waitFor(() => expect(screen.getByLabelText("AI message")).toHaveTextContent("建议"));
+
+    stream.event({ type: "delta", text: "恢复跑。" });
+    stream.event({
+      type: "final",
+      message: "建议恢复跑。\n已安全调整",
+      intent: "replan",
+      source: "model",
+      conversation: finalConversation,
+      adjustments: [{ id: "adj-1", label: "已安全调整", undoneAt: null }],
+      appliedMemories: []
+    });
+    stream.close();
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("AI message")).toHaveTextContent("建议恢复跑。 已安全调整");
+    });
+    expect(screen.getAllByLabelText("AI message")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "撤销" })).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
   it("sends messages with the selected conversation id", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         expect(String(input)).toBe("/api/agent");
         expect(JSON.parse(String(init?.body))).toEqual({ conversationId: "conv-1", message: "测试消息位置" });
-        return {
-          ok: true,
-          json: async () => ({
-            message: "Assistant reply",
-            conversation: { id: "conv-1", title: "测试消息位置", updatedAt: "2026-06-21T02:00:00.000Z" }
-          })
-        };
+        return completedNdjsonResponse("Assistant reply", {
+          id: "conv-1",
+          title: "测试消息位置",
+          updatedAt: "2026-06-21T02:00:00.000Z"
+        });
       })
     );
 
@@ -391,12 +482,10 @@ describe("AgentPanel", () => {
   it("refreshes suggestion chips after a send based on the new conversation topic", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        json: async () => ({
-          message: "本周跑步训练量偏高，建议降低强度并关注恢复。",
-          conversation: { id: "conv-1", title: "训练分析", updatedAt: "2026-06-21T02:00:00.000Z" }
-        })
+      vi.fn(async () => completedNdjsonResponse("本周跑步训练量偏高，建议降低强度并关注恢复。", {
+        id: "conv-1",
+        title: "训练分析",
+        updatedAt: "2026-06-21T02:00:00.000Z"
       }))
     );
 
@@ -422,10 +511,7 @@ describe("AgentPanel", () => {
     Element.prototype.scrollTo = scrollTo;
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        json: async () => ({ message: "Assistant reply" })
-      }))
+      vi.fn(async () => completedNdjsonResponse("Assistant reply"))
     );
 
     try {
@@ -449,5 +535,26 @@ describe("AgentPanel", () => {
       Element.prototype.scrollTo = originalScrollTo;
       vi.unstubAllGlobals();
     }
+  });
+
+  it("keeps partial text and reports an interrupted stream without a terminal event", async () => {
+    const stream = controlledNdjsonResponse();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(stream.response));
+
+    render(<AgentPanel initialConversations={conversations} initialConversationId="conv-1" initialMessages={[]} />);
+    fireEvent.change(screen.getByPlaceholderText("Ask about training, recovery, calendar, or meals"), {
+      target: { value: "给我建议" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    stream.event({ type: "start", requestId: "req-interrupted" });
+    stream.event({ type: "delta", text: "已经生成的部分" });
+    stream.close();
+
+    await waitFor(() => expect(screen.getByLabelText("AI message")).toHaveTextContent("已经生成的部分"));
+    expect(screen.getByText("回复中断，请重试。")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Ask about training, recovery, calendar, or meals")).toBeEnabled();
+    expect(screen.getByLabelText("Agent status")).toHaveTextContent("Ready");
+    vi.unstubAllGlobals();
   });
 });

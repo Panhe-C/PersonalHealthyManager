@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
+import type { AgentFinalPayload } from "@hbm/contracts";
 import type { AgentMessage } from "./api/schemas";
 import * as coachMessages from "./coachMessages";
 
-const { getRecentMessagesForChat, mergeConversationMessages } = coachMessages;
+const {
+  appendAssistantDelta,
+  canSubmitCoachMessage,
+  finalizeAssistantMessage,
+  getRecentMessagesForChat,
+  mergeConversationMessages
+} = coachMessages;
 
 describe("coach message state", () => {
   it("keeps optimistic turn messages when stale conversation details arrive", () => {
@@ -45,5 +52,57 @@ describe("coach message state", () => {
       "msg-8",
       "msg-9"
     ]);
+  });
+
+  it("appends stream deltas to the same optimistic assistant message", () => {
+    const messages: AgentMessage[] = [
+      { id: "local-assistant-1", role: "assistant", content: "建议" }
+    ];
+
+    expect(appendAssistantDelta(messages, "local-assistant-1", "恢复跑。")).toEqual([
+      { id: "local-assistant-1", role: "assistant", content: "建议恢复跑。" }
+    ]);
+  });
+
+  it("reconciles the optimistic assistant message from the final event", () => {
+    const messages: AgentMessage[] = [
+      { id: "local-assistant-1", role: "assistant", content: "建议恢复" }
+    ];
+    const final: AgentFinalPayload = {
+      message: "建议恢复跑。",
+      intent: "general",
+      source: "model",
+      conversation: {
+        id: "conv-1",
+        title: "训练建议",
+        updatedAt: "2026-07-30T02:00:00.000Z"
+      },
+      adjustments: [{ id: "adj-1", label: "已调整强度", undoneAt: null }],
+      appliedMemories: []
+    };
+
+    expect(finalizeAssistantMessage(messages, "local-assistant-1", final)).toEqual([
+      {
+        id: "local-assistant-1",
+        role: "assistant",
+        content: "建议恢复跑。",
+        adjustments: final.adjustments
+      }
+    ]);
+  });
+
+  it("blocks sends while conversation creation or deletion is pending", () => {
+    expect(canSubmitCoachMessage({
+      content: "今天怎么练？",
+      conversationId: "conv-1",
+      sending: false,
+      conversationMutationPending: true
+    })).toBe(false);
+    expect(canSubmitCoachMessage({
+      content: "今天怎么练？",
+      conversationId: "conv-1",
+      sending: false,
+      conversationMutationPending: false
+    })).toBe(true);
   });
 });

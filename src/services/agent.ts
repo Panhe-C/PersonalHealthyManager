@@ -2,6 +2,8 @@ import { loadModelRuntimeConfig, type ModelRuntimeConfig } from "@/src/settings/
 import { getProviderCredentialSource } from "@/src/settings/defaults";
 import type { AgentContext } from "@/src/services/agentContext";
 import { actionIdList } from "@/src/services/agentActions/registry";
+import { readSseEvents } from "@/src/services/agentStreaming/sse";
+import { createVisibleTextFilter } from "@/src/services/agentStreaming/visibleText";
 
 export type AgentIntent = "recovery_check" | "calendar_confirmation" | "menu_advice" | "replan" | "training_analysis" | "general";
 
@@ -141,7 +143,8 @@ function systemPrompt(intent: AgentIntent, context?: AgentContext) {
     "If you use a table, include at least one data row; otherwise use a short bullet list instead of an empty table.",
     `You may propose actions only from this list: ${actionIdList().join(", ")}.`,
     "Do not invent action ids or arguments.",
-    "Put any actions in a single <actions> JSON array block; put user-facing text in <explanation>.",
+    "Always put user-facing text first inside one <explanation>...</explanation> block.",
+    "Put any actions after the explanation in a single <actions> JSON array block.",
     "All listed actions execute immediately and are undoable by the user; never claim an irreversible external write unless the app reports it.",
     "If a safety rule overrides your proposal, tell the user truthfully what was changed and why.",
     "You have long-term memory. The 'User memory' section lists facts/preferences you have already saved about this user.",
@@ -271,6 +274,162 @@ async function callConfiguredModel(
   return callOpenAiCompatibleModel(config, message, history, intent, context);
 }
 
+type ModelDeltaHandler = (text: string) => void | Promise<void>;
+
+async function requireStreamingBody(response: Response, config: ModelRuntimeConfig) {
+  if (!response.ok) {
+    await readModelResponse(response, config);
+  }
+  if (!response.body) {
+    throw new Error(`${config.providerLabel} response did not include a stream.`);
+  }
+  return response.body;
+}
+
+function streamedProviderError(payload: unknown, fallback: string) {
+  return String(
+    (payload as { error?: { message?: unknown } })?.error?.message ??
+      (payload as { message?: unknown })?.message ??
+      fallback
+  );
+}
+
+async function streamOpenAiCompatibleModel(
+  config: ModelRuntimeConfig,
+  message: string,
+  history: AgentConversationMessage[],
+  intent: AgentIntent,
+  context: AgentContext | undefined,
+  onRawDelta: ModelDeltaHandler,
+  signal?: AbortSignal
+) {
+  const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: config.modelName,
+      temperature: 0.3,
+      max_tokens: 3000,
+      stream: true,
+      messages: [
+        { role: "system", content: systemPrompt(intent, context) },
+        ...compactHistory(history),
+        { role: "user", content: message }
+      ]
+    }),
+    signal
+  });
+  const body = await requireStreamingBody(response, config);
+  let finishReason: string | undefined;
+  let sawDone = false;
+
+  for await (const event of readSseEvents(body, signal)) {
+    if (event.data === "[DONE]") {
+      sawDone = true;
+      continue;
+    }
+
+    const payload = JSON.parse(event.data) as {
+      error?: { message?: unknown };
+      choices?: Array<{
+        delta?: { content?: unknown };
+        finish_reason?: unknown;
+      }>;
+    };
+    if (payload.error) {
+      throw new Error(streamedProviderError(payload, `${config.providerLabel} stream failed.`));
+    }
+    const choice = payload.choices?.[0];
+    const content = choice?.delta?.content;
+    if (typeof content === "string" && content) await onRawDelta(content);
+    if (typeof choice?.finish_reason === "string") finishReason = choice.finish_reason;
+  }
+
+  if (finishReason === "length") {
+    throw new Error(`${config.providerLabel} response was cut off before completion.`);
+  }
+  if (!sawDone) {
+    throw new Error(`${config.providerLabel} stream ended before completion.`);
+  }
+  if (finishReason !== "stop") {
+    throw new Error(`${config.providerLabel} stream ended without a successful completion reason.`);
+  }
+}
+
+async function streamAnthropicModel(
+  config: ModelRuntimeConfig,
+  message: string,
+  history: AgentConversationMessage[],
+  intent: AgentIntent,
+  context: AgentContext | undefined,
+  onRawDelta: ModelDeltaHandler,
+  signal?: AbortSignal
+) {
+  const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}/messages`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": config.apiKey,
+      "anthropic-version": "2023-06-01"
+    },
+    body: JSON.stringify({
+      model: config.modelName,
+      max_tokens: 3000,
+      stream: true,
+      system: systemPrompt(intent, context),
+      messages: [...compactHistory(history), { role: "user", content: message }]
+    }),
+    signal
+  });
+  const body = await requireStreamingBody(response, config);
+  let stopReason: string | undefined;
+  let sawStop = false;
+
+  for await (const event of readSseEvents(body, signal)) {
+    const payload = JSON.parse(event.data) as {
+      type?: string;
+      error?: { message?: unknown };
+      delta?: { type?: string; text?: unknown; stop_reason?: unknown };
+    };
+    if (event.event === "error" || payload.type === "error") {
+      throw new Error(streamedProviderError(payload, `${config.providerLabel} stream failed.`));
+    }
+    if (
+      payload.type === "content_block_delta" &&
+      payload.delta?.type === "text_delta" &&
+      typeof payload.delta.text === "string"
+    ) {
+      await onRawDelta(payload.delta.text);
+    }
+    if (payload.type === "message_delta" && typeof payload.delta?.stop_reason === "string") {
+      stopReason = payload.delta.stop_reason;
+    }
+    if (payload.type === "message_stop") sawStop = true;
+  }
+
+  if (stopReason === "max_tokens") {
+    throw new Error(`${config.providerLabel} response was cut off before completion.`);
+  }
+  if (!sawStop) {
+    throw new Error(`${config.providerLabel} stream ended before completion.`);
+  }
+  if (stopReason !== "end_turn" && stopReason !== "stop_sequence") {
+    throw new Error(`${config.providerLabel} stream ended without a successful completion reason.`);
+  }
+}
+
+function isAbortError(error: unknown, signal?: AbortSignal) {
+  return signal?.aborted || (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error as { name?: unknown }).name === "AbortError"
+  );
+}
+
 export type ModelChatMessage = { role: "user" | "assistant"; content: string };
 
 export async function runModelCompletion(
@@ -345,5 +504,70 @@ export async function createAgentResponseForUser(
       error: errorMessage,
       message: `Model call failed: ${normalizedErrorMessage}; using local guidance instead. ${fallback.message}`
     };
+  }
+}
+
+export async function createStreamingAgentResponseForUser(
+  userId: string,
+  message: string,
+  history: AgentConversationMessage[],
+  context: AgentContext | undefined,
+  onDelta: ModelDeltaHandler,
+  signal?: AbortSignal
+): Promise<AgentResponse> {
+  const fallback = createAgentResponse(message);
+  const config = await loadModelRuntimeConfig(userId);
+  const intent = context?.intent ?? fallback.intent;
+
+  if (!config) {
+    await onDelta(fallback.message);
+    return fallback;
+  }
+
+  const filter = createVisibleTextFilter();
+  let rawMessage = "";
+  let emittedVisibleText = false;
+  const onRawDelta = async (text: string) => {
+    rawMessage += text;
+    const visible = filter.push(text);
+    if (!visible) return;
+    emittedVisibleText = true;
+    await onDelta(visible);
+  };
+
+  try {
+    if (config.provider === "anthropic") {
+      await streamAnthropicModel(config, message, history, intent, context, onRawDelta, signal);
+    } else {
+      await streamOpenAiCompatibleModel(config, message, history, intent, context, onRawDelta, signal);
+    }
+
+    const trailing = filter.finish();
+    if (trailing) {
+      emittedVisibleText = true;
+      await onDelta(trailing);
+    }
+    if (!rawMessage.trim()) {
+      throw new Error("Model response did not include a message.");
+    }
+
+    return {
+      intent,
+      source: "model",
+      modelProvider: config.providerLabel,
+      modelName: config.modelName,
+      message: rawMessage
+    };
+  } catch (error) {
+    if (isAbortError(error, signal)) throw error;
+    const errorMessage = error instanceof Error ? error.message : "Model call failed.";
+    const normalizedErrorMessage = errorMessage.replace(/[.。]+$/, "");
+    const response = {
+      ...fallback,
+      error: errorMessage,
+      message: `Model call failed: ${normalizedErrorMessage}; using local guidance instead. ${fallback.message}`
+    };
+    if (!emittedVisibleText) await onDelta(response.message);
+    return response;
   }
 }

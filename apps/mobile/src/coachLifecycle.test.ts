@@ -10,4 +10,15 @@ describe("coach conversation lifecycle", () => {
     expect(source).toContain("autoCreateAttemptedRef.current = true");
     expect(source).not.toContain("[conversations.length, conversationsQuery.isLoading, createConversationMutation]");
   });
+
+  it("streams assistant deltas into one optimistic message and reconciles the final event", () => {
+    expect(source).toContain("streamAgentMessage");
+    expect(source).toContain("appendAssistantDelta(items, assistantMessageId, event.text)");
+    expect(source).toContain("finalizeAssistantMessage(items, assistantMessageId, event)");
+    expect(source).toContain("回复中断，请重试。");
+    expect(source).toContain("activeSendRef.current?.controller !== controller");
+    expect(source).toContain("disabled={sending}");
+    expect(source).not.toContain("sendMutation");
+    expect(source).not.toContain("sendAgentMessage");
+  });
 });

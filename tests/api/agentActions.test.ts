@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "@/app/api/agent/route";
 import { prisma } from "@/src/db/client";
-import { createAgentResponse, createAgentResponseForUser } from "@/src/services/agent";
+import {
+  createAgentResponse,
+  createAgentResponseForUser,
+  createStreamingAgentResponseForUser
+} from "@/src/services/agent";
 import { buildAgentContext } from "@/src/services/agentContext";
 import { executeAgentAction } from "@/src/services/agentActions/executor";
 import { applyMemories } from "@/src/services/agentMemory/memoryService";
@@ -28,7 +32,8 @@ vi.mock("@/src/db/client", () => ({
 
 vi.mock("@/src/services/agent", () => ({
   createAgentResponse: vi.fn(),
-  createAgentResponseForUser: vi.fn()
+  createAgentResponseForUser: vi.fn(),
+  createStreamingAgentResponseForUser: vi.fn()
 }));
 
 vi.mock("@/src/services/agentContext", () => ({ buildAgentContext: vi.fn() }));
@@ -214,5 +219,60 @@ describe("agent action execution", () => {
       expect.any(Array),
       expect.objectContaining({ source: "auto" })
     );
+  });
+
+  it("does not execute actions until streaming generation completes", async () => {
+    let complete!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      complete = resolve;
+    });
+    vi.mocked(createStreamingAgentResponseForUser).mockImplementation(
+      async (_userId, _message, _history, _context, onDelta) => {
+        await onDelta("已准备调整。");
+        await gate;
+        return {
+          intent: "replan",
+          message: replyWithActions,
+          source: "model"
+        };
+      }
+    );
+    vi.mocked(prisma.trainingTask.findFirst).mockResolvedValue({
+      id: "t1",
+      intensity: "moderate",
+      planId: "plan-1",
+      date: new Date("2026-06-24"),
+      plan: { id: "plan-1", status: "active" }
+    } as never);
+    vi.mocked(prisma.sleepRecord.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.recoveryRecord.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.calendarSnapshot.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.bodyProfile.findUnique).mockResolvedValue({ injuriesJson: "[]" } as never);
+    vi.mocked(executeAgentAction).mockResolvedValue({
+      id: "adj-1",
+      label: "已将训练强度调整为 easy",
+      undoneAt: null
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/agent", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/x-ndjson"
+        },
+        body: JSON.stringify({ conversationId: "conv-1", message: "把周三降为 easy" })
+      })
+    );
+    const reader = response.body!.getReader();
+    await reader.read();
+    await reader.read();
+
+    expect(executeAgentAction).not.toHaveBeenCalled();
+    complete();
+    while (!(await reader.read()).done) {
+      // Drain through the final event.
+    }
+    expect(executeAgentAction).toHaveBeenCalledTimes(1);
   });
 });

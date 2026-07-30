@@ -1,10 +1,16 @@
 import { prisma } from "@/src/db/client";
-import { createAgentResponse, createAgentResponseForUser } from "@/src/services/agent";
-import { buildAgentContext } from "@/src/services/agentContext";
+import {
+  createAgentResponse,
+  createAgentResponseForUser,
+  type AgentConversationMessage,
+  type AgentResponse
+} from "@/src/services/agent";
+import { buildAgentContext, type AgentContext } from "@/src/services/agentContext";
 import {
   getAgentConversationSummaryForUser,
   titleFromFirstMessage,
-  touchAgentConversationAfterMessage
+  touchAgentConversationAfterMessage,
+  type AgentConversationSummary
 } from "@/src/services/agentConversations";
 import { parseActionProposals } from "@/src/services/agentActions/proposals";
 import { agentActionRegistry } from "@/src/services/agentActions/registry";
@@ -21,6 +27,19 @@ export interface AgentMessageResult {
   status: number;
   body: unknown;
 }
+
+export type PreparedAgentMessage = {
+  userId: string;
+  content: string;
+  conversationId: string;
+  conversation: AgentConversationSummary;
+  history: AgentConversationMessage[];
+  context: AgentContext;
+};
+
+export type AgentPreparation =
+  | { ok: true; value: PreparedAgentMessage }
+  | { ok: false; result: AgentMessageResult };
 
 async function loadGuardSignals(userId: string, actionId: string, args: Record<string, unknown>): Promise<GuardSignals | null> {
   if (actionId !== "adjust_task_intensity" && actionId !== "reschedule_task") return null;
@@ -63,46 +82,56 @@ async function loadGuardSignals(userId: string, actionId: string, args: Record<s
   };
 }
 
-/**
- * Orchestrates a single agent turn: load conversation + history, ask the model,
- * parse proposed actions/memories, execute reversible actions under the safety
- * guard, apply memories, persist messages, refresh the rolling summary, and
- * touch the conversation. Extracted from `app/api/agent/route.ts` so both
- * `/api/agent` and `/api/v1/agent` can share it without duplicating logic.
- */
-export async function handleAgentMessage(
+export async function prepareAgentMessage(
   userId: string,
   body: unknown
-): Promise<AgentMessageResult> {
+): Promise<AgentPreparation> {
   const payload = (body ?? {}) as Record<string, unknown>;
   const content = String(payload.message ?? "").trim();
   const conversationId = String(payload.conversationId ?? "").trim();
 
   if (!content) {
-    return { status: 400, body: { error: "Message is required" } };
+    return { ok: false, result: { status: 400, body: { error: "Message is required" } } };
   }
   if (!conversationId) {
-    return { status: 400, body: { error: "Conversation is required" } };
+    return { ok: false, result: { status: 400, body: { error: "Conversation is required" } } };
   }
 
   const conversation = await getAgentConversationSummaryForUser(userId, conversationId);
   if (!conversation) {
-    return { status: 404, body: { error: "Conversation not found" } };
+    return { ok: false, result: { status: 404, body: { error: "Conversation not found" } } };
   }
 
-  const history = await prisma.agentMessage.findMany({
+  const historyRows = await prisma.agentMessage.findMany({
     where: { userId, conversationId },
     orderBy: { createdAt: "desc" },
     take: 8
   });
   const routed = createAgentResponse(content);
-  const agentContext = await buildAgentContext(userId, routed.intent, content, conversationId);
-  const response = await createAgentResponseForUser(
+  const context = await buildAgentContext(userId, routed.intent, content, conversationId);
+  const history = historyRows.reverse().map((message) => ({
+    role: message.role,
+    content: message.content
+  }));
+
+  return {
+    ok: true,
+    value: { userId, content, conversationId, conversation, history, context }
+  };
+}
+
+export async function finalizeAgentMessage(
+  prepared: PreparedAgentMessage,
+  response: AgentResponse
+): Promise<AgentMessageResult> {
+  const {
     userId,
     content,
-    history.reverse().map((message) => ({ role: message.role, content: message.content })),
-    agentContext
-  );
+    conversationId,
+    conversation,
+    history,
+    context: agentContext
+  } = prepared;
 
   const parsed = parseActionProposals(response.message);
   const memoryParsed = parseMemoryProposals(response.message);
@@ -224,4 +253,29 @@ export async function handleAgentMessage(
       appliedMemories
     }
   };
+}
+
+export async function handlePreparedAgentMessage(
+  prepared: PreparedAgentMessage
+): Promise<AgentMessageResult> {
+  const response = await createAgentResponseForUser(
+    prepared.userId,
+    prepared.content,
+    prepared.history,
+    prepared.context
+  );
+  return finalizeAgentMessage(prepared, response);
+}
+
+/**
+ * Orchestrates a complete non-streaming Agent turn. The streaming route reuses
+ * the same prepare and finalize stages around its provider stream.
+ */
+export async function handleAgentMessage(
+  userId: string,
+  body: unknown
+): Promise<AgentMessageResult> {
+  const prepared = await prepareAgentMessage(userId, body);
+  if (!prepared.ok) return prepared.result;
+  return handlePreparedAgentMessage(prepared.value);
 }
