@@ -1,9 +1,6 @@
 import { z } from "zod";
 import {
-  adjustmentSchema,
-  agentMessageResponseSchema,
-  appliedMemorySchema,
-  conversationSchema
+  appliedMemorySchema
 } from "./agent";
 
 export const AGENT_STREAM_MEDIA_TYPE = "application/x-ndjson";
@@ -18,17 +15,30 @@ export const agentStreamDeltaSchema = z.object({
   text: z.string().min(1)
 });
 
-export const agentStreamFinalSchema = agentMessageResponseSchema.extend({
+export const agentStreamConversationSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  updatedAt: z.string()
+}).passthrough();
+
+export const agentStreamAdjustmentSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  undoneAt: z.string().nullable()
+}).passthrough();
+
+export const agentStreamFinalSchema = z.object({
   type: z.literal("final"),
+  message: z.string(),
   intent: z.string().min(1),
   source: z.enum(["model", "rules"]),
   modelProvider: z.string().optional(),
   modelName: z.string().optional(),
   error: z.string().optional(),
-  conversation: conversationSchema,
-  adjustments: z.array(adjustmentSchema),
+  conversation: agentStreamConversationSchema,
+  adjustments: z.array(agentStreamAdjustmentSchema),
   appliedMemories: z.array(appliedMemorySchema)
-});
+}).passthrough();
 
 export const agentStreamErrorSchema = z.object({
   type: z.literal("error"),

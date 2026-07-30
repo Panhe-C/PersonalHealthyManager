@@ -21,9 +21,8 @@ describe("Agent NDJSON contract", () => {
       '{"type":"start","requestId":"req-1"}\n' +
       '{"type":"delta","text":"建议恢复跑。"}\n' +
       '{"type":"final","message":"建议恢复跑。","intent":"general","source":"model",' +
-      '"conversation":{"id":"conv-1","userId":"user-1","title":"恢复","summary":null,' +
-      '"summaryUpdatedAt":null,"summaryMessageCount":0,"createdAt":"2026-07-30T00:00:00.000Z",' +
-      '"updatedAt":"2026-07-30T00:00:00.000Z"},"adjustments":[],"appliedMemories":[]}\n'
+      '"conversation":{"id":"conv-1","title":"恢复","updatedAt":"2026-07-30T00:00:00.000Z"},' +
+      '"adjustments":[],"appliedMemories":[]}\n'
     ));
 
     expect(events.map((event) => event.type)).toEqual(["start", "delta", "final"]);
