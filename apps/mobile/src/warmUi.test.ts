@@ -143,7 +143,7 @@ describe("warm card mobile UI", () => {
     }
   });
 
-  it("floats a custom capsule tab bar with a raised FAB", () => {
+  it("floats a custom capsule tab bar with five equal tabs", () => {
     const layout = read("../app/(app)/(tabs)/_layout.tsx");
 
     expect(layout).toContain("tabBar={");
@@ -152,7 +152,7 @@ describe("warm card mobile UI", () => {
 
     const bar = read("./navigation/FloatingTabBar.tsx");
     expect(bar).toContain("BottomTabBarProps");
-    expect(bar).toContain('accessibilityLabel="快速记录"');
+    expect(bar).not.toContain("快速记录");
     expect(bar).toContain("borderRadius: radius.pill");
   });
 

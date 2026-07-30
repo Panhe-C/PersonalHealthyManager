@@ -1,40 +1,25 @@
 import { Pressable, StyleSheet, View } from "react-native";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
-import { Plus } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { cardShadow, radius, useTheme } from "../theme/tokens";
 
 /**
- * Index of the centre route (coach). Its capsule slot is a spacer: the raised
- * FAB sits on top of it and carries the navigation, so the FAB navigates to
- * the coach tab and doubles as the coach tab's selected-state indicator.
- */
-const FAB_ROUTE_INDEX = 2;
-
-/**
  * Warm floating capsule tab bar. Rendered through the bottom-tabs `tabBar`
  * render prop so the navigator keeps its five-route state, screen options,
- * and deep links untouched. The bar is absolutely positioned above the home
- * indicator; screens clear it via FLOATING_TAB_BAR_CLEARANCE (Screen.tsx).
- * No blur is involved, so Reduce Transparency needs no special handling.
+ * and deep links untouched. All five tabs are equal slots in the capsule.
+ * The bar is absolutely positioned above the home indicator; screens clear
+ * it via FLOATING_TAB_BAR_CLEARANCE (Screen.tsx). No blur is involved, so
+ * Reduce Transparency needs no special handling.
  */
 export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const { tokens, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const shadow = cardShadow(isDark ? "dark" : "light");
-  const coachRoute = state.routes[FAB_ROUTE_INDEX];
-  // The coach capsule slot is a spacer, so the FAB doubles as the coach tab's
-  // selected indicator: VoiceOver gets `selected` and the fill turns to tint.
-  const coachFocused = state.index === FAB_ROUTE_INDEX;
 
   return (
     <View pointerEvents="box-none" style={[styles.dock, { bottom: insets.bottom + 16 }]}>
       <View style={[styles.capsule, { backgroundColor: tokens.surface }, shadow]}>
         {state.routes.map((route, index) => {
-          if (index === FAB_ROUTE_INDEX) {
-            return <View key={route.key} pointerEvents="none" style={styles.tabSlot} />;
-          }
-
           const { options } = descriptors[route.key];
           const focused = state.index === index;
           const color = focused ? tokens.controlFill : tokens.labelSecondary;
@@ -70,20 +55,6 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
           );
         })}
       </View>
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ selected: coachFocused }}
-        accessibilityLabel="快速记录"
-        onPress={() => {
-          if (coachRoute) {
-            navigation.navigate(coachRoute.name, coachRoute.params);
-          }
-        }}
-        style={[styles.fab, { backgroundColor: coachFocused ? tokens.tint : tokens.controlFill }, shadow]}
-      >
-        <Plus color={tokens.controlLabel} size={26} strokeWidth={2.2} />
-      </Pressable>
     </View>
   );
 }
@@ -97,15 +68,5 @@ const styles = StyleSheet.create({
     paddingVertical: 14
   },
   dock: { left: 20, position: "absolute", right: 20 },
-  fab: {
-    alignItems: "center",
-    alignSelf: "center",
-    borderRadius: radius.pill,
-    height: 60,
-    justifyContent: "center",
-    position: "absolute",
-    top: -20,
-    width: 60
-  },
   tabSlot: { alignItems: "center", flex: 1, justifyContent: "center", minHeight: 44 }
 });

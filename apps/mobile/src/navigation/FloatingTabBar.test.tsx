@@ -12,8 +12,6 @@ vi.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ bottom: 34, left: 0, right: 0, top: 0 })
 }));
 
-vi.mock("lucide-react-native", () => ({ Plus: "Plus" }));
-
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { FloatingTabBar } from "./FloatingTabBar";
 
@@ -35,11 +33,6 @@ function collect(node: unknown, predicate: (element: Node) => boolean): Node[] {
   const element = node as Node;
   const self = predicate(element) ? [element] : [];
   return [...self, ...collect(element.props?.children, predicate)];
-}
-
-function flatten(style: unknown): Record<string, unknown> {
-  if (Array.isArray(style)) return Object.assign({}, ...style.map(flatten));
-  return (style ?? {}) as Record<string, unknown>;
 }
 
 const tabNames = ["today", "plan", "coach", "insights", "settings"] as const;
@@ -70,19 +63,35 @@ function buttons(tree: unknown): Node[] {
 }
 
 describe("FloatingTabBar", () => {
-  it("renders the four visible tabs with Chinese labels and leaves the centre slot to the FAB", () => {
+  it("renders the five tabs as equal slots with Chinese labels", () => {
     const tree = FloatingTabBar(makeProps().props);
 
     expect(buttons(tree).map((button) => button.props?.accessibilityLabel)).toEqual([
       "今日",
       "计划",
+      "教练",
       "数据",
-      "我的",
-      "快速记录"
+      "我的"
     ]);
     for (const button of buttons(tree)) {
       expect(button.props?.accessibilityRole).toBe("button");
     }
+  });
+
+  it("marks only the focused tab selected", () => {
+    const { props } = makeProps();
+    const focusedProps = {
+      ...props,
+      state: { ...props.state, index: 2 }
+    } as unknown as BottomTabBarProps;
+
+    expect(buttons(FloatingTabBar(focusedProps)).map((button) => button.props?.accessibilityState)).toEqual([
+      { selected: false },
+      { selected: false },
+      { selected: true },
+      { selected: false },
+      { selected: false }
+    ]);
   });
 
   it("emits tabPress but does not navigate when the focused tab is pressed", () => {
@@ -108,37 +117,17 @@ describe("FloatingTabBar", () => {
     expect(navigation.navigate).toHaveBeenCalledWith("plan", undefined);
   });
 
-  it("sends the FAB to the coach tab as the placeholder action", () => {
+  it("treats coach as an ordinary tab", () => {
     const { navigation, props } = makeProps();
-    const fab = buttons(FloatingTabBar(props)).find(
-      (button) => button.props?.accessibilityLabel === "快速记录"
-    );
+    const [, , coach] = buttons(FloatingTabBar(props));
 
-    fab?.props?.onPress?.();
+    coach.props?.onPress?.();
 
+    expect(navigation.emit).toHaveBeenCalledWith({
+      type: "tabPress",
+      target: "coach-key",
+      canPreventDefault: true
+    });
     expect(navigation.navigate).toHaveBeenCalledWith("coach", undefined);
-  });
-
-  it("marks the FAB selected and tinted while the coach tab is focused", () => {
-    const { props } = makeProps();
-    const focusedProps = {
-      ...props,
-      state: { ...props.state, index: 2 }
-    } as unknown as BottomTabBarProps;
-    const fab = buttons(FloatingTabBar(focusedProps)).find(
-      (button) => button.props?.accessibilityLabel === "快速记录"
-    );
-
-    expect(fab?.props?.accessibilityState).toEqual({ selected: true });
-    expect(flatten(fab?.props?.style).backgroundColor).toBe("#3D7A55");
-  });
-
-  it("keeps the FAB unselected and dark on the other tabs", () => {
-    const fab = buttons(FloatingTabBar(makeProps().props)).find(
-      (button) => button.props?.accessibilityLabel === "快速记录"
-    );
-
-    expect(fab?.props?.accessibilityState).toEqual({ selected: false });
-    expect(flatten(fab?.props?.style).backgroundColor).toBe("#22221F");
   });
 });
