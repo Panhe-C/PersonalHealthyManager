@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CalendarCheck, Dumbbell, Sparkles, Utensils } from "lucide-react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -31,6 +32,7 @@ function planWeekLabel(weekStart: string | undefined): string {
 
 export default function PlanTab() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const { data, isLoading, error } = useActivePlanQuery();
   const drafts = useCalendarDraftsQuery();
   const { notify } = useFeedback();
@@ -102,16 +104,23 @@ export default function PlanTab() {
         }
       />
 
-      <View style={[styles.weekStrip, { backgroundColor: tokens.surface }, shadow]}>
-        {weekDays.map((day) => (
-          <View key={day.name} style={styles.dayItem}>
-            <Text size="caption2" color={tokens.labelSecondary}>周{day.name}</Text>
-            <View style={[styles.dayCircle, day.active ? { backgroundColor: tokens.controlFill } : null]}>
-              <Text size="callout" color={day.active ? tokens.controlLabel : tokens.label} tabularNums>{day.day}</Text>
+      {/* Tapping the week strip pushes the full-screen day schedule. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="查看本周日程"
+        onPress={() => router.push("/(app)/(tabs)/plan/schedule")}
+      >
+        <View style={[styles.weekStrip, { backgroundColor: tokens.surface }, shadow]}>
+          {weekDays.map((day) => (
+            <View key={day.name} style={styles.dayItem}>
+              <Text size="caption2" color={tokens.labelSecondary}>周{day.name}</Text>
+              <View style={[styles.dayCircle, day.active ? { backgroundColor: tokens.controlFill } : null]}>
+                <Text size="callout" color={day.active ? tokens.controlLabel : tokens.label} tabularNums>{day.day}</Text>
+              </View>
             </View>
-          </View>
-        ))}
-      </View>
+          ))}
+        </View>
+      </Pressable>
 
       {isLoading ? <Spinner /> : error ? (
         <EmptyState title="计划加载失败" description="请稍后重试或重新登录。" />

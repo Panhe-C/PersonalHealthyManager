@@ -187,6 +187,20 @@ describe("warm card mobile UI", () => {
     expect(source).not.toContain("useNavigation");
   });
 
+  it("pushes a full-screen schedule from the plan week strip", () => {
+    const layout = read("../app/(app)/(tabs)/plan/_layout.tsx");
+    expect(layout).toContain('name="schedule"');
+    expect(layout).toContain("headerLargeTitleEnabled: false");
+
+    const plan = read("../app/(app)/(tabs)/plan/index.tsx");
+    expect(plan).toContain('router.push("/(app)/(tabs)/plan/schedule")');
+
+    const schedule = read("../app/(app)/(tabs)/plan/schedule.tsx");
+    expect(schedule).toContain("layoutDaySchedule");
+    expect(schedule).toContain("未指定时间");
+    expect(schedule).toContain("accessibilityLabel");
+  });
+
   it("hides the native header and builds Insights from warm cards", () => {
     expect(read("../app/(app)/(tabs)/insights/_layout.tsx")).toContain("headerShown: false");
 
