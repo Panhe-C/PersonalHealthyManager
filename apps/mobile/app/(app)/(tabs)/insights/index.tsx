@@ -4,7 +4,6 @@ import { Activity, Dumbbell, Footprints, Heart, HeartPulse, Moon } from "lucide-
 import { Screen } from "../../../../src/components/Screen";
 import { Text } from "../../../../src/components/Text";
 import { EmptyState, Spinner } from "../../../../src/components/States";
-import { TrendChart } from "../../../../src/components/QuietHealth";
 import { InsetGroup } from "../../../../src/components/InsetGroup";
 import { Row } from "../../../../src/components/Row";
 import { WarmHeader } from "../../../../src/components/WarmHeader";
@@ -72,6 +71,26 @@ export default function InsightsTab() {
   const exerciseSessions = activityList.filter((item) => weekKeySet.has(localDateKey(item.startedAt, APP_TIME_ZONE))).length;
   const heatmapSessions = activityList.filter((item) => heatmapKeySet.has(localDateKey(item.startedAt, APP_TIME_ZONE))).length;
   const exerciseTotal = exerciseWeek.reduce((sum, day) => sum + day.value, 0);
+
+  // Daily recovery bars: reuse the same local-day bucketing by mapping the
+  // percent into the TimedSession shape (one record per day in practice).
+  const recoveryByDay = minutesByDay(
+    (recovery.data ?? []).map((record) => ({ startedAt: record.date, durationMinutes: record.recoveryPercent ?? 0 })),
+    APP_TIME_ZONE
+  );
+  const recoveryWeek = buildWeek(weekKeys, recoveryByDay);
+  const recordedRecoveryDays = recoveryWeek.filter((day) => day.value > 0);
+  const latestRecoveryKey = recordedRecoveryDays.at(-1)?.key;
+  const recoveryBars: WeekBar[] = recoveryWeek.map((day, index) => ({
+    key: day.key,
+    label: weekDayNames[index],
+    value: day.value,
+    tone: day.key === latestRecoveryKey ? "controlFill" : day.value > 0 ? "tintFill" : "fill",
+    valueLabel: day.value > 0 ? `${day.value}%` : undefined,
+    accessibilityLabel: day.value > 0
+      ? `周${weekDayNames[index]}恢复 ${day.value}%`
+      : `周${weekDayNames[index]}无恢复记录`
+  }));
   const exerciseBars: WeekBar[] = exerciseWeek.map((day, index) => {
     const intensity = intensityByDay.get(day.key);
     return {
@@ -133,16 +152,25 @@ export default function InsightsTab() {
             </Text>
           </View>
 
-          <View style={[styles.chartCard, { backgroundColor: tokens.surface }, shadow]}>
-            {recoveryValues.length ? <TrendChart values={recoveryValues} /> : (
+          {/* 每日恢复: bar height = recovery percent, latest day highlighted,
+              each recorded day labelled with its figure. */}
+          <View style={[styles.card, { backgroundColor: tokens.surface }, shadow]}>
+            <View style={styles.cardHeaderRow}>
+              <View style={styles.cardHeaderLeft}>
+                <View style={[styles.iconTile, { backgroundColor: tokens.fill }]}>
+                  <HeartPulse color={tokens.tint} size={16} strokeWidth={1.8} />
+                </View>
+                <Text size="callout" weight="semibold">
+                  每日恢复
+                </Text>
+              </View>
+              <Text size="footnote" color={tokens.labelSecondary}>
+                {recoveryValues.length ? `最新 ${latestRecovery}%` : ""}
+              </Text>
+            </View>
+            {recoveryValues.length ? <WeekBars bars={recoveryBars} /> : (
               <EmptyState title="暂无恢复趋势" description="同步 COROS 后会显示趋势。" />
             )}
-            {recovery.data?.length ? (
-              <View style={styles.chartLabels}>
-                <Text size="caption" color={tokens.labelSecondary}>{formatDateLabel(recovery.data.at(-1)?.date ?? "")}</Text>
-                <Text size="caption" color={tokens.labelSecondary}>现在 · {latestRecovery}%</Text>
-              </View>
-            ) : null}
           </View>
 
           {/* 本周运动: bar height = total minutes, colour = dominant intensity. */}
@@ -243,13 +271,6 @@ const styles = StyleSheet.create({
   card: { borderRadius: radius.card, gap: 14, marginHorizontal: 20, padding: 18 },
   cardHeaderLeft: { alignItems: "center", flexDirection: "row", gap: 10 },
   cardHeaderRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  chartCard: {
-    borderRadius: radius.card,
-    gap: spacing.sm,
-    marginHorizontal: 20,
-    padding: 18
-  },
-  chartLabels: { flexDirection: "row", justifyContent: "space-between" },
   iconTile: {
     alignItems: "center",
     borderRadius: 10,

@@ -102,4 +102,18 @@ describe("WeekBars", () => {
 
     expect(labels).toEqual(dayNames);
   });
+
+  it("shows figures above the bars only when a bar carries a valueLabel", () => {
+    const withValues = bars().map((bar, index) => ({ ...bar, valueLabel: index === 0 ? "45%" : undefined }));
+    const texts = collect(WeekBars({ bars: withValues }), (element) => element.type === "Text").map(
+      (text) => text.props?.children
+    );
+
+    expect(texts).toContain("45%");
+    // 7 figure slots (one per column) + 7 weekday labels
+    expect(texts).toHaveLength(14);
+
+    const without = collect(WeekBars({ bars: bars() }), (element) => element.type === "Text");
+    expect(without).toHaveLength(7);
+  });
 });

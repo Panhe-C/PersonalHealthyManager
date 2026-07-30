@@ -20,6 +20,9 @@ export type WeekBar = {
   value: number;
   tone: WeekBarTone;
   accessibilityLabel: string;
+  /** Small figure above the bar (e.g. "87%"). The slot is always reserved so
+   *  columns with and without figures stay aligned. */
+  valueLabel?: string;
 };
 
 /** Shared 7-bar chart for the weekly exercise and sleep cards. Dumb: values,
@@ -28,11 +31,19 @@ export type WeekBar = {
 export function WeekBars({ bars }: { bars: WeekBar[] }) {
   const { tokens } = useTheme();
   const maxValue = Math.max(...bars.map((bar) => bar.value), 1);
+  // Only reserve the figure row when a caller actually uses it, so the
+  // exercise/sleep cards keep their original spacing.
+  const showValues = bars.some((bar) => bar.valueLabel);
 
   return (
     <View style={styles.barRow}>
       {bars.map((bar) => (
         <View key={bar.key} accessible accessibilityLabel={bar.accessibilityLabel} style={styles.barCol}>
+          {showValues ? (
+            <Text size="caption2" color={tokens.labelSecondary}>
+              {bar.valueLabel ?? " "}
+            </Text>
+          ) : null}
           <View
             style={[
               styles.bar,
