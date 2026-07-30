@@ -136,7 +136,7 @@ function CorosAuthSection({ connection, onAuthorized }: { connection: MobileMcpC
       </Text>
       <ChoiceGroup label="区域" options={corosRegions} value={region} onChange={setRegion} disabled={busy} />
       <Text size="subheadline" style={{ color: tokens.labelSecondary }}>{regionEndpoint(region)}</Text>
-      <Button title={busy ? "授权中…" : authorized ? "重新授权" : "授权"} disabled={busy} onPress={authorize} />
+      <Button title={busy ? "授权中…" : authorized ? "重新授权" : "授权"} disabled={busy} onPress={authorize} style={{ marginHorizontal: 0 }} />
     </View>
   );
 }
@@ -196,5 +196,5 @@ function CredentialField({ connection, onChange }: { connection: MobileMcpConnec
 }
 
 const styles = StyleSheet.create({
-  block: { gap: spacing.sm }
+  block: { gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm }
 });
