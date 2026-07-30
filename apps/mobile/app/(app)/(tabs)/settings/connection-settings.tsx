@@ -131,12 +131,12 @@ function CorosAuthSection({ connection, onAuthorized }: { connection: MobileMcpC
 
   return (
     <View style={styles.block}>
-      <Text size="subheadline" style={{ color: tokens.labelSecondary }}>
+      <Text size="subheadline" style={[styles.blockText, { color: tokens.labelSecondary }]}>
         {authorized ? oauthConnectionDetail(connection) : "尚未授权。选择账号所在区域后开始授权。"}
       </Text>
       <ChoiceGroup label="区域" options={corosRegions} value={region} onChange={setRegion} disabled={busy} />
-      <Text size="subheadline" style={{ color: tokens.labelSecondary }}>{regionEndpoint(region)}</Text>
-      <Button title={busy ? "授权中…" : authorized ? "重新授权" : "授权"} disabled={busy} onPress={authorize} style={{ marginHorizontal: 0 }} />
+      <Text size="subheadline" style={[styles.blockText, { color: tokens.labelSecondary }]}>{regionEndpoint(region)}</Text>
+      <Button title={busy ? "授权中…" : authorized ? "重新授权" : "授权"} disabled={busy} onPress={authorize} />
     </View>
   );
 }
@@ -154,8 +154,8 @@ function CredentialField({ connection, onChange }: { connection: MobileMcpConnec
   if (auth.type === "oauth2") {
     return (
       <View style={styles.block}>
-        <Text size="subheadline" style={{ color: tokens.labelSecondary }}>{oauthConnectionDetail(connection)}</Text>
-        <Text size="subheadline" style={{ color: tokens.labelSecondary }}>OAuth 授权需要在网页端完成，这里只显示状态。</Text>
+        <Text size="subheadline" style={[styles.blockText, { color: tokens.labelSecondary }]}>{oauthConnectionDetail(connection)}</Text>
+        <Text size="subheadline" style={[styles.blockText, { color: tokens.labelSecondary }]}>OAuth 授权需要在网页端完成，这里只显示状态。</Text>
       </View>
     );
   }
@@ -196,5 +196,6 @@ function CredentialField({ connection, onChange }: { connection: MobileMcpConnec
 }
 
 const styles = StyleSheet.create({
-  block: { gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm }
+  block: { gap: spacing.md, paddingVertical: spacing.sm },
+  blockText: { paddingHorizontal: spacing.lg }
 });

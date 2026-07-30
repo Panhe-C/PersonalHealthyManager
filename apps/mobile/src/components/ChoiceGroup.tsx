@@ -67,7 +67,8 @@ export function ChoiceGroup<Value extends string>({
 
 const styles = StyleSheet.create({
   group: {
-    gap: spacing.xs
+    gap: spacing.xs,
+    paddingHorizontal: spacing.lg
   },
   trackGrow: {
     flexGrow: 1

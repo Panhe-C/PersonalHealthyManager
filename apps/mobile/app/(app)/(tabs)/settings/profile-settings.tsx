@@ -128,18 +128,20 @@ export default function ProfileSettingsScreen() {
       </InsetGroup>
 
       <InsetGroup header="偏好">
-        <ChoiceGroup
-          label="性别"
-          options={sexOptions}
-          value={draft.sex}
-          onChange={(sex) => setDraft((current) => ({ ...current, sex }))}
-        />
-        <ChoiceGroup
-          label="训练经验"
-          options={experienceOptions}
-          value={draft.experience}
-          onChange={(experience) => setDraft((current) => ({ ...current, experience }))}
-        />
+        <View style={styles.preferenceBlock}>
+          <ChoiceGroup
+            label="性别"
+            options={sexOptions}
+            value={draft.sex}
+            onChange={(sex) => setDraft((current) => ({ ...current, sex }))}
+          />
+          <ChoiceGroup
+            label="训练经验"
+            options={experienceOptions}
+            value={draft.experience}
+            onChange={(experience) => setDraft((current) => ({ ...current, experience }))}
+          />
+        </View>
       </InsetGroup>
 
       <InsetGroup header="限制与偏好" footer="用逗号分隔多个条目。">
@@ -154,5 +156,6 @@ export default function ProfileSettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  preferenceBlock: { gap: spacing.md, paddingVertical: spacing.xs },
   row: { flexDirection: "row", gap: spacing.md }
 });
