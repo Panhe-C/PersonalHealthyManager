@@ -70,7 +70,6 @@ export default function ConnectionSettingsScreen() {
         >
           <Row
             title="启用连接"
-            value={connection.enabled ? "已启用" : "已停用"}
             trailing={
             <Switch
               value={connection.enabled}

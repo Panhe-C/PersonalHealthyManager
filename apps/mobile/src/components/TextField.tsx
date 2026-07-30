@@ -36,6 +36,7 @@ export function TextField({
       <View style={[styles.row, stacked && styles.rowStacked]}>
         <Text
           size="body"
+          numberOfLines={1}
           style={[styles.label, stacked && styles.labelStacked, { color: tokens.label }]}
         >
           {label}
@@ -90,7 +91,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs
   },
   label: {
-    width: 96
+    flexShrink: 0
   },
   labelStacked: {
     width: "100%"

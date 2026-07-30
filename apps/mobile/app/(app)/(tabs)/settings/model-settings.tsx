@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { Screen } from "../../../../src/components/Screen";
 import { Text } from "../../../../src/components/Text";
@@ -7,6 +6,7 @@ import { Button } from "../../../../src/components/Button";
 import { ChoiceGroup } from "../../../../src/components/ChoiceGroup";
 import { useFeedback } from "../../../../src/components/Feedback";
 import { InsetGroup } from "../../../../src/components/InsetGroup";
+import { Row } from "../../../../src/components/Row";
 import { TextField } from "../../../../src/components/TextField";
 
 import { useSettingsQuery } from "../../../../src/api/hooks";
@@ -17,7 +17,7 @@ import {
   saveSettings,
   type MobileSettings
 } from "../../../../src/api/settings";
-import { radius, spacing, useTheme } from "../../../../src/theme/tokens";
+import { spacing, useTheme } from "../../../../src/theme/tokens";
 
 export default function ModelSettingsScreen() {
   const query = useSettingsQuery();
@@ -94,10 +94,7 @@ export default function ModelSettingsScreen() {
             />
           </>
         ) : (
-          <View style={[styles.readOnly, { backgroundColor: tokens.surface, borderColor: tokens.separator }]}>
-            <Text weight="medium">{draft.modelName}</Text>
-            <Text size="subheadline" style={{ color: tokens.labelSecondary }}>{draft.modelBaseUrl}</Text>
-          </View>
+          <Row title={draft.modelName} subtitle={draft.modelBaseUrl} />
         )}
       </InsetGroup>
 
@@ -110,7 +107,7 @@ export default function ModelSettingsScreen() {
           value={apiKey}
           onChange={setApiKey}
           secure
-          placeholder={draft.hasApiKey ? `已配置 ${draft.apiKeyHint ?? ""}；留空保持不变` : "输入 API Key"}
+          placeholder={draft.hasApiKey ? `已配置 ${draft.apiKeyHint ?? ""}` : "输入 API Key"}
         />
       </InsetGroup>
 
@@ -118,15 +115,3 @@ export default function ModelSettingsScreen() {
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  readOnly: {
-    borderRadius: radius.md,
-    borderWidth: 1,
-    gap: 2,
-    justifyContent: "center",
-    minHeight: 52,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm
-  }
-});

@@ -1,4 +1,18 @@
 import type { MobileMcpConnection } from "./api/settings";
+import { APP_TIME_ZONE } from "./ui/format";
+
+/** Chinese date-time for authorization expiry, e.g. 2026年8月27日 08:23. */
+function zhDateTime(date: Date): string {
+  return date.toLocaleString("zh-CN", {
+    timeZone: APP_TIME_ZONE,
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  });
+}
 
 /**
  * Describes an OAuth2 connection without exposing an editable secret: there is
@@ -14,9 +28,9 @@ export function oauthConnectionDetail(connection: MobileMcpConnection, now = new
     return `已授权 ${auth.accessTokenHint}`;
   }
   if (expiresAt.getTime() <= now.getTime()) {
-    return `授权已于 ${expiresAt.toLocaleString()} 过期，请重新授权。`;
+    return `授权已于 ${zhDateTime(expiresAt)} 过期，请重新授权。`;
   }
-  return `已授权 ${auth.accessTokenHint} · ${expiresAt.toLocaleString()} 到期`;
+  return `已授权 ${auth.accessTokenHint} · ${zhDateTime(expiresAt)} 到期`;
 }
 
 export function mcpConnectionStatus(connection: MobileMcpConnection | undefined) {
