@@ -54,10 +54,17 @@ export const agentStreamEventSchema = z.discriminatedUnion("type", [
 ]);
 
 export type AgentStreamEvent = z.infer<typeof agentStreamEventSchema>;
-export type AgentFinalPayload = Omit<
-  Extract<AgentStreamEvent, { type: "final" }>,
-  "type"
->;
+export type AgentFinalPayload = {
+  message: string;
+  intent: string;
+  source: "model" | "rules";
+  modelProvider?: string;
+  modelName?: string;
+  error?: string;
+  conversation: z.infer<typeof agentStreamConversationSchema>;
+  adjustments: z.infer<typeof agentStreamAdjustmentSchema>[];
+  appliedMemories: z.infer<typeof appliedMemorySchema>[];
+};
 
 export function encodeAgentStreamEvent(event: AgentStreamEvent): Uint8Array {
   const validated = agentStreamEventSchema.parse(event);
