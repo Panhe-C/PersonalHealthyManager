@@ -335,6 +335,42 @@ describe("agent response shell", () => {
     expect(result.error).toContain("ended before completion");
   });
 
+  it("falls back when OpenAI sends DONE without a successful finish reason", async () => {
+    vi.mocked(loadModelRuntimeConfig).mockResolvedValue(deepSeekConfig);
+    vi.mocked(fetch).mockResolvedValue(sseResponse([
+      'data: {"choices":[{"delta":{"content":"<explanation>部分</explanation><actions>[]</actions>"}}]}\n\n',
+      "data: [DONE]\n\n"
+    ]));
+
+    const result = await createStreamingAgentResponseForUser(
+      "user-1", "分析本周训练", [], undefined, vi.fn()
+    );
+
+    expect(result.source).toBe("rules");
+    expect(result.error).toContain("completion reason");
+  });
+
+  it("falls back when Anthropic stops without a successful stop reason", async () => {
+    vi.mocked(loadModelRuntimeConfig).mockResolvedValue({
+      provider: "anthropic",
+      providerLabel: "Anthropic",
+      modelName: "claude-sonnet",
+      baseUrl: "https://api.anthropic.com/v1",
+      apiKey: "sk-ant"
+    });
+    vi.mocked(fetch).mockResolvedValue(sseResponse([
+      'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"<explanation>部分</explanation><memories>[]</memories>"}}\n\n',
+      'event: message_stop\ndata: {"type":"message_stop"}\n\n'
+    ]));
+
+    const result = await createStreamingAgentResponseForUser(
+      "user-1", "分析本周训练", [], undefined, vi.fn()
+    );
+
+    expect(result.source).toBe("rules");
+    expect(result.error).toContain("completion reason");
+  });
+
   it("preserves AbortError instead of converting cancellation to fallback", async () => {
     vi.mocked(loadModelRuntimeConfig).mockResolvedValue(deepSeekConfig);
     vi.mocked(fetch).mockRejectedValue(new DOMException("aborted", "AbortError"));

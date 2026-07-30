@@ -354,6 +354,9 @@ async function streamOpenAiCompatibleModel(
   if (!sawDone) {
     throw new Error(`${config.providerLabel} stream ended before completion.`);
   }
+  if (finishReason !== "stop") {
+    throw new Error(`${config.providerLabel} stream ended without a successful completion reason.`);
+  }
 }
 
 async function streamAnthropicModel(
@@ -412,6 +415,9 @@ async function streamAnthropicModel(
   }
   if (!sawStop) {
     throw new Error(`${config.providerLabel} stream ended before completion.`);
+  }
+  if (stopReason !== "end_turn" && stopReason !== "stop_sequence") {
+    throw new Error(`${config.providerLabel} stream ended without a successful completion reason.`);
   }
 }
 

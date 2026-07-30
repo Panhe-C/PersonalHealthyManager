@@ -67,6 +67,7 @@ export const POST = withUser(async (user, request: Request) => {
           (text) => enqueue({ type: "delta", text }),
           abortController.signal
         );
+        abortController.signal.throwIfAborted();
         const result = await finalizeAgentMessage(prepared.value, modelResponse);
         enqueue({
           type: "final",

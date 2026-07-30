@@ -16,6 +16,8 @@ describe("coach conversation lifecycle", () => {
     expect(source).toContain("appendAssistantDelta(items, assistantMessageId, event.text)");
     expect(source).toContain("finalizeAssistantMessage(items, assistantMessageId, event)");
     expect(source).toContain("回复中断，请重试。");
+    expect(source).toContain("activeSendRef.current?.controller !== controller");
+    expect(source).toContain("disabled={sending}");
     expect(source).not.toContain("sendMutation");
     expect(source).not.toContain("sendAgentMessage");
   });

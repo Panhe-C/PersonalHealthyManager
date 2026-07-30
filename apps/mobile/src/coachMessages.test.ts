@@ -5,6 +5,7 @@ import * as coachMessages from "./coachMessages";
 
 const {
   appendAssistantDelta,
+  canSubmitCoachMessage,
   finalizeAssistantMessage,
   getRecentMessagesForChat,
   mergeConversationMessages
@@ -88,5 +89,20 @@ describe("coach message state", () => {
         adjustments: final.adjustments
       }
     ]);
+  });
+
+  it("blocks sends while conversation creation or deletion is pending", () => {
+    expect(canSubmitCoachMessage({
+      content: "今天怎么练？",
+      conversationId: "conv-1",
+      sending: false,
+      conversationMutationPending: true
+    })).toBe(false);
+    expect(canSubmitCoachMessage({
+      content: "今天怎么练？",
+      conversationId: "conv-1",
+      sending: false,
+      conversationMutationPending: false
+    })).toBe(true);
   });
 });

@@ -23,6 +23,7 @@ import { useAgentMemoriesQuery, useConversationDetailQuery, useConversationsQuer
 import { RichMessage } from "../../../src/components/RichMessage";
 import {
   appendAssistantDelta,
+  canSubmitCoachMessage,
   finalizeAssistantMessage,
   getRecentMessagesForChat,
   mergeConversationMessages
@@ -108,7 +109,7 @@ export default function CoachTab() {
   const autoCreateAttemptedRef = useRef(false);
   const drawerProgress = useRef(new Animated.Value(0)).current;
   const messageScrollRef = useRef<ElementRef<typeof ScrollView>>(null);
-  const sendAbortRef = useRef<AbortController | null>(null);
+  const activeSendRef = useRef<{ controller: AbortController; conversationId: string } | null>(null);
 
   const conversationDetailQuery = useConversationDetailQuery(selectedConversationId);
   const conversations = conversationsQuery.data ?? [];
@@ -145,6 +146,8 @@ export default function CoachTab() {
     },
     onError: (err) => setError(err instanceof Error ? err.message : "删除会话失败")
   });
+  const conversationMutationPending =
+    createConversationMutation.isPending || deleteConversationMutation.isPending;
 
   const hasMessageFeedback = visibleMessages.length > 0 || sending;
 
@@ -198,7 +201,7 @@ export default function CoachTab() {
     }
   }, [conversationDetailQuery.data]);
 
-  useEffect(() => () => sendAbortRef.current?.abort(), []);
+  useEffect(() => () => activeSendRef.current?.controller.abort(), []);
 
   useEffect(() => {
     if (
@@ -221,7 +224,12 @@ export default function CoachTab() {
 
   async function submitMessage(text = draft) {
     const content = text.trim();
-    if (!content || !selectedConversationId || sending) return;
+    if (!selectedConversationId || !canSubmitCoachMessage({
+      content,
+      conversationId: selectedConversationId,
+      sending,
+      conversationMutationPending
+    })) return;
     const timestamp = Date.now();
     const conversationId = selectedConversationId;
     const userMessage: AgentMessage = { id: `local-user-${timestamp}`, role: "user", content };
@@ -231,7 +239,7 @@ export default function CoachTab() {
     let hasVisibleDelta = false;
     let completed = false;
 
-    sendAbortRef.current = controller;
+    activeSendRef.current = { controller, conversationId };
     setSending(true);
     setDraft("");
     setError(null);
@@ -241,6 +249,7 @@ export default function CoachTab() {
       await streamAgentMessage(conversationId, content, {
         signal: controller.signal,
         onEvent: (event) => {
+          if (activeSendRef.current?.controller !== controller) return;
           if (event.type === "delta") {
             hasVisibleDelta = true;
             setMessages((items) => appendAssistantDelta(items, assistantMessageId, event.text));
@@ -259,6 +268,7 @@ export default function CoachTab() {
       void queryClient.invalidateQueries({ queryKey: ["agent", "conversations", conversationId] });
       void queryClient.invalidateQueries({ queryKey: ["agent", "memories"] });
     } catch (err) {
+      if (activeSendRef.current?.controller !== controller) return;
       if (!hasVisibleDelta && !completed) {
         setMessages((items) => items.filter((item) => item.id !== assistantMessageId));
       }
@@ -266,8 +276,10 @@ export default function CoachTab() {
         setError(hasVisibleDelta ? "回复中断，请重试。" : err instanceof Error ? err.message : "发送失败");
       }
     } finally {
-      if (sendAbortRef.current === controller) sendAbortRef.current = null;
-      setSending(false);
+      if (activeSendRef.current?.controller === controller) {
+        activeSendRef.current = null;
+        setSending(false);
+      }
     }
   }
 
@@ -350,10 +362,10 @@ export default function CoachTab() {
                   accessibilityRole="button"
                   accessibilityLabel="新对话"
                   onPress={() => createConversationMutation.mutate()}
-                  disabled={createConversationMutation.isPending}
+                  disabled={createConversationMutation.isPending || sending}
                   style={({ pressed }) => [styles.toolbarIconButton, pressed && styles.pressed]}
                 >
-                  <SquarePen color={createConversationMutation.isPending ? tokens.muted : tokens.inkStrong} size={22} strokeWidth={1.7} />
+                  <SquarePen color={createConversationMutation.isPending || sending ? tokens.muted : tokens.inkStrong} size={22} strokeWidth={1.7} />
                 </Pressable>
               </View>
             </View>
@@ -418,10 +430,22 @@ export default function CoachTab() {
               accessibilityRole="button"
               accessibilityLabel="发送消息"
               onPress={() => submitMessage()}
-              disabled={!draft.trim() || !selectedConversationId || sending}
+              disabled={!canSubmitCoachMessage({
+                content: draft,
+                conversationId: selectedConversationId,
+                sending,
+                conversationMutationPending
+              })}
               style={({ pressed }) => [
                 styles.sendButton,
-                { backgroundColor: draft.trim() && selectedConversationId && !sending ? tokens.clay : tokens.line },
+                {
+                  backgroundColor: canSubmitCoachMessage({
+                    content: draft,
+                    conversationId: selectedConversationId,
+                    sending,
+                    conversationMutationPending
+                  }) ? tokens.clay : tokens.line
+                },
                 pressed && styles.pressed
               ]}
             >
@@ -509,14 +533,14 @@ export default function CoachTab() {
                     accessibilityRole="button"
                     accessibilityLabel="新建历史对话"
                     onPress={() => createConversationMutation.mutate()}
-                    disabled={createConversationMutation.isPending}
+                    disabled={createConversationMutation.isPending || sending}
                     style={({ pressed }) => [
                       styles.drawerNewButton,
                       { borderColor: tokens.line, backgroundColor: tokens.panelSoft },
                       pressed && styles.pressed
                     ]}
                   >
-                    <SquarePen color={createConversationMutation.isPending ? tokens.muted : tokens.sage} size={17} />
+                    <SquarePen color={createConversationMutation.isPending || sending ? tokens.muted : tokens.sage} size={17} />
                   </Pressable>
                 </View>
                 <Text size="sm" numberOfLines={2} style={{ color: tokens.muted }}>
@@ -532,6 +556,7 @@ export default function CoachTab() {
                     <Pressable
                       accessibilityRole="button"
                       key={conversation.id}
+                      disabled={sending}
                       onPress={() => {
                         setSelectedConversationId(conversation.id);
                         closeConversationDrawer();
@@ -553,6 +578,7 @@ export default function CoachTab() {
                       <Pressable
                         accessibilityRole="button"
                         accessibilityLabel={`删除 ${conversation.title}`}
+                        disabled={sending}
                         onPress={() => requestDeleteConversation(conversation)}
                         style={styles.drawerDeleteButton}
                       >

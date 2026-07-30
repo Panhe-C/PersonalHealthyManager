@@ -19,6 +19,20 @@ export function getRecentMessagesForChat(messages: AgentMessage[], limit = 8) {
   return messages.slice(-limit);
 }
 
+export function canSubmitCoachMessage(input: {
+  content: string;
+  conversationId?: string;
+  sending: boolean;
+  conversationMutationPending: boolean;
+}) {
+  return Boolean(
+    input.content.trim() &&
+    input.conversationId &&
+    !input.sending &&
+    !input.conversationMutationPending
+  );
+}
+
 export function appendAssistantDelta(messages: AgentMessage[], messageId: string, text: string) {
   return messages.map((message) =>
     message.id === messageId ? { ...message, content: `${message.content}${text}` } : message

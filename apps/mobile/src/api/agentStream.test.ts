@@ -125,4 +125,57 @@ describe("mobile agent streaming API", () => {
     );
     expect(tokenStore.setTokens).toHaveBeenCalledOnce();
   });
+
+  it("surfaces a pre-stream JSON error", async () => {
+    expoFetch.mockResolvedValue(new Response(JSON.stringify({
+      error: "Conversation not found",
+      code: "not_found"
+    }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" }
+    }));
+
+    await expect(streamAgentMessage("missing", "你好", { onEvent: vi.fn() })).rejects.toMatchObject({
+      message: "Conversation not found",
+      status: 404,
+      code: "not_found"
+    });
+  });
+
+  it("turns a terminal error event into a rejected request", async () => {
+    expoFetch.mockResolvedValue(streamResponse([
+      { type: "start", requestId: "req-error" },
+      { type: "error", error: "Generation failed", code: "stream_interrupted" }
+    ]));
+
+    await expect(streamAgentMessage("conv-1", "你好", { onEvent: vi.fn() })).rejects.toMatchObject({
+      message: "Generation failed",
+      code: "stream_interrupted"
+    });
+  });
+
+  it("passes cancellation to expo fetch", async () => {
+    expoFetch.mockImplementation((_url, init) => new Promise((_resolve, reject) => {
+      if (init?.signal?.aborted) {
+        reject(new DOMException("aborted", "AbortError"));
+        return;
+      }
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), {
+        once: true
+      });
+    }));
+    const controller = new AbortController();
+    const request = streamAgentMessage("conv-1", "你好", {
+      signal: controller.signal,
+      onEvent: vi.fn()
+    });
+
+    controller.abort();
+
+    await expect(request).rejects.toMatchObject({ name: "AbortError" });
+    expect(expoFetch).toHaveBeenCalledWith(
+      "http://localhost:3000/api/v1/agent",
+      expect.objectContaining({ signal: controller.signal })
+    );
+  });
 });

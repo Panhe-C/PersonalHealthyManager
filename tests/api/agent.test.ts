@@ -267,4 +267,47 @@ describe("agent API", () => {
     await vi.waitFor(() => expect(providerAborted).toHaveBeenCalled());
     expect(prisma.agentMessage.create).not.toHaveBeenCalled();
   });
+
+  it("skips finalization when cancellation wins after model generation resolves", async () => {
+    vi.mocked(prisma.agentConversation.findFirst).mockResolvedValue({
+      id: "conv-1",
+      title: "New conversation",
+      updatedAt: new Date("2026-07-30T09:00:00+08:00")
+    } as never);
+    vi.mocked(prisma.agentMessage.findMany).mockResolvedValue([] as never);
+    let resolveModel!: () => void;
+    const modelGate = new Promise<void>((resolve) => {
+      resolveModel = resolve;
+    });
+    vi.mocked(createStreamingAgentResponseForUser).mockImplementation(
+      async (_userId, _message, _history, _context, onDelta) => {
+        await onDelta("已生成");
+        await modelGate;
+        return {
+          intent: "general",
+          message: "<explanation>已生成</explanation>",
+          source: "model"
+        };
+      }
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/agent", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: AGENT_STREAM_MEDIA_TYPE
+        },
+        body: JSON.stringify({ conversationId: "conv-1", message: "今天怎么训练？" })
+      })
+    );
+    const reader = response.body!.getReader();
+    await reader.read();
+    await reader.read();
+    await reader.cancel();
+    resolveModel();
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(prisma.agentMessage.create).not.toHaveBeenCalled();
+  });
 });
