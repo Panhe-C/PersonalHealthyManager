@@ -105,6 +105,7 @@ export default function CoachTab() {
   const [showConversationDrawer, setShowConversationDrawer] = useState(false);
   const autoCreateAttemptedRef = useRef(false);
   const drawerProgress = useRef(new Animated.Value(0)).current;
+  const scrimProgress = useRef(new Animated.Value(0)).current;
   const messageScrollRef = useRef<ElementRef<typeof ScrollView>>(null);
 
   const conversationDetailQuery = useConversationDetailQuery(selectedConversationId);
@@ -117,24 +118,34 @@ export default function CoachTab() {
     inputRange: [0, 1],
     outputRange: [-drawerWidth, 0]
   });
-  // The scrim fades with the same progress as the slide, so closing never
-  // leaves a dark frame behind once the drawer is gone.
-  const drawerScrimOpacity = drawerProgress.interpolate({
+  // The scrim has its own clock: on close it fades out faster than the panel
+  // slides, so no dim band chases the drawer's edge across the page.
+  const drawerScrimOpacity = scrimProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 0.28]
   });
   const openConversationDrawer = useCallback(() => {
     setShowConversationDrawer(true);
     drawerProgress.setValue(0);
+    scrimProgress.setValue(0);
     requestAnimationFrame(() => {
-      Animated.timing(drawerProgress, {
-        toValue: 1,
-        duration: 220,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true
-      }).start();
+      Animated.parallel([
+        Animated.timing(drawerProgress, {
+          toValue: 1,
+          duration: 220,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true
+        }),
+        Animated.timing(scrimProgress, {
+          toValue: 1,
+          duration: 180,
+          delay: 60,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true
+        })
+      ]).start();
     });
-  }, [drawerProgress]);
+  }, [drawerProgress, scrimProgress]);
 
   const createConversationMutation = useMutation({
     mutationFn: createAgentConversation,
@@ -324,12 +335,20 @@ export default function CoachTab() {
   }
 
   function closeConversationDrawer(onClosed?: () => void) {
-    Animated.timing(drawerProgress, {
-      toValue: 0,
-      duration: 180,
-      easing: Easing.in(Easing.cubic),
-      useNativeDriver: true
-    }).start(({ finished }) => {
+    Animated.parallel([
+      Animated.timing(scrimProgress, {
+        toValue: 0,
+        duration: 120,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true
+      }),
+      Animated.timing(drawerProgress, {
+        toValue: 0,
+        duration: 200,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true
+      })
+    ]).start(({ finished }) => {
       if (!finished) return;
       setShowConversationDrawer(false);
       onClosed?.();
@@ -722,8 +741,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm
   },
   conversationDrawer: {
-    borderTopRightRadius: radius.sheet,
-    borderBottomRightRadius: radius.sheet,
     gap: spacing.md,
     height: "100%",
     paddingHorizontal: spacing.lg,
