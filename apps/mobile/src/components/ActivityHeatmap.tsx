@@ -77,7 +77,7 @@ export function ActivityHeatmap({
 
 const styles = StyleSheet.create({
   cell: { aspectRatio: 1, borderRadius: 4, width: "100%" },
-  cellCompact: { aspectRatio: 1, borderRadius: 3, width: 12 },
+  cellCompact: { borderRadius: 3, height: 12, width: "100%" },
   container: { gap: spacing.sm },
   grid: { flexDirection: "row", gap: CELL_GAP },
   gridCompact: { gap: 4 },
@@ -85,5 +85,5 @@ const styles = StyleSheet.create({
   swatch: { borderRadius: 3, height: 12, width: 12 },
   swatchCompact: { height: 10, width: 10 },
   weekColumn: { flex: 1, gap: CELL_GAP },
-  weekColumnCompact: { flex: 0, gap: 4 }
+  weekColumnCompact: { gap: 4 }
 });
