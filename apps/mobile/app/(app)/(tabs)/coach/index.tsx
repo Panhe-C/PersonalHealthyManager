@@ -477,10 +477,11 @@ export default function CoachTab() {
           <Animated.View
             style={[
               styles.conversationDrawer,
-              cardShadow(isDark ? "dark" : "light"),
               {
+                // No cardShadow and no right border here: iOS shadows do not
+                // follow translateX smoothly and a hairline smears during the
+                // slide — the fading scrim provides the separation instead.
                 backgroundColor: tokens.surface,
-                borderColor: tokens.separator,
                 paddingTop: Math.max(insets.top + spacing.md, spacing.xxl),
                 paddingBottom: Math.max(insets.bottom + spacing.lg, spacing.xl),
                 transform: [{ translateX: drawerTranslateX }],
@@ -721,7 +722,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm
   },
   conversationDrawer: {
-    borderRightWidth: 1,
     borderTopRightRadius: radius.sheet,
     borderBottomRightRadius: radius.sheet,
     gap: spacing.md,
