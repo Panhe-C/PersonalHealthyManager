@@ -1,4 +1,5 @@
 import { prisma } from "@/src/db/client";
+import { getMealMenusForDate } from "@/src/services/mealMenuService";
 
 // Read-side queries extracted from app/(dashboard)/plan/_data.ts so the v1 API
 // endpoints and the RSC pages can share one implementation. The RSC _data.ts
@@ -88,6 +89,9 @@ export interface TodayOverview {
   latestRecovery: Awaited<ReturnType<typeof getLatestRecovery>>;
   latestSleep: Awaited<ReturnType<typeof getLatestSleep>>;
   todayTasks: NonNullable<Awaited<ReturnType<typeof getActivePlan>>>["trainingTasks"];
+  /** Today's meal menus (breakfast/lunch/dinner), mock-backed when no meal
+   *  menu connection is configured. */
+  mealMenus: Awaited<ReturnType<typeof getMealMenusForDate>>;
   activePlanId: string | null;
 }
 
@@ -109,6 +113,7 @@ export async function getTodayOverview(userId: string, timezone: string): Promis
   const todayTasks = plan
     ? plan.trainingTasks.filter((task) => sameDayInTimezone(task.date, today, timezone))
     : [];
+  const mealMenus = await getMealMenusForDate(userId, today);
 
   return {
     date: today.toISOString(),
@@ -116,6 +121,7 @@ export async function getTodayOverview(userId: string, timezone: string): Promis
     latestRecovery,
     latestSleep,
     todayTasks,
+    mealMenus,
     activePlanId: plan?.id ?? null
   };
 }

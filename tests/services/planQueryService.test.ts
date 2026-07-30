@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { planFindFirst, recoveryFindFirst, sleepFindFirst, goalFindFirst } = vi.hoisted(() => ({
+const { planFindFirst, recoveryFindFirst, sleepFindFirst, goalFindFirst, getMealMenusForDate } = vi.hoisted(() => ({
   planFindFirst: vi.fn(),
   recoveryFindFirst: vi.fn(),
   sleepFindFirst: vi.fn(),
-  goalFindFirst: vi.fn()
+  goalFindFirst: vi.fn(),
+  getMealMenusForDate: vi.fn()
 }));
 
 vi.mock("@/src/db/client", () => ({
@@ -16,7 +17,18 @@ vi.mock("@/src/db/client", () => ({
   }
 }));
 
+vi.mock("@/src/services/mealMenuService", () => ({
+  getMealMenusForDate
+}));
+
 import { getTodayOverview } from "@/src/services/planQueryService";
+
+const mockMenu = {
+  source: "mock",
+  date: new Date("2026-06-29T00:00:00+08:00"),
+  meal: "breakfast",
+  items: [{ name: "燕麦鸡蛋", calories: 430, proteinGrams: 24, carbohydrateGrams: 52, fatGrams: 12, tags: [] }]
+};
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -25,6 +37,7 @@ beforeEach(() => {
   recoveryFindFirst.mockResolvedValue(null);
   sleepFindFirst.mockResolvedValue(null);
   goalFindFirst.mockResolvedValue(null);
+  getMealMenusForDate.mockResolvedValue([mockMenu]);
 });
 
 afterEach(() => {
@@ -47,6 +60,7 @@ describe("getTodayOverview timezone filtering", () => {
 
     expect(result.todayTasks.map((t) => t.id)).toEqual(["t1", "t3"]);
     expect(result.activePlanId).toBe("plan-1");
+    expect(result.mealMenus).toEqual([mockMenu]);
   });
 
   it("returns empty tasks when there is no active plan", async () => {
