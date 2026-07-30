@@ -58,7 +58,7 @@ describe("coach layout", () => {
     expect(source).toContain("paddingTop: Math.max(insets.top + spacing.md");
     expect(source).toContain("styles.drawerTitleRow");
     expect(source).toContain("styles.drawerNewButton");
-    expect(source).toContain('accessibilityLabel="新建历史对话"');
+    expect(source).toContain('accessibilityLabel="新对话"');
     expect(source).not.toContain("<Button title={createConversationMutation.isPending ? \"新建中\" : \"新建\"}");
   });
 

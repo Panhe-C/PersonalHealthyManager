@@ -117,6 +117,12 @@ export default function CoachTab() {
     inputRange: [0, 1],
     outputRange: [-drawerWidth, 0]
   });
+  // The scrim fades with the same progress as the slide, so closing never
+  // leaves a dark frame behind once the drawer is gone.
+  const drawerScrimOpacity = drawerProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 0.28]
+  });
   const openConversationDrawer = useCallback(() => {
     setShowConversationDrawer(true);
     drawerProgress.setValue(0);
@@ -483,26 +489,21 @@ export default function CoachTab() {
             ]}
           >
             <View style={styles.drawerHeader}>
-              <View style={styles.drawerTitleBlock}>
-                <View style={styles.drawerTitleRow}>
-                  <Text size="title2" weight="strong" numberOfLines={1}>历史对话</Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="新建历史对话"
-                    onPress={() => createConversationMutation.mutate()}
-                    disabled={createConversationMutation.isPending}
-                    style={({ pressed }) => [
-                      styles.drawerNewButton,
-                      { borderColor: tokens.separator, backgroundColor: tokens.surfaceAlt },
-                      pressed && styles.pressed
-                    ]}
-                  >
-                    <SquarePen color={createConversationMutation.isPending ? tokens.labelSecondary : tokens.tint} size={17} />
-                  </Pressable>
-                </View>
-                <Text size="subheadline" numberOfLines={2} style={{ color: tokens.labelSecondary }}>
-                  从侧边栏切换，不占用教练页顶部空间。
-                </Text>
+              <View style={styles.drawerTitleRow}>
+                <Text size="title2" weight="strong" numberOfLines={1}>历史对话</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="新对话"
+                  onPress={() => createConversationMutation.mutate()}
+                  disabled={createConversationMutation.isPending}
+                  style={({ pressed }) => [
+                    styles.drawerNewButton,
+                    { backgroundColor: tokens.fill },
+                    pressed && styles.pressed
+                  ]}
+                >
+                  <SquarePen color={createConversationMutation.isPending ? tokens.labelSecondary : tokens.tint} size={17} />
+                </Pressable>
               </View>
             </View>
             {conversationsQuery.isLoading ? <Spinner /> : (
@@ -519,15 +520,18 @@ export default function CoachTab() {
                       }}
                       style={({ pressed }) => [
                         styles.drawerConversationItem,
-                        { backgroundColor: selected ? tokens.tint : tokens.surfaceAlt, borderColor: selected ? tokens.tint : tokens.separator },
+                        selected ? { backgroundColor: tokens.fill } : null,
                         pressed && styles.pressed
                       ]}
                     >
+                      {/* Left accent bar marks the open conversation; the
+                          placeholder twin keeps unselected rows aligned. */}
+                      <View style={[styles.drawerSelectedBar, selected ? { backgroundColor: tokens.tint } : null]} />
                       <View style={styles.drawerConversationText}>
-                        <Text size="body" weight="strong" numberOfLines={1} style={{ color: selected ? "#fff" : tokens.label }}>
+                        <Text size="body" weight="strong" numberOfLines={1} style={{ color: tokens.label }}>
                           {conversation.title}
                         </Text>
-                        <Text size="caption" style={{ color: selected ? "#eef7ef" : tokens.labelSecondary }}>
+                        <Text size="caption" style={{ color: tokens.labelSecondary }}>
                           {formatDateLabel(conversation.updatedAt)}
                         </Text>
                       </View>
@@ -537,7 +541,7 @@ export default function CoachTab() {
                         onPress={() => requestDeleteConversation(conversation)}
                         style={styles.drawerDeleteButton}
                       >
-                        <Trash2 color={selected ? "#fff" : tokens.red} size={16} />
+                        <Trash2 color={tokens.labelTertiary} size={16} />
                       </Pressable>
                     </Pressable>
                   );
@@ -545,7 +549,9 @@ export default function CoachTab() {
               </ScrollView>
             )}
           </Animated.View>
-          <Pressable style={styles.drawerScrim} onPress={() => closeConversationDrawer()} />
+          <Animated.View style={[styles.drawerScrimWrap, { opacity: drawerScrimOpacity }]}>
+            <Pressable style={styles.drawerScrim} onPress={() => closeConversationDrawer()} />
+          </Animated.View>
         </View>
       </Modal>
     </>
@@ -726,22 +732,22 @@ const styles = StyleSheet.create({
   drawerBackdrop: { flex: 1, flexDirection: "row" },
   drawerConversationItem: {
     alignItems: "center",
-    borderRadius: radius.sheet,
-    borderWidth: 1,
+    borderRadius: radius.card,
     flexDirection: "row",
     gap: spacing.md,
-    minHeight: 76,
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.md,
-    paddingVertical: spacing.md
+    minHeight: 64,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.sm,
+    paddingVertical: spacing.sm
   },
-  drawerConversationList: { gap: spacing.sm, paddingBottom: spacing.xl, paddingTop: spacing.xs },
+  drawerConversationList: { gap: spacing.xs, paddingBottom: spacing.xl, paddingTop: spacing.xs },
   drawerConversationText: { flex: 1, gap: spacing.xs, minWidth: 0 },
   drawerDeleteButton: { alignItems: "center", borderRadius: radius.sm, height: 40, justifyContent: "center", width: 40 },
   drawerHeader: { marginBottom: spacing.sm },
-  drawerNewButton: { alignItems: "center", borderRadius: radius.md, borderWidth: 1, height: 44, justifyContent: "center", width: 44 },
-  drawerScrim: { backgroundColor: "rgba(0, 0, 0, 0.28)", flex: 1 },
-  drawerTitleBlock: { gap: spacing.xs },
+  drawerNewButton: { alignItems: "center", borderRadius: 21, height: 42, justifyContent: "center", width: 42 },
+  drawerScrim: { flex: 1 },
+  drawerScrimWrap: { backgroundColor: "#000000", flex: 1 },
+  drawerSelectedBar: { borderRadius: 2, height: 24, width: 3 },
   drawerTitleRow: { alignItems: "center", flexDirection: "row", gap: spacing.md, justifyContent: "space-between" },
   headerAction: { alignItems: "center", height: 44, justifyContent: "center", width: 44 },
   headerActions: { alignItems: "center", flexDirection: "row" },
