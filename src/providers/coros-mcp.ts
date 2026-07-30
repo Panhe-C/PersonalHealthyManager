@@ -252,9 +252,14 @@ function findMatchingTool(tools: McpTool[], patterns: string[]): McpTool | null 
 }
 
 const ACTIVITY_TOOL_PATTERNS = ["sportrecords", "sport_records", "sportrecord", "sport", "activities", "activity", "workout", "exercise"];
-const SLEEP_TOOL_PATTERNS = ["sleep"];
+const SLEEP_TOOL_PATTERNS = ["sleepdata", "sleep_data", "sleep"];
 const RECOVERY_TOOL_PATTERNS = ["recovery", "hrv", "health", "readiness"];
 const PROFILE_TOOL_PATTERNS = ["userinfo", "user_info", "profile"];
+// Daily vitals live on dedicated tools; the recovery status tool carries only
+// the percent, so these are fetched and merged into the same per-day records.
+const RESTING_HR_TOOL_PATTERNS = ["restingheartrate", "resting_heart_rate", "resting_hr"];
+const STRESS_TOOL_PATTERNS = ["stresslevel", "stress_level"];
+const SLEEP_HRV_TOOL_PATTERNS = ["sleephrv", "sleep_hrv"];
 const COROS_SYNC_LOOKBACK_DAYS = 14;
 const COROS_SYNC_TIMEZONE = "Asia/Shanghai";
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -265,7 +270,7 @@ type CorosSyncWindow = {
   endDate: string;
 };
 
-type CorosSyncKind = "activity" | "sleep" | "recovery";
+type CorosSyncKind = "activity" | "sleep" | "recovery" | "vitals";
 type CorosTextActivity = {
   labelId: string;
   sportType: number;
@@ -283,6 +288,18 @@ type CorosTextSleep = {
 type CorosTextRecovery = {
   date: string;
   recoveryPercent?: number;
+};
+type CorosTextRestingHeartRate = {
+  date: string;
+  restingHeartRateBpm: number;
+};
+type CorosTextStressLevel = {
+  date: string;
+  stressLevel: number;
+};
+type CorosTextSleepHrv = {
+  date: string;
+  hrvMs: number;
 };
 type CorosTextProfile = {
   heightCm?: number;
@@ -430,7 +447,11 @@ export async function fetchCorosRemoteMcpSnapshot(connection: DataMcpConnection)
         sleepTool.name,
         toolArguments("sleep", sleepTool, syncWindow)
       );
-      snapshot.sleep = extractPayloadArray(result);
+      // A sleep record must carry a duration; this drops anything a
+      // mis-matched tool (e.g. a sleep-HRV tool) might return here.
+      snapshot.sleep = extractPayloadArray(result).filter(
+        (item) => typeof (item as { durationMinutes?: unknown })?.durationMinutes === "number"
+      );
     } catch (error) {
       errors.push(`Sleep: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
@@ -447,6 +468,36 @@ export async function fetchCorosRemoteMcpSnapshot(connection: DataMcpConnection)
       snapshot.recovery = extractPayloadArray(result);
     } catch (error) {
       errors.push(`Recovery: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }
+
+  const vitalTools = [
+    { tool: findMatchingTool(tools, RESTING_HR_TOOL_PATTERNS), label: "RestingHeartRate" },
+    { tool: findMatchingTool(tools, STRESS_TOOL_PATTERNS), label: "StressLevel" },
+    { tool: findMatchingTool(tools, SLEEP_HRV_TOOL_PATTERNS), label: "SleepHrv" }
+  ];
+  for (const { tool, label } of vitalTools) {
+    if (!tool) continue;
+    try {
+      const result = await callToolWithFreshSession(
+        endpoint,
+        authHeaders,
+        tool.name,
+        toolArguments("vitals", tool, syncWindow)
+      );
+      // Keep only records that actually carry one of the vital fields.
+      snapshot.recovery.push(
+        ...extractPayloadArray(result).filter((item) => {
+          const record = item as { restingHeartRateBpm?: unknown; stressLevel?: unknown; hrvMs?: unknown };
+          return (
+            typeof record?.restingHeartRateBpm === "number" ||
+            typeof record?.stressLevel === "number" ||
+            typeof record?.hrvMs === "number"
+          );
+        })
+      );
+    } catch (error) {
+      errors.push(`${label}: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }
 
@@ -699,6 +750,37 @@ function parseRecoveryStatusText(text: string): CorosTextRecovery[] {
   ];
 }
 
+function parseRestingHeartRateText(text: string): CorosTextRestingHeartRate[] {
+  if (!text.includes("Resting Heart Rate")) return [];
+
+  const rows: CorosTextRestingHeartRate[] = [];
+  for (const match of text.matchAll(/^(\d{4}-\d{2}-\d{2}):\s*(\d+)\s*bpm\s*$/gm)) {
+    rows.push({ date: match[1], restingHeartRateBpm: Number(match[2]) });
+  }
+  return rows;
+}
+
+function parseStressLevelText(text: string): CorosTextStressLevel[] {
+  if (!text.includes("Stress Level")) return [];
+
+  const rows: CorosTextStressLevel[] = [];
+  for (const match of text.matchAll(/^(\d{4}-\d{2}-\d{2}):\s*\r?\n\s*Average Stress:\s*(\d+)/gm)) {
+    rows.push({ date: match[1], stressLevel: Number(match[2]) });
+  }
+  return rows;
+}
+
+/** Reads only the official assessment section ("HRV Avg: N ms"), never the raw time series. */
+function parseSleepHrvText(text: string): CorosTextSleepHrv[] {
+  if (!text.includes("HRV Assessment")) return [];
+
+  const rows: CorosTextSleepHrv[] = [];
+  for (const match of text.matchAll(/^(\d{4}-\d{2}-\d{2}):\s*\r?\n\s*HRV Avg:\s*(\d+)\s*ms/gm)) {
+    rows.push({ date: match[1], hrvMs: Number(match[2]) });
+  }
+  return rows;
+}
+
 function parseUserProfileText(text: string): CorosTextProfile[] {
   if (!text.includes("User Profile Information")) return [];
 
@@ -719,7 +801,15 @@ function parseUserProfileText(text: string): CorosTextProfile[] {
 }
 
 function parseCorosTextPayload(text: string): unknown[] {
-  return [...parseSportRecordsText(text), ...parseSleepDataText(text), ...parseRecoveryStatusText(text), ...parseUserProfileText(text)];
+  return [
+    ...parseSportRecordsText(text),
+    ...parseSleepDataText(text),
+    ...parseRecoveryStatusText(text),
+    ...parseRestingHeartRateText(text),
+    ...parseStressLevelText(text),
+    ...parseSleepHrvText(text),
+    ...parseUserProfileText(text)
+  ];
 }
 
 function extractPayloadArray(result: unknown): unknown[] {

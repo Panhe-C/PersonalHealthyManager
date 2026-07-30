@@ -751,6 +751,135 @@ Estimated Full Recovery: 11h`)
     );
   });
 
+  it("imports COROS resting heart rate, stress, and sleep HRV text responses", async () => {
+    vi.mocked(prisma.userSettings.findUnique).mockResolvedValueOnce(null);
+    vi.mocked(prisma.userSettings.upsert).mockResolvedValue({} as never);
+
+    await saveUserSettings("user-1", {
+      modelProvider: "openai",
+      modelName: "gpt-4o-mini",
+      modelBaseUrl: "https://api.openai.com/v1",
+      apiKey: "",
+      dataMcpConnections: [
+        {
+          ...defaultDataMcpConnections[0],
+          endpoint: "https://mcp.example.test/coros",
+          auth: { type: "bearer", token: "coros-token-123456" }
+        }
+      ]
+    });
+
+    const [upsertArg] = vi.mocked(prisma.userSettings.upsert).mock.calls.at(0) ?? [];
+    vi.mocked(prisma.userSettings.findUnique).mockResolvedValue(
+      settingsRecord(String(upsertArg?.create?.dataMcpConnectionsJson ?? upsertArg?.update?.dataMcpConnectionsJson)) as never
+    );
+
+    const json = (payload: unknown) =>
+      ({
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        text: async () => JSON.stringify(payload)
+      }) as never;
+
+    const textResult = (id: unknown, text: string) =>
+      json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(text) }] } });
+
+    vi.mocked(fetch).mockImplementation(async (_input, init) => {
+      const body = init && typeof init.body === "string" ? JSON.parse(init.body) : ({} as Record<string, unknown>);
+      const method = (body as { method?: string }).method;
+      const id = (body as { id?: unknown }).id;
+
+      if (method === "initialize") return json({ jsonrpc: "2.0", id, result: {} });
+      if (method === "tools/list") {
+        return json({
+          jsonrpc: "2.0",
+          id,
+          result: {
+            tools: [
+              { name: "queryRecoveryStatus" },
+              { name: "queryRestingHeartRate" },
+              { name: "queryStressLevel" },
+              { name: "querySleepHrv" }
+            ]
+          }
+        });
+      }
+      if (method === "tools/call") {
+        const params = (body as { params?: { name?: string } }).params;
+        if (params?.name === "queryRecoveryStatus") {
+          return textResult(id, `Recovery Status
+========================
+
+Recovery: 94%
+Level: Heavy training allowed
+Estimated Full Recovery: 11h`);
+        }
+        if (params?.name === "queryRestingHeartRate") {
+          return textResult(id, `Resting Heart Rate — Last 14 days
+========================
+
+2026-06-20: 57 bpm
+2026-06-19: 56 bpm`);
+        }
+        if (params?.name === "queryStressLevel") {
+          return textResult(id, `Stress Level — Last 14 days
+========================
+
+2026-06-20:
+Average Stress: 27 (Low)
+Relaxed: No data
+
+2026-06-19:
+Average Stress: 33 (Low)`);
+        }
+        if (params?.name === "querySleepHrv") {
+          return textResult(id, `Sleep HRV — 2026-06-14 to 2026-06-20
+========================
+Note: dates are wake-up days (each value comes from the night that ended that morning).
+
+HRV Assessment — Last 7 days
+========================
+
+2026-06-20:
+  HRV Avg: 36 ms — Normal
+  Normal Range: 29 - 37 ms
+  Baseline: 33 ms
+2026-06-19:
+  HRV Avg: 38 ms — Above normal
+  Normal Range: 29 - 37 ms
+  Baseline: 33 ms`);
+        }
+      }
+
+      return json({ jsonrpc: "2.0", id, result: {} });
+    });
+
+    const result = await syncCorosFromSettings("user-1");
+
+    expect(result).toEqual({ activities: 0, sleep: 0, recovery: 7 });
+    expect(mocks.tx.recoveryRecord.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ date: new Date("2026-06-20T00:00:00+08:00"), recoveryPercent: 94 })
+      })
+    );
+    expect(mocks.tx.recoveryRecord.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ date: new Date("2026-06-20T00:00:00+08:00"), restingHeartRateBpm: 57 })
+      })
+    );
+    expect(mocks.tx.recoveryRecord.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ date: new Date("2026-06-19T00:00:00+08:00"), stressLevel: 33 })
+      })
+    );
+    expect(mocks.tx.recoveryRecord.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ date: new Date("2026-06-20T00:00:00+08:00"), hrvMs: 36 })
+      })
+    );
+  });
+
   it("uses isolated MCP sessions for activity and sleep tool calls", async () => {
     vi.mocked(prisma.userSettings.findUnique).mockResolvedValueOnce(null);
     vi.mocked(prisma.userSettings.upsert).mockResolvedValue({} as never);
