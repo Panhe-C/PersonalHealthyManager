@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ElementRef } from "react";
-import { Animated, Easing, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { ArrowDown, Brain, History, Leaf, Pencil, Send, SquarePen, Trash2 } from "lucide-react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigation } from "expo-router";
@@ -92,7 +92,6 @@ export default function CoachTab() {
   const { confirm } = useFeedback();
   const { tokens, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const { width: viewportWidth } = useWindowDimensions();
   const [selectedConversationId, setSelectedConversationId] = useState<string | undefined>();
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -104,8 +103,6 @@ export default function CoachTab() {
   const [showCoachTools, setShowCoachTools] = useState(false);
   const [showConversationDrawer, setShowConversationDrawer] = useState(false);
   const autoCreateAttemptedRef = useRef(false);
-  const drawerProgress = useRef(new Animated.Value(0)).current;
-  const scrimProgress = useRef(new Animated.Value(0)).current;
   const messageScrollRef = useRef<ElementRef<typeof ScrollView>>(null);
 
   const conversationDetailQuery = useConversationDetailQuery(selectedConversationId);
@@ -113,39 +110,9 @@ export default function CoachTab() {
   const selectedConversation = conversations.find((item) => item.id === selectedConversationId);
   const suggestions = useMemo(() => buildSuggestions(messages), [messages]);
   const visibleMessages = useMemo(() => getRecentMessagesForChat(messages), [messages]);
-  const drawerWidth = Math.min(Math.round(viewportWidth * 0.82), 380);
-  const drawerTranslateX = drawerProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-drawerWidth, 0]
-  });
-  // The scrim has its own clock: on close it fades out faster than the panel
-  // slides, so no dim band chases the drawer's edge across the page.
-  const drawerScrimOpacity = scrimProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 0.28]
-  });
-  const openConversationDrawer = useCallback(() => {
-    setShowConversationDrawer(true);
-    drawerProgress.setValue(0);
-    scrimProgress.setValue(0);
-    requestAnimationFrame(() => {
-      Animated.parallel([
-        Animated.timing(drawerProgress, {
-          toValue: 1,
-          duration: 220,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true
-        }),
-        Animated.timing(scrimProgress, {
-          toValue: 1,
-          duration: 180,
-          delay: 60,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true
-        })
-      ]).start();
-    });
-  }, [drawerProgress, scrimProgress]);
+  // The history sheet uses the same native-fade Modal as the memory sheet —
+  // no hand-rolled slide, which is what smeared during close.
+  const openConversationDrawer = useCallback(() => setShowConversationDrawer(true), []);
 
   const createConversationMutation = useMutation({
     mutationFn: createAgentConversation,
@@ -334,25 +301,10 @@ export default function CoachTab() {
     setEditMemoryDraft({ kind: memory.kind, category: memory.category, content: memory.content });
   }
 
+  /** The sheet is a Modal, so it closes before the confirm sheet opens to avoid stacked modals. */
   function closeConversationDrawer(onClosed?: () => void) {
-    Animated.parallel([
-      Animated.timing(scrimProgress, {
-        toValue: 0,
-        duration: 120,
-        easing: Easing.in(Easing.quad),
-        useNativeDriver: true
-      }),
-      Animated.timing(drawerProgress, {
-        toValue: 0,
-        duration: 200,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: true
-      })
-    ]).start(({ finished }) => {
-      if (!finished) return;
-      setShowConversationDrawer(false);
-      onClosed?.();
-    });
+    setShowConversationDrawer(false);
+    onClosed?.();
   }
 
   return (
@@ -491,40 +443,32 @@ export default function CoachTab() {
         </Pressable>
       </Modal>
 
-      <Modal visible={showConversationDrawer} transparent animationType="none" onRequestClose={() => closeConversationDrawer()}>
-        <View style={styles.drawerBackdrop}>
-          <Animated.View
+      <Modal visible={showConversationDrawer} transparent animationType="fade" onRequestClose={() => closeConversationDrawer()}>
+        <Pressable style={styles.sheetBackdrop} onPress={() => closeConversationDrawer()}>
+          <Pressable
             style={[
-              styles.conversationDrawer,
-              {
-                // No cardShadow and no right border here: iOS shadows do not
-                // follow translateX smoothly and a hairline smears during the
-                // slide — the fading scrim provides the separation instead.
-                backgroundColor: tokens.surface,
-                paddingTop: Math.max(insets.top + spacing.md, spacing.xxl),
-                paddingBottom: Math.max(insets.bottom + spacing.lg, spacing.xl),
-                transform: [{ translateX: drawerTranslateX }],
-                width: drawerWidth
-              }
+              styles.memorySheet,
+              { backgroundColor: tokens.surface, borderColor: tokens.separator, paddingBottom: Math.max(insets.bottom, spacing.lg) },
+              cardShadow(isDark ? "dark" : "light")
             ]}
+            onPress={(event) => event.stopPropagation()}
           >
-            <View style={styles.drawerHeader}>
-              <View style={styles.drawerTitleRow}>
-                <Text size="title2" weight="strong" numberOfLines={1}>历史对话</Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="新对话"
-                  onPress={() => createConversationMutation.mutate()}
-                  disabled={createConversationMutation.isPending}
-                  style={({ pressed }) => [
-                    styles.drawerNewButton,
-                    { backgroundColor: tokens.fill },
-                    pressed && styles.pressed
-                  ]}
-                >
-                  <SquarePen color={createConversationMutation.isPending ? tokens.labelSecondary : tokens.tint} size={17} />
-                </Pressable>
-              </View>
+            <View style={[styles.sheetHandle, { backgroundColor: tokens.separatorOpaque }]} />
+            <View style={styles.drawerTitleRow}>
+              <Text size="title2" weight="strong" numberOfLines={1}>历史对话</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="新对话"
+                onPress={() => createConversationMutation.mutate()}
+                disabled={createConversationMutation.isPending}
+                style={({ pressed }) => [
+                  styles.drawerNewButton,
+                  { backgroundColor: tokens.fill },
+                  pressed && styles.pressed
+                ]}
+              >
+                <SquarePen color={createConversationMutation.isPending ? tokens.labelSecondary : tokens.tint} size={17} />
+              </Pressable>
             </View>
             {conversationsQuery.isLoading ? <Spinner /> : (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerConversationList}>
@@ -568,11 +512,8 @@ export default function CoachTab() {
                 })}
               </ScrollView>
             )}
-          </Animated.View>
-          <Animated.View style={[styles.drawerScrimWrap, { opacity: drawerScrimOpacity }]}>
-            <Pressable style={styles.drawerScrim} onPress={() => closeConversationDrawer()} />
-          </Animated.View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </>
   );
@@ -740,13 +681,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm
   },
-  conversationDrawer: {
-    gap: spacing.md,
-    height: "100%",
-    paddingHorizontal: spacing.lg,
-    width: "82%"
-  },
-  drawerBackdrop: { flex: 1, flexDirection: "row" },
   drawerConversationItem: {
     alignItems: "center",
     borderRadius: radius.card,
@@ -760,10 +694,7 @@ const styles = StyleSheet.create({
   drawerConversationList: { gap: spacing.xs, paddingBottom: spacing.xl, paddingTop: spacing.xs },
   drawerConversationText: { flex: 1, gap: spacing.xs, minWidth: 0 },
   drawerDeleteButton: { alignItems: "center", borderRadius: radius.sm, height: 40, justifyContent: "center", width: 40 },
-  drawerHeader: { marginBottom: spacing.sm },
   drawerNewButton: { alignItems: "center", borderRadius: 21, height: 42, justifyContent: "center", width: 42 },
-  drawerScrim: { flex: 1 },
-  drawerScrimWrap: { backgroundColor: "#000000", flex: 1 },
   drawerSelectedBar: { borderRadius: 2, height: 24, width: 3 },
   drawerTitleRow: { alignItems: "center", flexDirection: "row", gap: spacing.md, justifyContent: "space-between" },
   headerAction: { alignItems: "center", height: 44, justifyContent: "center", width: 44 },

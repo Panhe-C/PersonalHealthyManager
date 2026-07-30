@@ -43,19 +43,20 @@ describe("coach layout", () => {
     expect(source).toContain("SquarePen");
     expect(source).toContain('accessibilityLabel="历史对话"');
     expect(source).toContain('accessibilityLabel="新对话"');
-    expect(source).toContain("Animated.View");
-    expect(source).toContain("drawerTranslateX");
-    expect(source).toContain('animationType="none"');
-    expect(source).not.toContain('animationType="slide"');
+    expect(source).toContain('animationType="fade"');
+    expect(source).toContain("sheetBackdrop");
+    expect(source).not.toContain("drawerTranslateX");
+    expect(source).not.toContain('animationType="none"');
     expect(source).not.toContain(">历史</Text>");
     expect(source).not.toContain("新对话</Text>");
   });
 
-  it("keeps the history drawer header clear of the device safe area", () => {
+  it("keeps the history sheet docked to the bottom safe area", () => {
     const source = readFileSync(new URL("../app/(app)/(tabs)/coach/index.tsx", import.meta.url), "utf8");
 
     expect(source).toContain("useSafeAreaInsets");
-    expect(source).toContain("paddingTop: Math.max(insets.top + spacing.md");
+    expect(source).toContain("paddingBottom: Math.max(insets.bottom, spacing.lg)");
+    expect(source).toContain("sheetHandle");
     expect(source).toContain("styles.drawerTitleRow");
     expect(source).toContain("styles.drawerNewButton");
     expect(source).toContain('accessibilityLabel="新对话"');
