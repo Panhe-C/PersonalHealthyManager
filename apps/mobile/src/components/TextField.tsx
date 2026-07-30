@@ -81,7 +81,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     gap: spacing.md,
-    minHeight: 44
+    minHeight: 44,
+    paddingHorizontal: spacing.lg
   },
   rowStacked: {
     alignItems: "stretch",
