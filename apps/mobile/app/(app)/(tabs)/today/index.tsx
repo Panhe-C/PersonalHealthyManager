@@ -3,7 +3,7 @@ import { StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Footprints, Moon } from "lucide-react-native";
+import { CalendarDays, Footprints, Gauge, Heart } from "lucide-react-native";
 import { Screen } from "../../../../src/components/Screen";
 import { Text } from "../../../../src/components/Text";
 import { Button } from "../../../../src/components/Button";
@@ -13,7 +13,7 @@ import { EmptyState, Spinner } from "../../../../src/components/States";
 import { TextField } from "../../../../src/components/TextField";
 import { ReadinessRing } from "../../../../src/components/QuietHealth";
 import { WarmHeader, WarmHeaderButton } from "../../../../src/components/WarmHeader";
-import { useSleepQuery, useTodayOverviewQuery } from "../../../../src/api/hooks";
+import { useRecoveryQuery, useTodayOverviewQuery } from "../../../../src/api/hooks";
 import { completeTrainingTask } from "../../../../src/api/training";
 import {
   APP_TIME_ZONE,
@@ -27,13 +27,6 @@ import type { TodayOverview } from "../../../../src/api/schemas";
 type TodayTask = TodayOverview["todayTasks"][number];
 type ChecklistStatus = TodayTask["checklistItems"][number]["status"];
 
-// Sleep bar geometry: bars scale against the longest night shown instead of
-// the prototype's `hours * 7` multiplier.
-const BAR_MAX_HEIGHT = 72;
-const BAR_MIN_HEIGHT = 6;
-const BAR_WIDTH = 18;
-const BAR_RADIUS = 6;
-
 const weekdayFormat = new Intl.DateTimeFormat("zh-CN", {
   timeZone: APP_TIME_ZONE,
   weekday: "short"
@@ -44,17 +37,19 @@ function weekdayLabel(value: string): string {
   return Number.isNaN(date.getTime()) ? "" : weekdayFormat.format(date);
 }
 
-// VoiceOver reads each sleep bar as one unit, e.g. 周二睡眠 8 小时 35 分.
-function sleepBarLabel(record: { date: string; durationMinutes: number }): string {
-  const hours = Math.floor(record.durationMinutes / 60);
-  const rest = record.durationMinutes % 60;
-  const duration = rest > 0 ? `${hours} 小时 ${rest} 分` : `${hours} 小时`;
-  return `${weekdayLabel(record.date)}睡眠 ${duration}`;
+/** Latest value vs the week's average for one recovery metric (resting heart
+ *  rate, stress). Nulls are dropped from the average; missing latest → null. */
+function vitalDelta(records: { restingHeartRateBpm?: number | null; stressLevel?: number | null }[], key: "restingHeartRateBpm" | "stressLevel") {
+  const latest = records[0]?.[key] ?? null;
+  const values = records.flatMap((record) => (record[key] == null ? [] : [record[key]!]));
+  const average = values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : null;
+  const delta = latest != null && average != null ? latest - average : null;
+  return { latest, delta };
 }
 
 export default function TodayTab() {
   const { data, isLoading, error } = useTodayOverviewQuery();
-  const sleep = useSleepQuery(7);
+  const recoveryWeek = useRecoveryQuery(7);
   const { tokens, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -63,12 +58,8 @@ export default function TodayTab() {
   const sleepMinutes = typeof data?.latestSleep?.durationMinutes === "number" ? data.latestSleep.durationMinutes : null;
   const activityMinutes = data?.todayTasks.reduce((sum, task) => sum + task.durationMinutes, 0) ?? 0;
   const focusTask = data?.todayTasks[0];
-  // The API returns the newest night first; the card renders oldest to newest.
-  const weekSleep = [...(sleep.data ?? [])].slice(0, 7).reverse();
-  const maxSleep = Math.max(...weekSleep.map((record) => record.durationMinutes), 1);
-  const averageSleep = weekSleep.length
-    ? Math.round(weekSleep.reduce((sum, record) => sum + record.durationMinutes, 0) / weekSleep.length)
-    : null;
+  const heartRate = vitalDelta(recoveryWeek.data ?? [], "restingHeartRateBpm");
+  const stress = vitalDelta(recoveryWeek.data ?? [], "stressLevel");
 
   return (
     <Screen contentContainerStyle={{ gap: spacing.lg, paddingTop: insets.top + spacing.lg }}>
@@ -124,54 +115,11 @@ export default function TodayTab() {
             </View>
           </View>
 
-          {/* Weekly sleep bars, newest night on the right in controlFill. */}
-          <View style={[styles.card, { backgroundColor: tokens.surface }, shadow]}>
-            <View style={styles.cardHeaderRow}>
-              <View style={styles.cardHeaderLeft}>
-                <View style={[styles.iconTile, { backgroundColor: tokens.fill }]}>
-                  <Moon color={tokens.label} size={16} strokeWidth={1.8} />
-                </View>
-                <Text size="callout" weight="semibold">
-                  本周睡眠
-                </Text>
-              </View>
-              <Text size="footnote" color={tokens.labelSecondary}>
-                {averageSleep === null ? "暂无记录" : `平均 ${formatDuration(averageSleep)}`}
-              </Text>
-            </View>
-            {weekSleep.length ? (
-              <View style={styles.barRow}>
-                {weekSleep.map((record, index) => (
-                  <View
-                    key={record.id}
-                    accessible
-                    accessibilityLabel={sleepBarLabel(record)}
-                    style={styles.barCol}
-                  >
-                    <View
-                      style={[
-                        styles.bar,
-                        {
-                          backgroundColor:
-                            index === weekSleep.length - 1 ? tokens.controlFill : tokens.fill,
-                          height: Math.max(
-                            BAR_MIN_HEIGHT,
-                            Math.round((record.durationMinutes / maxSleep) * BAR_MAX_HEIGHT)
-                          )
-                        }
-                      ]}
-                    />
-                    <Text size="caption2" color={tokens.labelSecondary}>
-                      {weekdayLabel(record.date).replace("周", "")}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            ) : (
-              <Text size="footnote" color={tokens.labelSecondary}>
-                同步 Apple 健康后展示最近几晚的睡眠。
-              </Text>
-            )}
+          {/* Resting heart rate and stress, side by side. Sleep bars moved to
+              the Insights tab, which owns the weekly charts. */}
+          <View style={styles.cardRow}>
+            <VitalCard icon="heart" title="静息心率" unit="bpm" vital={heartRate} shadow={shadow} />
+            <VitalCard icon="gauge" title="压力" unit="" vital={stress} shadow={shadow} />
           </View>
 
           {focusTask ? <TodayChecklist task={focusTask} shadow={shadow} /> : (
@@ -201,6 +149,67 @@ function nextChecklistStatus(status: ChecklistStatus): ChecklistStatus {
   if (status === "pending") return "completed";
   if (status === "completed") return "skipped";
   return "pending";
+}
+
+type Vital = { latest: number | null; delta: number | null };
+
+/** Half-width card with the latest reading and its delta from the week
+ *  average. For both metrics lower is better, so a negative delta is tint. */
+function VitalCard({
+  icon,
+  title,
+  unit,
+  vital,
+  shadow
+}: {
+  icon: "heart" | "gauge";
+  title: string;
+  unit: string;
+  vital: Vital;
+  shadow: ReturnType<typeof cardShadow>;
+}) {
+  const { tokens } = useTheme();
+  const deltaText =
+    vital.latest == null
+      ? "暂无记录"
+      : vital.delta == null || vital.delta === 0
+        ? "与周均持平"
+        : `较周均 ${vital.delta > 0 ? "+" : ""}${vital.delta}`;
+  const deltaColor = vital.delta == null || vital.delta === 0
+    ? tokens.labelSecondary
+    : vital.delta < 0
+      ? tokens.tint
+      : tokens.orange;
+
+  return (
+    <View
+      accessible
+      accessibilityLabel={`${title} ${vital.latest ?? "无数据"}${unit ? ` ${unit}` : ""},${deltaText}`}
+      style={[styles.card, styles.halfCard, { backgroundColor: tokens.surface }, shadow]}
+    >
+      <View style={styles.cardHeaderLeft}>
+        <View style={[styles.iconTile, { backgroundColor: tokens.fill }]}>
+          {icon === "heart" ? (
+            <Heart color={tokens.red} size={16} strokeWidth={1.8} />
+          ) : (
+            <Gauge color={tokens.orange} size={16} strokeWidth={1.8} />
+          )}
+        </View>
+        <Text size="callout" weight="semibold">
+          {title}
+        </Text>
+      </View>
+      <Text size="title1" weight="strong" tabularNums>
+        {vital.latest ?? "—"}
+        {vital.latest != null && unit ? (
+          <Text size="footnote" color={tokens.labelSecondary}>{` ${unit}`}</Text>
+        ) : null}
+      </Text>
+      <Text size="footnote" color={deltaColor}>
+        {deltaText}
+      </Text>
+    </View>
+  );
 }
 
 function TodayChecklist({
@@ -294,17 +303,11 @@ function TodayChecklist({
 }
 
 const styles = StyleSheet.create({
-  bar: { borderRadius: BAR_RADIUS, width: BAR_WIDTH },
-  barCol: { alignItems: "center", gap: 6 },
-  barRow: {
-    alignItems: "flex-end",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.xs
-  },
   card: { borderRadius: radius.card, gap: 14, marginHorizontal: 20, padding: 18 },
   cardHeaderLeft: { alignItems: "center", flexDirection: "row", gap: 10 },
   cardHeaderRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  cardRow: { flexDirection: "row", gap: 12, marginHorizontal: 20 },
+  halfCard: { flex: 1, gap: 8, marginHorizontal: 0, padding: 14 },
   heroCard: {
     alignItems: "center",
     borderRadius: radius.sheet, // the hero card uses the larger 32pt radius

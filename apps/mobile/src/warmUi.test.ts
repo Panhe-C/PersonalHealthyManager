@@ -163,8 +163,9 @@ describe("warm card mobile UI", () => {
 
     expect(source).toContain("WarmHeader");
     expect(source).toContain("ReadinessRing");
-    expect(source).toContain("本周睡眠");
-    expect(source).toContain("useSleepQuery");
+    expect(source).toContain("静息心率");
+    expect(source).toContain("useRecoveryQuery(7)");
+    expect(source).not.toContain("useSleepQuery");
     expect(source).toContain("训练清单");
     expect(source).toContain("CheckRow");
     expect(source).toContain("cardShadow");
@@ -296,12 +297,13 @@ describe("warm card mobile UI", () => {
     expect(source).not.toContain("BottomTabBarHeightContext");
   });
 
-  it("labels each Today sleep bar and aligns the submit button to the card margin", () => {
+  it("labels the Today vital cards and aligns the submit button to the card margin", () => {
     const source = read("../app/(app)/(tabs)/today/index.tsx");
 
     expect(source).toContain("accessible");
-    expect(source).toContain("accessibilityLabel={sleepBarLabel(record)}");
-    expect(source).toContain("小时");
+    expect(source).toContain("静息心率");
+    expect(source).toContain("压力");
+    expect(source).toContain("较周均");
     expect(source).toContain("styles.submitWrap");
   });
 
