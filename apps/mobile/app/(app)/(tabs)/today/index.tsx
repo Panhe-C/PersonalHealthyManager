@@ -3,7 +3,7 @@ import { StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Footprints, Gauge, Heart } from "lucide-react-native";
+import { CalendarDays, Footprints, Gauge, Heart, UtensilsCrossed } from "lucide-react-native";
 import { Screen } from "../../../../src/components/Screen";
 import { Text } from "../../../../src/components/Text";
 import { Button } from "../../../../src/components/Button";
@@ -122,6 +122,47 @@ export default function TodayTab() {
             <VitalCard icon="gauge" title="压力" unit="" vital={stress} shadow={shadow} />
           </View>
 
+          {data.mealMenus.length > 0 ? (
+            <View style={[styles.card, { backgroundColor: tokens.surface }, shadow]}>
+              <View style={styles.cardHeaderRow}>
+                <View style={styles.cardHeaderLeft}>
+                  <View style={[styles.iconTile, { backgroundColor: tokens.fill }]}>
+                    <UtensilsCrossed color={tokens.orange} size={16} strokeWidth={1.8} />
+                  </View>
+                  <Text size="callout" weight="semibold">
+                    今日饮食
+                  </Text>
+                </View>
+                <Text size="footnote" color={tokens.labelSecondary}>
+                  {`${data.mealMenus.length} 餐`}
+                </Text>
+              </View>
+              {data.mealMenus.map((menu, menuIndex) => (
+                <View
+                  key={`${menu.meal}-${menuIndex}`}
+                  style={[
+                    styles.mealGroup,
+                    menuIndex > 0 ? { borderTopColor: tokens.separator, borderTopWidth: StyleSheet.hairlineWidth } : null
+                  ]}
+                >
+                  <Text size="footnote" weight="semibold" color={tokens.labelSecondary}>
+                    {mealLabel(menu.meal)}
+                  </Text>
+                  {menu.items.map((item, itemIndex) => (
+                    <View key={`${item.name}-${itemIndex}`} style={styles.mealItemRow}>
+                      <Text size="subheadline" color={tokens.label} style={styles.mealItemName} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      <Text size="caption" color={tokens.labelSecondary}>
+                        {item.calories} kcal · 蛋白 {item.proteinGrams}g
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ))}
+            </View>
+          ) : null}
+
           {focusTask ? <TodayChecklist task={focusTask} shadow={shadow} /> : (
             <View style={[styles.card, { backgroundColor: tokens.surface }, shadow]}>
               <View style={styles.cardHeaderRow}>
@@ -149,6 +190,13 @@ function nextChecklistStatus(status: ChecklistStatus): ChecklistStatus {
   if (status === "pending") return "completed";
   if (status === "completed") return "skipped";
   return "pending";
+}
+
+function mealLabel(meal: string): string {
+  if (meal === "breakfast") return "早餐";
+  if (meal === "lunch") return "午餐";
+  if (meal === "dinner") return "晚餐";
+  return meal;
 }
 
 type Vital = { latest: number | null; delta: number | null };
@@ -340,6 +388,9 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
     paddingHorizontal: spacing.lg
   },
+  mealGroup: { gap: spacing.xs, paddingTop: spacing.sm },
+  mealItemName: { flex: 1 },
+  mealItemRow: { alignItems: "baseline", flexDirection: "row", gap: spacing.sm, justifyContent: "space-between" },
   rowDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: spacing.lg },
   submitWrap: { marginHorizontal: spacing.xs }
 });
