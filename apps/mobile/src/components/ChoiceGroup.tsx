@@ -1,55 +1,93 @@
-import { Pressable, StyleSheet, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { radius, spacing, useTheme } from "../theme/tokens";
 import { Text } from "./Text";
-import { opacity, radius, spacing, useTheme } from "../theme/tokens";
+
+type ChoiceGroupProps<Value extends string> = {
+  label?: string;
+  value: Value;
+  options: readonly { label: string; value: Value }[];
+  onChange: (value: Value) => void;
+  disabled?: boolean;
+};
 
 export function ChoiceGroup<Value extends string>({
   label,
-  options,
   value,
+  options,
   onChange,
   disabled = false
-}: {
-  label?: string;
-  options: readonly { value: Value; label: string }[];
-  value: Value;
-  onChange: (value: Value) => void;
-  disabled?: boolean;
-}) {
+}: ChoiceGroupProps<Value>) {
   const { tokens } = useTheme();
 
   return (
     <View style={styles.group}>
-      {label ? <Text size="sm" style={{ color: tokens.muted }}>{label}</Text> : null}
-      <View style={styles.options}>
-        {options.map((option) => {
-          const selected = option.value === value;
-          return (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              disabled={disabled}
-              key={option.value}
-              onPress={() => onChange(option.value)}
-              style={({ pressed }) => [
-                styles.chip,
-                { backgroundColor: selected ? tokens.sage : tokens.panelSoft, borderColor: selected ? tokens.sage : tokens.line },
-                pressed && { opacity: opacity.pressed },
-                disabled && { opacity: opacity.disabled }
-              ]}
-            >
-              <Text size="sm" weight={selected ? "medium" : "regular"} style={{ color: selected ? "#fff" : tokens.ink }}>
-                {option.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      {label ? (
+        <Text size="footnote" style={{ color: tokens.labelSecondary }}>
+          {label}
+        </Text>
+      ) : null}
+      {/* Few options stretch to fill the width; many (e.g. seven model
+          providers) scroll sideways instead of wrapping mid-word. */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trackGrow}>
+        <View style={[styles.track, { backgroundColor: tokens.fill }]}>
+          {options.map((option) => {
+            const selected = option.value === value;
+
+            return (
+              <Pressable
+                key={option.value}
+                accessibilityRole="button"
+                accessibilityState={{ disabled, selected }}
+                disabled={disabled}
+                onPress={() => onChange(option.value)}
+                style={({ pressed }) => [
+                  styles.segment,
+                  selected && { backgroundColor: tokens.surface },
+                  { opacity: disabled ? 0.45 : pressed ? 0.65 : 1 }
+                ]}
+              >
+                <Text
+                  size="subheadline"
+                  numberOfLines={1}
+                  style={{
+                    color: tokens.label,
+                    fontWeight: selected ? "600" : "400"
+                  }}
+                >
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  chip: { borderRadius: radius.md, borderWidth: 1, minHeight: 40, justifyContent: "center", paddingHorizontal: spacing.md },
-  group: { gap: spacing.sm },
-  options: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }
+  group: {
+    gap: spacing.xs,
+    paddingHorizontal: spacing.lg
+  },
+  trackGrow: {
+    flexGrow: 1
+  },
+  track: {
+    borderRadius: radius.md,
+    flexDirection: "row",
+    flexGrow: 1,
+    gap: 2,
+    padding: 2
+  },
+  segment: {
+    alignItems: "center",
+    borderRadius: radius.sm,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 32,
+    minWidth: 64,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs
+  }
 });

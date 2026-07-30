@@ -4,7 +4,7 @@ import { router } from "expo-router";
 import { ApiError } from "../../src/api/client";
 import { useAuth } from "../../src/auth/AuthContext";
 import { Button } from "../../src/components/Button";
-import { PageHeader } from "../../src/components/QuietHealth";
+import { InsetGroup } from "../../src/components/InsetGroup";
 import { Screen } from "../../src/components/Screen";
 import { Text } from "../../src/components/Text";
 import { TextField } from "../../src/components/TextField";
@@ -55,9 +55,12 @@ export default function LoginScreen() {
 
   return (
     <Screen>
-      <PageHeader title="登录" subtitle="Healthy Body Manager" />
+      <View style={styles.header}>
+        <Text size="title1" weight="strong" style={styles.pageTitle}>登录</Text>
+        <Text size="subheadline" color={tokens.labelSecondary}>Healthy Body Manager</Text>
+      </View>
 
-      <View style={styles.form}>
+      <InsetGroup>
         <TextField
           label="邮箱"
           value={email}
@@ -66,17 +69,17 @@ export default function LoginScreen() {
           keyboardType="email-address"
         />
         <TextField label="密码" value={password} onChange={setPassword} placeholder="••••••••" secure />
-      </View>
+      </InsetGroup>
 
-      {error && <Text style={{ color: tokens.danger }}>{error}</Text>}
-      {notice && <Text style={{ color: tokens.muted }}>{notice}</Text>}
+      {error && <Text style={{ color: tokens.red, paddingHorizontal: spacing.lg }}>{error}</Text>}
+      {notice && <Text style={{ color: tokens.labelSecondary, paddingHorizontal: spacing.lg }}>{notice}</Text>}
 
       <View style={styles.actions}>
         {needsVerification && (
-          <Button title={busy ? "发送中…" : "重新发送验证邮件"} variant="ghost" onPress={resend} disabled={busy} />
+          <Button title={busy ? "发送中…" : "重新发送验证邮件"} variant="plain" onPress={resend} disabled={busy} />
         )}
         <Button title={busy ? "登录中…" : "登录"} onPress={submit} disabled={busy} />
-        <Button title="还没有账号？去注册" variant="ghost" onPress={() => router.push("/(auth)/register")} />
+        <Button title="还没有账号？去注册" variant="plain" onPress={() => router.push("/(auth)/register")} />
       </View>
     </Screen>
   );
@@ -84,5 +87,6 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   actions: { gap: spacing.md },
-  form: { gap: spacing.lg }
+  header: { gap: spacing.xs, paddingHorizontal: spacing.lg, paddingTop: spacing.xxl },
+  pageTitle: { fontSize: 30, letterSpacing: -0.5, lineHeight: 36, marginTop: 2 }
 });

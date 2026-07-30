@@ -25,9 +25,9 @@ function Inline({ text, color }: { text: string; color: string }) {
 
 function SpanText({ span, tokens }: { span: InlineSpan; tokens: ThemeTokens }) {
   if (span.code) {
-    return <Text style={[styles.inlineCode, { backgroundColor: tokens.panelSoft, color: tokens.sageStrong, fontFamily: monospace }]}>{span.text}</Text>;
+    return <Text style={[styles.inlineCode, { backgroundColor: tokens.surfaceAlt, color: tokens.tint, fontFamily: monospace }]}>{span.text}</Text>;
   }
-  if (span.bold) return <Text weight="strong" style={{ color: tokens.inkStrong }}>{span.text}</Text>;
+  if (span.bold) return <Text weight="strong" style={{ color: tokens.label }}>{span.text}</Text>;
   return <Text>{span.text}</Text>;
 }
 
@@ -37,26 +37,26 @@ function TableCard({ headers, rows }: { headers: string[]; rows: string[][] }) {
   const cellStyle = scrolls ? { width: SCROLL_COLUMN_WIDTH } : { flex: 1 };
 
   const grid = (
-    <View style={[styles.table, { borderColor: tokens.line, backgroundColor: tokens.panel }, scrolls && styles.tableScrollable]}>
-      <View style={[styles.tableRow, styles.tableHead, { backgroundColor: tokens.panelSoft, borderBottomColor: tokens.line }]}>
+    <View style={[styles.table, { borderColor: tokens.separator, backgroundColor: tokens.surface }, scrolls && styles.tableScrollable]}>
+      <View style={[styles.tableRow, styles.tableHead, { backgroundColor: tokens.surfaceAlt, borderBottomColor: tokens.separator }]}>
         {headers.map((header, index) => (
           <View key={index} style={cellStyle}>
-            <Text size="xs" weight="medium" style={{ color: tokens.muted }}>{header}</Text>
+            <Text size="caption" weight="medium" style={{ color: tokens.labelSecondary }}>{header}</Text>
           </View>
         ))}
       </View>
       {rows.map((row, rowIndex) => (
         <View
           key={rowIndex}
-          style={[styles.tableRow, rowIndex < rows.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: tokens.line }]}
+          style={[styles.tableRow, rowIndex < rows.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: tokens.separator }]}
         >
           {row.map((cell, cellIndex) => (
             <View key={cellIndex} style={cellStyle}>
               {/* The leading column is almost always the row's label, so anchor the eye there. */}
               {cellIndex === 0 ? (
-                <Text size="sm" weight="medium" style={{ color: tokens.inkStrong }}>{cell}</Text>
+                <Text size="subheadline" weight="medium" style={{ color: tokens.label }}>{cell}</Text>
               ) : (
-                <Inline text={cell} color={tokens.ink} />
+                <Inline text={cell} color={tokens.label} />
               )}
             </View>
           ))}
@@ -80,26 +80,26 @@ function Block({ block }: { block: MessageBlock }) {
     case "heading":
       return block.level === 1 ? (
         <View style={styles.headingRow}>
-          <View style={[styles.headingAccent, { backgroundColor: tokens.sage }]} />
-          <Text size="lg" weight="strong" style={{ color: tokens.inkStrong, flex: 1 }}>{block.text}</Text>
+          <View style={[styles.headingAccent, { backgroundColor: tokens.tint }]} />
+          <Text size="title3" weight="strong" style={{ color: tokens.label, flex: 1 }}>{block.text}</Text>
         </View>
       ) : (
-        <Text size="md" weight="medium" style={{ color: tokens.sageStrong }}>{block.text}</Text>
+        <Text size="body" weight="medium" style={{ color: tokens.tint }}>{block.text}</Text>
       );
 
     case "paragraph":
-      return <Inline text={block.text} color={tokens.ink} />;
+      return <Inline text={block.text} color={tokens.label} />;
 
     case "list":
       return (
         <View style={styles.list}>
           {block.items.map((item, index) => (
             <View key={index} style={styles.listItem}>
-              <Text size="sm" weight="medium" style={[styles.listMarker, { color: tokens.sage }]}>
+              <Text size="subheadline" weight="medium" style={[styles.listMarker, { color: tokens.tint }]}>
                 {block.ordered ? `${index + 1}.` : "•"}
               </Text>
               <View style={styles.listBody}>
-                <Inline text={item} color={tokens.ink} />
+                <Inline text={item} color={tokens.label} />
               </View>
             </View>
           ))}
@@ -111,13 +111,13 @@ function Block({ block }: { block: MessageBlock }) {
 
     case "code":
       return (
-        <View style={[styles.codeCard, { backgroundColor: tokens.panelSoft, borderColor: tokens.line }]}>
-          <Text size="sm" style={{ color: tokens.ink, fontFamily: monospace }}>{block.text}</Text>
+        <View style={[styles.codeCard, { backgroundColor: tokens.surfaceAlt, borderColor: tokens.separator }]}>
+          <Text size="subheadline" style={{ color: tokens.label, fontFamily: monospace }}>{block.text}</Text>
         </View>
       );
 
     case "divider":
-      return <View style={[styles.divider, { backgroundColor: tokens.line }]} />;
+      return <View style={[styles.divider, { backgroundColor: tokens.separator }]} />;
   }
 }
 

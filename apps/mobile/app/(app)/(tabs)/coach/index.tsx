@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useRef, useState, type ElementRef } from "react";
-import { Animated, Easing, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState, type ElementRef } from "react";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { ArrowDown, Brain, History, Leaf, Pencil, Send, SquarePen, Trash2 } from "lucide-react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { Text } from "../../../src/components/Text";
-import { Card } from "../../../src/components/Card";
-import { Button } from "../../../src/components/Button";
-import { ChoiceGroup } from "../../../src/components/ChoiceGroup";
-import { useFeedback } from "../../../src/components/Feedback";
-import { EmptyState, Spinner } from "../../../src/components/States";
+import { useNavigation } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { FLOATING_TAB_BAR_CLEARANCE } from "../../../../src/navigation/tabBarMetrics";
+import { Text } from "../../../../src/components/Text";
+import { Button } from "../../../../src/components/Button";
+import { ChoiceGroup } from "../../../../src/components/ChoiceGroup";
+import { useFeedback } from "../../../../src/components/Feedback";
+import { InsetGroup } from "../../../../src/components/InsetGroup";
+import { Row } from "../../../../src/components/Row";
+import { EmptyState, Spinner } from "../../../../src/components/States";
 import {
   createAgentConversation,
   createAgentMemory,
@@ -17,20 +20,20 @@ import {
   undoAgentAdjustment,
   updateAgentMemory,
   type MemoryDraft
-} from "../../../src/api/agent";
-import { streamAgentMessage } from "../../../src/api/agentStream";
-import { useAgentMemoriesQuery, useConversationDetailQuery, useConversationsQuery } from "../../../src/api/hooks";
-import { RichMessage } from "../../../src/components/RichMessage";
+} from "../../../../src/api/agent";
+import { streamAgentMessage } from "../../../../src/api/agentStream";
+import { useAgentMemoriesQuery, useConversationDetailQuery, useConversationsQuery } from "../../../../src/api/hooks";
+import { RichMessage } from "../../../../src/components/RichMessage";
 import {
   appendAssistantDelta,
   canSubmitCoachMessage,
   finalizeAssistantMessage,
   getRecentMessagesForChat,
   mergeConversationMessages
-} from "../../../src/coachMessages";
-import { formatDateLabel } from "../../../src/ui/format";
-import { opacity, radius, spacing, useTheme } from "../../../src/theme/tokens";
-import type { AgentAdjustment, AgentMessage, Conversation, Memory } from "../../../src/api/schemas";
+} from "../../../../src/coachMessages";
+import { formatDateLabel } from "../../../../src/ui/format";
+import { cardShadow, opacity, radius, spacing, useTheme } from "../../../../src/theme/tokens";
+import type { AgentAdjustment, AgentMessage, Conversation, Memory } from "../../../../src/api/schemas";
 
 const fallbackSuggestions = [
   "我昨晚没睡好，今天还适合跑吗？",
@@ -88,13 +91,13 @@ function buildSuggestions(messages: AgentMessage[]) {
 }
 
 export default function CoachTab() {
+  const navigation = useNavigation();
   const queryClient = useQueryClient();
   const conversationsQuery = useConversationsQuery();
   const memoriesQuery = useAgentMemoriesQuery();
   const { confirm } = useFeedback();
-  const { tokens } = useTheme();
+  const { tokens, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const { width: viewportWidth } = useWindowDimensions();
   const [selectedConversationId, setSelectedConversationId] = useState<string | undefined>();
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -107,7 +110,6 @@ export default function CoachTab() {
   const [showCoachTools, setShowCoachTools] = useState(false);
   const [showConversationDrawer, setShowConversationDrawer] = useState(false);
   const autoCreateAttemptedRef = useRef(false);
-  const drawerProgress = useRef(new Animated.Value(0)).current;
   const messageScrollRef = useRef<ElementRef<typeof ScrollView>>(null);
   const activeSendRef = useRef<{ controller: AbortController; conversationId: string } | null>(null);
 
@@ -116,11 +118,9 @@ export default function CoachTab() {
   const selectedConversation = conversations.find((item) => item.id === selectedConversationId);
   const suggestions = useMemo(() => buildSuggestions(messages), [messages]);
   const visibleMessages = useMemo(() => getRecentMessagesForChat(messages), [messages]);
-  const drawerWidth = Math.min(Math.round(viewportWidth * 0.82), 380);
-  const drawerTranslateX = drawerProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-drawerWidth, 0]
-  });
+  // The history sheet uses the same native-fade Modal as the memory sheet —
+  // no hand-rolled slide, which is what smeared during close.
+  const openConversationDrawer = useCallback(() => setShowConversationDrawer(true), []);
 
   const createConversationMutation = useMutation({
     mutationFn: createAgentConversation,
@@ -190,6 +190,47 @@ export default function CoachTab() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["agent", "memories"] }),
     onError: (err) => setError(err instanceof Error ? err.message : "删除记忆失败")
   });
+
+  useEffect(() => {
+    navigation.setOptions({
+      title: selectedConversation?.title ?? "新对话",
+      headerLeft: () => (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="历史对话"
+          hitSlop={11}
+          onPress={openConversationDrawer}
+          style={styles.headerAction}
+        >
+          <History color={tokens.tint} size={22} strokeWidth={1.9} />
+        </Pressable>
+      ),
+      headerRight: () => (
+        <View style={styles.headerActions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="教练记忆"
+            hitSlop={11}
+            onPress={() => setShowCoachTools(true)}
+            style={styles.headerAction}
+          >
+            <Brain color={tokens.tint} size={21} strokeWidth={1.9} />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="新对话"
+            accessibilityState={{ disabled: createConversationMutation.isPending }}
+            hitSlop={11}
+            onPress={() => createConversationMutation.mutate()}
+            disabled={createConversationMutation.isPending}
+            style={styles.headerAction}
+          >
+            <SquarePen color={createConversationMutation.isPending ? tokens.labelTertiary : tokens.tint} size={22} strokeWidth={1.9} />
+          </Pressable>
+        </View>
+      )
+    });
+  }, [createConversationMutation, navigation, openConversationDrawer, selectedConversation?.title, tokens]);
 
   useEffect(() => {
     if (!selectedConversationId && conversations[0]) setSelectedConversationId(conversations[0].id);
@@ -301,83 +342,23 @@ export default function CoachTab() {
     setEditMemoryDraft({ kind: memory.kind, category: memory.category, content: memory.content });
   }
 
-  function openConversationDrawer() {
-    setShowConversationDrawer(true);
-    drawerProgress.setValue(0);
-    requestAnimationFrame(() => {
-      Animated.timing(drawerProgress, {
-        toValue: 1,
-        duration: 220,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true
-      }).start();
-    });
-  }
-
+  /** The sheet is a Modal, so it closes before the confirm sheet opens to avoid stacked modals. */
   function closeConversationDrawer(onClosed?: () => void) {
-    Animated.timing(drawerProgress, {
-      toValue: 0,
-      duration: 180,
-      easing: Easing.in(Easing.cubic),
-      useNativeDriver: true
-    }).start(({ finished }) => {
-      if (!finished) return;
-      setShowConversationDrawer(false);
-      onClosed?.();
-    });
+    setShowConversationDrawer(false);
+    onClosed?.();
   }
 
   return (
     <>
-      <SafeAreaView edges={["top"]} style={[styles.screen, { backgroundColor: tokens.bg }]}>
+      <View style={[styles.screen, { backgroundColor: tokens.bg }]}>
         <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <View style={[styles.headerLayer, { backgroundColor: tokens.bg, borderBottomColor: tokens.line }]}>
-            <View style={styles.coachHeader}>
-              <Text size="display" weight="strong" style={{ color: tokens.inkStrong, textAlign: "center" }}>教练</Text>
-              <Text style={{ color: tokens.muted, textAlign: "center" }}>结合你的计划与恢复状态</Text>
-            </View>
-
-            <View style={styles.chatToolbar}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="历史对话"
-                onPress={openConversationDrawer}
-                style={({ pressed }) => [styles.toolbarIconButton, pressed && styles.pressed]}
-              >
-                <History color={tokens.inkStrong} size={22} strokeWidth={1.7} />
-              </Pressable>
-              <Text size="xs" numberOfLines={1} style={{ color: tokens.muted, flex: 1, textAlign: "center" }}>
-                {selectedConversation?.title ?? "新对话"}
-              </Text>
-              <View style={styles.toolbarActions}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="教练记忆"
-                  onPress={() => setShowCoachTools(true)}
-                  style={({ pressed }) => [styles.toolbarIconButton, pressed && styles.pressed]}
-                >
-                  <Brain color={tokens.sage} size={21} strokeWidth={1.7} />
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="新对话"
-                  onPress={() => createConversationMutation.mutate()}
-                  disabled={createConversationMutation.isPending || sending}
-                  style={({ pressed }) => [styles.toolbarIconButton, pressed && styles.pressed]}
-                >
-                  <SquarePen color={createConversationMutation.isPending || sending ? tokens.muted : tokens.inkStrong} size={22} strokeWidth={1.7} />
-                </Pressable>
-              </View>
-            </View>
-          </View>
-
           {error ? (
-            <View style={[styles.inlineError, { backgroundColor: tokens.dangerSoft, borderColor: tokens.danger }]}>
-              <Text size="sm" style={{ color: tokens.danger }}>{error}</Text>
+            <View style={[styles.inlineError, { backgroundColor: tokens.redFill, borderColor: tokens.red }]}>
+              <Text size="subheadline" color={tokens.red}>{error}</Text>
             </View>
           ) : null}
 
-          <View style={[styles.chatBody, { backgroundColor: tokens.panel }]}>
+          <View style={[styles.chatBody, { backgroundColor: tokens.bg }]}>
             <View style={styles.messageStage}>
               {conversationDetailQuery.isLoading || createConversationMutation.isPending ? (
                 <Spinner />
@@ -393,7 +374,7 @@ export default function CoachTab() {
                   contentContainerStyle={styles.messageList}
                   onContentSizeChange={() => messageScrollRef.current?.scrollToEnd({ animated: false })}
                 >
-                  {sending ? <Text size="sm" style={{ color: tokens.muted }}>Coach 正在回复...</Text> : null}
+                {sending ? <Text size="subheadline" color={tokens.labelSecondary}>Coach 正在回复...</Text> : null}
                   {visibleMessages.map((message) => (
                     <MessageBubble key={message.id} message={message} onUndo={(adjustment) => undoMutation.mutate(adjustment.id)} />
                   ))}
@@ -408,23 +389,23 @@ export default function CoachTab() {
                     accessibilityRole="button"
                     key={item}
                     onPress={() => submitMessage(item)}
-                    style={({ pressed }) => [styles.suggestionCard, { backgroundColor: tokens.bg, borderColor: tokens.line }, pressed && styles.pressed]}
+                    style={({ pressed }) => [styles.suggestionCard, { backgroundColor: tokens.surface, borderColor: tokens.separator }, pressed && styles.pressed]}
                   >
-                    <Text size="sm" numberOfLines={1}>{item}</Text>
+                    <Text size="subheadline" numberOfLines={1}>{item}</Text>
                   </Pressable>
                 ))}
               </ScrollView>
             ) : null}
           </View>
 
-          <View style={[styles.composerDock, { backgroundColor: tokens.bg, borderTopColor: tokens.line }]}>
+          <View style={[styles.composerDock, { backgroundColor: tokens.bg, borderTopColor: tokens.separator, paddingBottom: spacing.sm + insets.bottom + FLOATING_TAB_BAR_CLEARANCE }]}>
             <TextInput
               multiline
               value={draft}
               onChangeText={setDraft}
               placeholder="问问你的教练…"
-              placeholderTextColor={tokens.muted}
-              style={[styles.input, { borderColor: tokens.line, color: tokens.ink, backgroundColor: tokens.panel }]}
+              placeholderTextColor={tokens.labelTertiary}
+              style={[styles.input, { borderColor: tokens.separator, color: tokens.label, backgroundColor: tokens.surface }]}
             />
             <Pressable
               accessibilityRole="button"
@@ -444,35 +425,51 @@ export default function CoachTab() {
                     conversationId: selectedConversationId,
                     sending,
                     conversationMutationPending
-                  }) ? tokens.clay : tokens.line
+                  })
+                    ? tokens.controlFill
+                    : tokens.fill
                 },
                 pressed && styles.pressed
               ]}
             >
-              <Send color="#fff" size={20} strokeWidth={2} />
+              <Send
+                color={
+                  canSubmitCoachMessage({
+                    content: draft,
+                    conversationId: selectedConversationId,
+                    sending,
+                    conversationMutationPending
+                  })
+                    ? tokens.controlLabel
+                    : tokens.labelTertiary
+                }
+                size={18}
+                strokeWidth={2.2}
+              />
             </Pressable>
           </View>
         </KeyboardAvoidingView>
-      </SafeAreaView>
+      </View>
 
       <Modal visible={showCoachTools} transparent animationType="fade" onRequestClose={() => setShowCoachTools(false)}>
         <Pressable style={styles.sheetBackdrop} onPress={() => setShowCoachTools(false)}>
           <Pressable
             style={[
               styles.memorySheet,
-              { backgroundColor: tokens.panel, borderColor: tokens.line, paddingBottom: Math.max(insets.bottom, spacing.lg) }
+              { backgroundColor: tokens.surface, borderColor: tokens.separator, paddingBottom: Math.max(insets.bottom, spacing.lg) },
+              cardShadow(isDark ? "dark" : "light")
             ]}
             onPress={(event) => event.stopPropagation()}
           >
-            <View style={[styles.sheetHandle, { backgroundColor: tokens.lineStrong }]} />
+            <View style={[styles.sheetHandle, { backgroundColor: tokens.separatorOpaque }]} />
             <View style={styles.memoryTrayHeader}>
               <View style={styles.cardText}>
-                <Text size="xl" weight="strong">教练记忆</Text>
-                <Text size="sm" style={{ color: tokens.muted }}>管理 Coach 用来理解你的偏好与约束。</Text>
+                <Text size="title2" weight="strong">教练记忆</Text>
+                <Text size="subheadline" style={{ color: tokens.labelSecondary }}>管理 Coach 用来理解你的偏好与约束。</Text>
               </View>
               <Button
                 title={addingMemory ? "取消" : "新增"}
-                variant="ghost"
+                variant="plain"
                 onPress={() => {
                   setAddingMemory((value) => !value);
                   setMemoryDraft(emptyMemoryDraft);
@@ -510,43 +507,32 @@ export default function CoachTab() {
         </Pressable>
       </Modal>
 
-      <Modal visible={showConversationDrawer} transparent animationType="none" onRequestClose={() => closeConversationDrawer()}>
-        <View style={styles.drawerBackdrop}>
-          <Animated.View
+      <Modal visible={showConversationDrawer} transparent animationType="fade" onRequestClose={() => closeConversationDrawer()}>
+        <Pressable style={styles.sheetBackdrop} onPress={() => closeConversationDrawer()}>
+          <Pressable
             style={[
-              styles.conversationDrawer,
-              {
-                backgroundColor: tokens.panel,
-                borderColor: tokens.line,
-                paddingTop: Math.max(insets.top + spacing.md, spacing.xxl),
-                paddingBottom: Math.max(insets.bottom + spacing.lg, spacing.xl),
-                transform: [{ translateX: drawerTranslateX }],
-                width: drawerWidth
-              }
+              styles.memorySheet,
+              { backgroundColor: tokens.surface, borderColor: tokens.separator, paddingBottom: Math.max(insets.bottom, spacing.lg) },
+              cardShadow(isDark ? "dark" : "light")
             ]}
+            onPress={(event) => event.stopPropagation()}
           >
-            <View style={styles.drawerHeader}>
-              <View style={styles.drawerTitleBlock}>
-                <View style={styles.drawerTitleRow}>
-                  <Text size="xl" weight="strong" numberOfLines={1}>历史对话</Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="新建历史对话"
-                    onPress={() => createConversationMutation.mutate()}
-                    disabled={createConversationMutation.isPending || sending}
-                    style={({ pressed }) => [
-                      styles.drawerNewButton,
-                      { borderColor: tokens.line, backgroundColor: tokens.panelSoft },
-                      pressed && styles.pressed
-                    ]}
-                  >
-                    <SquarePen color={createConversationMutation.isPending || sending ? tokens.muted : tokens.sage} size={17} />
-                  </Pressable>
-                </View>
-                <Text size="sm" numberOfLines={2} style={{ color: tokens.muted }}>
-                  从侧边栏切换，不占用教练页顶部空间。
-                </Text>
-              </View>
+            <View style={[styles.sheetHandle, { backgroundColor: tokens.separatorOpaque }]} />
+            <View style={styles.drawerTitleRow}>
+              <Text size="title2" weight="strong" numberOfLines={1}>历史对话</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="新对话"
+                onPress={() => createConversationMutation.mutate()}
+                disabled={createConversationMutation.isPending || sending}
+                style={({ pressed }) => [
+                  styles.drawerNewButton,
+                  { backgroundColor: tokens.fill },
+                  pressed && styles.pressed
+                ]}
+              >
+                <SquarePen color={createConversationMutation.isPending || sending ? tokens.labelSecondary : tokens.tint} size={17} />
+              </Pressable>
             </View>
             {conversationsQuery.isLoading ? <Spinner /> : (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerConversationList}>
@@ -563,15 +549,18 @@ export default function CoachTab() {
                       }}
                       style={({ pressed }) => [
                         styles.drawerConversationItem,
-                        { backgroundColor: selected ? tokens.sage : tokens.panelSoft, borderColor: selected ? tokens.sage : tokens.line },
+                        selected ? { backgroundColor: tokens.fill } : null,
                         pressed && styles.pressed
                       ]}
                     >
+                      {/* Left accent bar marks the open conversation; the
+                          placeholder twin keeps unselected rows aligned. */}
+                      <View style={[styles.drawerSelectedBar, selected ? { backgroundColor: tokens.tint } : null]} />
                       <View style={styles.drawerConversationText}>
-                        <Text size="md" weight="strong" numberOfLines={1} style={{ color: selected ? "#fff" : tokens.ink }}>
+                        <Text size="body" weight="strong" numberOfLines={1} style={{ color: tokens.label }}>
                           {conversation.title}
                         </Text>
-                        <Text size="xs" style={{ color: selected ? "#eef7ef" : tokens.muted }}>
+                        <Text size="caption" style={{ color: tokens.labelSecondary }}>
                           {formatDateLabel(conversation.updatedAt)}
                         </Text>
                       </View>
@@ -582,32 +571,31 @@ export default function CoachTab() {
                         onPress={() => requestDeleteConversation(conversation)}
                         style={styles.drawerDeleteButton}
                       >
-                        <Trash2 color={selected ? "#fff" : tokens.danger} size={16} />
+                        <Trash2 color={tokens.labelTertiary} size={16} />
                       </Pressable>
                     </Pressable>
                   );
                 })}
               </ScrollView>
             )}
-          </Animated.View>
-          <Pressable style={styles.drawerScrim} onPress={() => closeConversationDrawer()} />
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </>
   );
 }
 
 function MessageBubble({ message, onUndo }: { message: AgentMessage; onUndo: (adjustment: AgentAdjustment) => void }) {
-  const { tokens } = useTheme();
+  const { tokens, isDark } = useTheme();
   const isUser = message.role === "user";
 
   if (!isUser) {
     return (
       <View style={[styles.messageRow, styles.assistantMessageRow]}>
-        <View style={[styles.assistantAvatar, { borderColor: tokens.sage }]}>
-          <Leaf color={tokens.sage} size={19} strokeWidth={1.6} />
+        <View style={[styles.assistantAvatar, { borderColor: tokens.tint }]}>
+          <Leaf color={tokens.tint} size={19} strokeWidth={1.6} />
         </View>
-        <View style={styles.assistantContent}>
+        <View style={[styles.assistantContent, { backgroundColor: tokens.surface }, cardShadow(isDark ? "dark" : "light")]}>
           <RichMessage content={message.content} />
           {message.adjustments?.map((adjustment) => (
             <AdjustmentProposal key={adjustment.id} adjustment={adjustment} onUndo={onUndo} />
@@ -622,13 +610,10 @@ function MessageBubble({ message, onUndo }: { message: AgentMessage; onUndo: (ad
       <View
         style={[
           styles.userBubble,
-          {
-            backgroundColor: tokens.panelSoft,
-            borderColor: tokens.line
-          }
+          { backgroundColor: tokens.controlFill }
         ]}
       >
-        <Text style={{ color: tokens.ink }}>{message.content}</Text>
+        <Text color={tokens.controlLabel}>{message.content}</Text>
       </View>
     </View>
   );
@@ -637,23 +622,23 @@ function MessageBubble({ message, onUndo }: { message: AgentMessage; onUndo: (ad
 function AdjustmentProposal({ adjustment, onUndo }: { adjustment: AgentAdjustment; onUndo: (adjustment: AgentAdjustment) => void }) {
   const { tokens } = useTheme();
   return (
-    <View style={[styles.proposalCard, { borderTopColor: tokens.line }]}>
-      <Text size="lg" weight="strong" style={{ color: tokens.inkStrong }}>调整今日训练</Text>
+    <View style={[styles.proposalCard, { borderTopColor: tokens.separator }]}>
+      <Text size="title3" weight="strong" style={{ color: tokens.label }}>调整今日训练</Text>
       <View style={styles.planComparison}>
         <View style={styles.planRow}>
-          <Text size="sm" style={{ color: tokens.muted, width: 58 }}>调整前</Text>
-          <Text size="sm" style={{ color: tokens.ink, flex: 1 }}>本次对话前的计划</Text>
+          <Text size="subheadline" style={{ color: tokens.labelSecondary, width: 58 }}>调整前</Text>
+          <Text size="subheadline" style={{ color: tokens.label, flex: 1 }}>本次对话前的计划</Text>
         </View>
-        <ArrowDown color={tokens.sage} size={24} strokeWidth={1.6} style={styles.planArrow} />
+        <ArrowDown color={tokens.tint} size={24} strokeWidth={1.6} style={styles.planArrow} />
         <View style={styles.planRow}>
-          <Text size="sm" style={{ color: tokens.sage, width: 58 }}>调整后</Text>
-          <Text weight="medium" style={{ color: tokens.inkStrong, flex: 1 }}>{adjustment.label}</Text>
+          <Text size="subheadline" style={{ color: tokens.tint, width: 58 }}>调整后</Text>
+          <Text weight="medium" style={{ color: tokens.label, flex: 1 }}>{adjustment.label}</Text>
         </View>
       </View>
       {adjustment.undoneAt ? (
-        <Text style={{ color: tokens.muted, textAlign: "center" }}>调整已撤销</Text>
+        <Text style={{ color: tokens.labelSecondary, textAlign: "center" }}>调整已撤销</Text>
       ) : (
-        <Pressable accessibilityRole="button" onPress={() => onUndo(adjustment)} style={({ pressed }) => [styles.proposalAction, { backgroundColor: tokens.clay }, pressed && styles.pressed]}>
+        <Pressable accessibilityRole="button" onPress={() => onUndo(adjustment)} style={({ pressed }) => [styles.proposalAction, { backgroundColor: tokens.tint }, pressed && styles.pressed]}>
           <Text weight="medium" style={{ color: "#fff", textAlign: "center" }}>撤销调整</Text>
         </Pressable>
       )}
@@ -676,7 +661,7 @@ function MemoryEditor({
 }) {
   const { tokens } = useTheme();
   return (
-    <Card style={styles.memoryEditor}>
+    <InsetGroup header="编辑记忆">
       <ChoiceGroup
         label="类型"
         options={memoryKindOptions}
@@ -694,14 +679,14 @@ function MemoryEditor({
         value={draft.content}
         onChangeText={(content) => onChange({ ...draft, content })}
         placeholder="要记住的内容"
-        placeholderTextColor={tokens.muted}
-        style={[styles.input, { borderColor: tokens.line, color: tokens.ink, backgroundColor: tokens.panelSoft }]}
+        placeholderTextColor={tokens.labelTertiary}
+        style={[styles.input, { borderColor: tokens.separator, color: tokens.label, backgroundColor: tokens.surface }]}
       />
       <View style={styles.rowActions}>
         <Button title={submitLabel} onPress={onSubmit} disabled={!draft.content.trim()} />
-        <Button title="取消" variant="ghost" onPress={onCancel} />
+        <Button title="取消" variant="plain" onPress={onCancel} />
       </View>
-    </Card>
+    </InsetGroup>
   );
 }
 
@@ -729,82 +714,74 @@ function MemoryRow({
     return <MemoryEditor draft={draft} onChange={onChange} onCancel={onCancel} onSubmit={onSave} submitLabel="保存" />;
   }
   return (
-    <Card style={styles.memoryCard}>
-      <View style={styles.memoryText}>
-        <Text size="xs" weight="medium" style={{ color: tokens.sage }}>{memoryLabel(memoryKindOptions, memory.kind)} · {memoryLabel(memoryCategoryOptions, memory.category)}</Text>
-        <Text>{memory.content}</Text>
-        <Text size="xs" style={{ color: tokens.muted }}>{memory.source} · {Math.round(memory.confidence * 100)}%</Text>
-      </View>
-      <View style={styles.memoryActions}>
-        <Pressable accessibilityRole="button" onPress={onStartEdit} style={styles.iconButton}>
-          <Pencil color={tokens.sage} size={16} />
-        </Pressable>
-        <Pressable accessibilityRole="button" onPress={onDelete} style={styles.iconButton}>
-          <Trash2 color={tokens.danger} size={16} />
-        </Pressable>
-      </View>
-    </Card>
+    <InsetGroup>
+      <Row
+        title={memory.content}
+        subtitle={`${memoryLabel(memoryKindOptions, memory.kind)} · ${memoryLabel(memoryCategoryOptions, memory.category)} · ${memory.source} · ${Math.round(memory.confidence * 100)}%`}
+        trailing={(
+          <View style={styles.memoryActions}>
+            <Pressable accessibilityRole="button" accessibilityLabel="编辑记忆" onPress={onStartEdit} style={styles.iconButton}>
+              <Pencil color={tokens.tint} size={16} />
+            </Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel="删除记忆" onPress={onDelete} style={styles.iconButton}>
+              <Trash2 color={tokens.red} size={16} />
+            </Pressable>
+          </View>
+        )}
+      />
+    </InsetGroup>
   );
 }
 
 const styles = StyleSheet.create({
   assistantAvatar: { alignItems: "center", borderRadius: 24, borderWidth: 1, height: 46, justifyContent: "center", width: 46 },
-  assistantContent: { flex: 1, gap: spacing.lg, paddingTop: spacing.sm },
+  assistantContent: { borderRadius: radius.bubble, flex: 1, gap: spacing.lg, padding: spacing.md },
   assistantMessageRow: { alignItems: "flex-start", gap: spacing.md, justifyContent: "flex-start" },
   cardText: { flex: 1, gap: spacing.xs },
   chatBody: { flex: 1 },
-  chatToolbar: { alignItems: "center", flexDirection: "row", gap: spacing.sm, justifyContent: "space-between", paddingTop: spacing.sm },
-  coachHeader: { alignItems: "center", gap: spacing.xs, paddingTop: spacing.sm },
-  composerDock: { alignItems: "flex-end", borderTopWidth: 1, flexDirection: "row", gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-  conversationDrawer: {
-    borderRightWidth: 1,
-    borderTopRightRadius: radius.lg,
-    borderBottomRightRadius: radius.lg,
-    gap: spacing.md,
-    height: "100%",
+  composerDock: {
+    alignItems: "flex-end",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    gap: spacing.sm,
     paddingHorizontal: spacing.lg,
-    width: "82%"
+    paddingVertical: spacing.sm
   },
-  drawerBackdrop: { flex: 1, flexDirection: "row" },
   drawerConversationItem: {
     alignItems: "center",
-    borderRadius: radius.lg,
-    borderWidth: 1,
+    borderRadius: radius.card,
     flexDirection: "row",
     gap: spacing.md,
-    minHeight: 76,
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.md,
-    paddingVertical: spacing.md
+    minHeight: 64,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.sm,
+    paddingVertical: spacing.sm
   },
-  drawerConversationList: { gap: spacing.sm, paddingBottom: spacing.xl, paddingTop: spacing.xs },
+  drawerConversationList: { gap: spacing.xs, paddingBottom: spacing.xl, paddingTop: spacing.xs },
   drawerConversationText: { flex: 1, gap: spacing.xs, minWidth: 0 },
   drawerDeleteButton: { alignItems: "center", borderRadius: radius.sm, height: 40, justifyContent: "center", width: 40 },
-  drawerHeader: { marginBottom: spacing.sm },
-  drawerNewButton: { alignItems: "center", borderRadius: radius.md, borderWidth: 1, height: 44, justifyContent: "center", width: 44 },
-  drawerScrim: { backgroundColor: "rgba(0, 0, 0, 0.28)", flex: 1 },
-  drawerTitleBlock: { gap: spacing.xs },
+  drawerNewButton: { alignItems: "center", borderRadius: 21, height: 42, justifyContent: "center", width: 42 },
+  drawerSelectedBar: { borderRadius: 2, height: 24, width: 3 },
   drawerTitleRow: { alignItems: "center", flexDirection: "row", gap: spacing.md, justifyContent: "space-between" },
-  headerLayer: { borderBottomWidth: 1, paddingBottom: spacing.sm, paddingHorizontal: spacing.lg },
+  headerAction: { alignItems: "center", height: 44, justifyContent: "center", width: 44 },
+  headerActions: { alignItems: "center", flexDirection: "row" },
   iconButton: { alignItems: "center", justifyContent: "center", minHeight: 36, minWidth: 36 },
   inlineError: { borderWidth: 1, borderLeftWidth: 0, borderRightWidth: 0, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   input: {
-    borderRadius: radius.lg,
-    borderWidth: 1,
+    borderRadius: radius.bubble,
+    borderWidth: StyleSheet.hairlineWidth,
     flex: 1,
+    fontSize: 17,
     maxHeight: 110,
-    minHeight: 46,
+    minHeight: 36,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm
   },
   memoryActions: { alignItems: "center", flexDirection: "row", gap: spacing.xs },
-  memoryCard: { alignItems: "flex-start", flexDirection: "row", gap: spacing.md },
-  memoryEditor: { gap: spacing.md },
   memoryList: { gap: spacing.sm, paddingBottom: spacing.md },
-  memorySheet: { borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, borderWidth: 1, gap: spacing.md, maxHeight: "78%", paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
-  memoryText: { flex: 1, gap: spacing.xs },
+  memorySheet: { borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, borderWidth: 1, gap: spacing.md, maxHeight: "78%", paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   memoryTrayHeader: { alignItems: "center", flexDirection: "row", gap: spacing.md },
-  messageBubble: { borderRadius: radius.md, borderWidth: 1, gap: spacing.xs, maxWidth: "88%", padding: spacing.md },
+  messageBubble: { borderRadius: radius.bubble, gap: spacing.xs, maxWidth: "88%", padding: spacing.md },
   messageList: { flexGrow: 1, gap: spacing.md, justifyContent: "flex-end", padding: spacing.md },
   messageRow: { flexDirection: "row" },
   messageScroll: { flex: 1 },
@@ -817,14 +794,12 @@ const styles = StyleSheet.create({
   proposalCard: { borderTopWidth: 1, gap: spacing.lg, paddingTop: spacing.lg },
   rowActions: { flexDirection: "row", gap: spacing.sm },
   screen: { flex: 1 },
-  sendButton: { alignItems: "center", borderRadius: 24, height: 48, justifyContent: "center", width: 48 },
+  sendButton: { alignItems: "center", borderRadius: radius.pill, height: 32, justifyContent: "center", width: 32 },
   sheetBackdrop: { backgroundColor: "rgba(18, 24, 20, 0.34)", flex: 1, justifyContent: "flex-end" },
   sheetHandle: { alignSelf: "center", borderRadius: 2, height: 4, marginBottom: spacing.sm, width: 40 },
-  suggestionCard: { borderRadius: radius.lg, borderWidth: 1, maxWidth: 240, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  suggestionCard: { borderRadius: radius.sheet, borderWidth: 1, maxWidth: 240, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   suggestionList: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   suggestionStrip: { flexGrow: 0 },
-  toolbarActions: { alignItems: "center", flexDirection: "row" },
-  toolbarIconButton: { alignItems: "center", height: 42, justifyContent: "center", width: 42 },
-  userBubble: { borderRadius: radius.lg, borderWidth: 1, maxWidth: "82%", paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  userBubble: { borderRadius: radius.bubble, maxWidth: "82%", paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   userMessageRow: { justifyContent: "flex-end" }
 });

@@ -149,7 +149,7 @@ const lightBase = {
   destructiveLabel: "#FFFFFF"
 } as const;
 
-type BaseTokens = typeof lightBase;
+type BaseTokens = { [K in keyof typeof lightBase]: string };
 
 const darkBase: BaseTokens = {
   bg: "#000000",

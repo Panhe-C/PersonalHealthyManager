@@ -1,22 +1,20 @@
 import { useState } from "react";
-import { StyleSheet, View } from "react-native";
-import { Screen } from "../../src/components/Screen";
-import { Text } from "../../src/components/Text";
-import { Button } from "../../src/components/Button";
-import { useFeedback } from "../../src/components/Feedback";
-import { Section } from "../../src/components/Section";
-import { TextField } from "../../src/components/TextField";
+import { Screen } from "../../../../src/components/Screen";
+import { Button } from "../../../../src/components/Button";
+import { useFeedback } from "../../../../src/components/Feedback";
+import { InsetGroup } from "../../../../src/components/InsetGroup";
+import { Row } from "../../../../src/components/Row";
+import { TextField } from "../../../../src/components/TextField";
 
-import { changePassword, deleteAccount } from "../../src/api/account";
-import { useAuth } from "../../src/auth/AuthContext";
-import { radius, spacing, useTheme } from "../../src/theme/tokens";
+import { changePassword, deleteAccount } from "../../../../src/api/account";
+import { useAuth } from "../../../../src/auth/AuthContext";
+import { spacing } from "../../../../src/theme/tokens";
 
 const MIN_PASSWORD_LENGTH = 12;
 
 export default function AccountSecurityScreen() {
   const { signOut } = useAuth();
   const { confirm, notify } = useFeedback();
-  const { tokens } = useTheme();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -67,10 +65,8 @@ export default function AccountSecurityScreen() {
   }
 
   return (
-    <Screen>
-      <Text style={{ color: tokens.muted }}>修改密码后，Web 和其他设备都需要重新登录。</Text>
-
-      <Section title="修改密码">
+    <Screen contentContainerStyle={{ paddingTop: spacing.lg }}>
+      <InsetGroup header="修改密码" footer="修改密码后，Web 和其他设备都需要重新登录。">
         <TextField label="当前密码" value={currentPassword} onChange={setCurrentPassword} secure placeholder="••••••••" />
         <TextField
           label="新密码"
@@ -94,18 +90,12 @@ export default function AccountSecurityScreen() {
           disabled={busy || !currentPassword || !newPassword || !confirmPassword}
           onPress={submit}
         />
-      </Section>
+      </InsetGroup>
 
-      <View style={[styles.dangerZone, { backgroundColor: tokens.dangerSoft, borderColor: tokens.danger }]}>
-        <Text size="lg" weight="strong" style={{ color: tokens.danger }}>永久删除账户</Text>
-        <Text style={{ color: tokens.ink }}>建议先导出数据。删除后无法恢复，备份文件和第三方日历事件需要单独处理。</Text>
+      <InsetGroup header="危险操作" footer="建议先导出数据。删除后无法恢复，备份文件和第三方日历事件需要单独处理。">
         <TextField label="输入当前密码以确认删除" value={deletePassword} onChange={setDeletePassword} secure placeholder="••••••••" />
-        <Button title={deleting ? "删除中…" : "永久删除账户"} variant="danger" disabled={deleting || !deletePassword} onPress={removeAccount} />
-      </View>
+        <Row title={deleting ? "删除中…" : "永久删除账户"} destructive disabled={deleting || !deletePassword} onPress={removeAccount} />
+      </InsetGroup>
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  dangerZone: { borderRadius: radius.lg, borderWidth: 1, gap: spacing.md, padding: spacing.lg }
-});

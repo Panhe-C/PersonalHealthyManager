@@ -1,18 +1,17 @@
 import { useState } from "react";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
-import { Screen } from "../../src/components/Screen";
-import { Button } from "../../src/components/Button";
-import { useFeedback } from "../../src/components/Feedback";
-import { Section } from "../../src/components/Section";
-import { Text } from "../../src/components/Text";
+import { Screen } from "../../../../src/components/Screen";
+import { Button } from "../../../../src/components/Button";
+import { useFeedback } from "../../../../src/components/Feedback";
+import { InsetGroup } from "../../../../src/components/InsetGroup";
+import { Row } from "../../../../src/components/Row";
 
-import { exportAccountData } from "../../src/api/export";
-import { useTheme } from "../../src/theme/tokens";
+import { exportAccountData } from "../../../../src/api/export";
+import { spacing } from "../../../../src/theme/tokens";
 
 export default function DataExportScreen() {
   const { notify } = useFeedback();
-  const { tokens } = useTheme();
   const [busy, setBusy] = useState(false);
 
   async function run() {
@@ -36,14 +35,11 @@ export default function DataExportScreen() {
   }
 
   return (
-    <Screen>
-      <Text style={{ color: tokens.muted }}>生成不含密码、会话 token 和明文密钥的 JSON 文件。</Text>
-
-      <Section title="包含内容">
-        <Text style={{ color: tokens.muted }}>
-          账户资料、目标、健康记录、计划、日历草稿、教练对话与记忆、脱敏设置和自动同步状态。
-        </Text>
-      </Section>
+    <Screen contentContainerStyle={{ paddingTop: spacing.lg }}>
+      <InsetGroup header="包含内容" footer="生成不含密码、会话 token 和明文密钥的 JSON 文件。">
+        <Row title="账户与健康资料" subtitle="账户资料、目标、健康记录与计划" />
+        <Row title="教练与连接状态" subtitle="对话、记忆、脱敏设置和自动同步状态" />
+      </InsetGroup>
 
       <Button title={busy ? "正在生成…" : "生成并分享数据文件"} disabled={busy} onPress={run} />
     </Screen>

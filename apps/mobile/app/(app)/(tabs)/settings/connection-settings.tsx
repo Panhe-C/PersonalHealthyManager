@@ -1,19 +1,20 @@
 import { useEffect, useState } from "react";
 import { StyleSheet, Switch, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
-import { Screen } from "../../src/components/Screen";
-import { Text } from "../../src/components/Text";
-import { Button } from "../../src/components/Button";
-import { ChoiceGroup } from "../../src/components/ChoiceGroup";
-import { useFeedback } from "../../src/components/Feedback";
-import { Section } from "../../src/components/Section";
-import { TextField } from "../../src/components/TextField";
+import { Screen } from "../../../../src/components/Screen";
+import { Text } from "../../../../src/components/Text";
+import { Button } from "../../../../src/components/Button";
+import { ChoiceGroup } from "../../../../src/components/ChoiceGroup";
+import { useFeedback } from "../../../../src/components/Feedback";
+import { InsetGroup } from "../../../../src/components/InsetGroup";
+import { Row } from "../../../../src/components/Row";
+import { TextField } from "../../../../src/components/TextField";
 
-import { useSettingsQuery } from "../../src/api/hooks";
-import { corosRegions, regionEndpoint, saveSettings, type CorosRegion, type MobileMcpConnection, type MobileSettings } from "../../src/api/settings";
-import { runCorosOAuth } from "../../src/corosOAuthSession";
-import { oauthConnectionDetail } from "../../src/settingsStatus";
-import { spacing, useTheme } from "../../src/theme/tokens";
+import { useSettingsQuery } from "../../../../src/api/hooks";
+import { corosRegions, regionEndpoint, saveSettings, type CorosRegion, type MobileMcpConnection, type MobileSettings } from "../../../../src/api/settings";
+import { runCorosOAuth } from "../../../../src/corosOAuthSession";
+import { oauthConnectionDetail } from "../../../../src/settingsStatus";
+import { spacing, useTheme } from "../../../../src/theme/tokens";
 
 export default function ConnectionSettingsScreen() {
   const query = useSettingsQuery();
@@ -51,29 +52,32 @@ export default function ConnectionSettingsScreen() {
 
   if (!draft) {
     return (
-      <Screen>
-        <Text style={{ color: tokens.muted }}>{query.error ? "配置加载失败" : "正在读取服务器配置…"}</Text>
+      <Screen contentContainerStyle={{ paddingTop: spacing.lg }}>
+        <Text style={{ color: tokens.labelSecondary }}>{query.error ? "配置加载失败" : "正在读取服务器配置…"}</Text>
       </Screen>
     );
   }
 
   return (
-    <Screen>
-      <Text style={{ color: tokens.muted }}>令牌只会提交到服务端加密保存；留空保持现有令牌。COROS 使用 OAuth，点击授权会打开浏览器登录。</Text>
-
+    <Screen contentContainerStyle={{ paddingTop: spacing.lg }}>
       {draft.dataMcpConnections.map((connection) => (
-        <Section
+        <InsetGroup
           key={connection.id}
-          title={connection.label}
-          description={connection.id}
-          action={
+          header={connection.label}
+          footer={connection.id === "coros"
+            ? "COROS 使用 OAuth，点击授权会打开浏览器登录。"
+            : "令牌只会提交到服务端加密保存；留空保持现有令牌。"}
+        >
+          <Row
+            title="启用连接"
+            trailing={
             <Switch
               value={connection.enabled}
               onValueChange={(enabled) => update(connection.id, { enabled })}
-              trackColor={{ true: tokens.sage, false: tokens.line }}
+              trackColor={{ true: tokens.tint, false: tokens.separator }}
             />
           }
-        >
+          />
           {connection.id === "coros" ? (
             <CorosAuthSection connection={connection} onAuthorized={reloadSettings} />
           ) : (
@@ -87,7 +91,7 @@ export default function ConnectionSettingsScreen() {
               <CredentialField connection={connection} onChange={(auth) => update(connection.id, { auth })} />
             </>
           )}
-        </Section>
+        </InsetGroup>
       ))}
 
       <Button title={busy ? "保存中…" : "保存连接配置"} disabled={busy} onPress={save} />
@@ -127,11 +131,11 @@ function CorosAuthSection({ connection, onAuthorized }: { connection: MobileMcpC
 
   return (
     <View style={styles.block}>
-      <Text size="sm" style={{ color: tokens.muted }}>
+      <Text size="subheadline" style={[styles.blockText, { color: tokens.labelSecondary }]}>
         {authorized ? oauthConnectionDetail(connection) : "尚未授权。选择账号所在区域后开始授权。"}
       </Text>
       <ChoiceGroup label="区域" options={corosRegions} value={region} onChange={setRegion} disabled={busy} />
-      <Text size="sm" style={{ color: tokens.muted }}>{regionEndpoint(region)}</Text>
+      <Text size="subheadline" style={[styles.blockText, { color: tokens.labelSecondary }]}>{regionEndpoint(region)}</Text>
       <Button title={busy ? "授权中…" : authorized ? "重新授权" : "授权"} disabled={busy} onPress={authorize} />
     </View>
   );
@@ -150,8 +154,8 @@ function CredentialField({ connection, onChange }: { connection: MobileMcpConnec
   if (auth.type === "oauth2") {
     return (
       <View style={styles.block}>
-        <Text size="sm" style={{ color: tokens.muted }}>{oauthConnectionDetail(connection)}</Text>
-        <Text size="sm" style={{ color: tokens.muted }}>OAuth 授权需要在网页端完成，这里只显示状态。</Text>
+        <Text size="subheadline" style={[styles.blockText, { color: tokens.labelSecondary }]}>{oauthConnectionDetail(connection)}</Text>
+        <Text size="subheadline" style={[styles.blockText, { color: tokens.labelSecondary }]}>OAuth 授权需要在网页端完成，这里只显示状态。</Text>
       </View>
     );
   }
@@ -192,5 +196,6 @@ function CredentialField({ connection, onChange }: { connection: MobileMcpConnec
 }
 
 const styles = StyleSheet.create({
-  block: { gap: spacing.sm }
+  block: { gap: spacing.md, paddingVertical: spacing.sm },
+  blockText: { paddingHorizontal: spacing.lg }
 });

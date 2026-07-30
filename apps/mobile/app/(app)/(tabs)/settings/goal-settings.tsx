@@ -1,20 +1,20 @@
 import { useState } from "react";
 import { Pressable, StyleSheet } from "react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Screen } from "../../src/components/Screen";
-import { Text } from "../../src/components/Text";
-import { Button } from "../../src/components/Button";
-import { ChoiceGroup } from "../../src/components/ChoiceGroup";
-import { useFeedback } from "../../src/components/Feedback";
-import { HairlineRow } from "../../src/components/QuietHealth";
-import { Section } from "../../src/components/Section";
-import { EmptyState, Spinner } from "../../src/components/States";
-import { TextField } from "../../src/components/TextField";
+import { Screen } from "../../../../src/components/Screen";
+import { Text } from "../../../../src/components/Text";
+import { Button } from "../../../../src/components/Button";
+import { ChoiceGroup } from "../../../../src/components/ChoiceGroup";
+import { useFeedback } from "../../../../src/components/Feedback";
+import { InsetGroup } from "../../../../src/components/InsetGroup";
+import { Row } from "../../../../src/components/Row";
+import { EmptyState, Spinner } from "../../../../src/components/States";
+import { TextField } from "../../../../src/components/TextField";
 
-import { useGoalsQuery } from "../../src/api/hooks";
-import { createGoal, pauseGoal, updateGoal, type GoalInput } from "../../src/api/goals";
-import type { Goal } from "../../src/api/schemas";
-import { opacity, spacing, useTheme } from "../../src/theme/tokens";
+import { useGoalsQuery } from "../../../../src/api/hooks";
+import { createGoal, pauseGoal, updateGoal, type GoalInput } from "../../../../src/api/goals";
+import type { Goal } from "../../../../src/api/schemas";
+import { opacity, spacing, useTheme } from "../../../../src/theme/tokens";
 
 const types: readonly { value: Goal["type"]; label: string }[] = [
   { value: "primary", label: "主目标" },
@@ -88,10 +88,8 @@ export default function GoalSettingsScreen() {
   }
 
   return (
-    <Screen>
-      <Text style={{ color: tokens.muted }}>主目标会直接影响训练计划优先级。</Text>
-
-      <Section title={editing ? "编辑目标" : "新建目标"}>
+    <Screen contentContainerStyle={{ paddingTop: spacing.lg }}>
+      <InsetGroup header={editing ? "编辑目标" : "新建目标"} footer="主目标会直接影响训练计划优先级。">
         <TextField label="目标名称" value={title} onChange={setTitle} placeholder="例如：完成半程马拉松" autoCapitalize="sentences" />
         <ChoiceGroup label="类型" options={types} value={type} onChange={setType} />
         <TextField label="优先级" value={priority} onChange={setPriority} keyboardType="number-pad" placeholder="1-10" />
@@ -101,14 +99,14 @@ export default function GoalSettingsScreen() {
           disabled={mutation.isPending || !title.trim()}
           onPress={() => mutation.mutate()}
         />
-        {editing ? <Button title="取消编辑" variant="ghost" onPress={reset} /> : null}
-      </Section>
+        {editing ? <Button title="取消编辑" variant="plain" onPress={reset} /> : null}
+      </InsetGroup>
 
-      <Section title="现有目标" description="点击一行进行编辑。">
+      <InsetGroup header="现有目标" footer="点击一行进行编辑。">
         {query.isLoading ? <Spinner /> : query.error ? (
           <EmptyState title="目标加载失败" description="请确认后端服务。" />
         ) : query.data?.length ? query.data.map((goal) => (
-          <HairlineRow
+          <Row
             key={goal.id}
             title={goal.title}
             subtitle={`${types.find((item) => item.value === goal.type)?.label ?? goal.type} · 优先级 ${goal.priority} · ${goal.status}`}
@@ -120,12 +118,12 @@ export default function GoalSettingsScreen() {
                 onPress={() => pause(goal)}
                 style={({ pressed }) => [styles.pauseAction, pressed && { opacity: opacity.pressed }]}
               >
-                <Text size="sm" style={{ color: tokens.danger }}>暂停</Text>
+                <Text size="subheadline" style={{ color: tokens.red }}>暂停</Text>
               </Pressable>
             }
           />
         )) : <EmptyState title="还没有目标" description="目标会影响计划和教练建议。" />}
-      </Section>
+      </InsetGroup>
     </Screen>
   );
 }

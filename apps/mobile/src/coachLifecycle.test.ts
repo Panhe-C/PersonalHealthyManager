@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const source = readFileSync(new URL("../app/(app)/(tabs)/coach.tsx", import.meta.url), "utf8");
+const source = readFileSync(new URL("../app/(app)/(tabs)/coach/index.tsx", import.meta.url), "utf8");
 
 describe("coach conversation lifecycle", () => {
   it("attempts automatic conversation creation only once and never after the list query fails", () => {

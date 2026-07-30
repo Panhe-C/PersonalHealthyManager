@@ -28,6 +28,22 @@ export const trainingTaskSchema = z.object({
   updatedAt: z.string()
 });
 
+export const mealMenuItemSchema = z.object({
+  name: z.string(),
+  calories: z.number(),
+  proteinGrams: z.number(),
+  carbohydrateGrams: z.number(),
+  fatGrams: z.number(),
+  tags: z.array(z.string())
+});
+
+export const mealMenuSchema = z.object({
+  source: z.string(),
+  date: z.string(),
+  meal: z.string(),
+  items: z.array(mealMenuItemSchema)
+});
+
 export const todayOverviewSchema = z.object({
   date: z.string(),
   primaryGoal: z
@@ -43,6 +59,7 @@ export const todayOverviewSchema = z.object({
   latestRecovery: z.object({}).passthrough().nullable(),
   latestSleep: z.object({}).passthrough().nullable(),
   todayTasks: z.array(trainingTaskSchema),
+  mealMenus: z.array(mealMenuSchema),
   activePlanId: z.string().nullable()
 });
 
@@ -216,6 +233,7 @@ export type CompletedTrainingTask = z.infer<typeof completedTrainingTaskSchema>;
 export type Conversation = z.infer<typeof conversationSchema>;
 export type ConversationDetail = z.infer<typeof conversationDetailSchema>;
 export type Goal = z.infer<typeof goalSchema>;
+export type MealMenu = z.infer<typeof mealMenuSchema>;
 export type Memory = z.infer<typeof memorySchema>;
 export type RecoveryRecord = z.infer<typeof recoveryRecordSchema>;
 export type SleepRecord = z.infer<typeof sleepRecordSchema>;

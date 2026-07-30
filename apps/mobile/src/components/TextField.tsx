@@ -1,6 +1,19 @@
-import { StyleSheet, TextInput, View } from "react-native";
+import { StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
+import { spacing, useTheme } from "../theme/tokens";
 import { Text } from "./Text";
-import { radius, spacing, useTheme } from "../theme/tokens";
+
+type TextFieldProps = {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  secure?: boolean;
+  hint?: string;
+  error?: string;
+  keyboardType?: "default" | "email-address" | "number-pad" | "decimal-pad";
+  autoCapitalize?: "none" | "sentences";
+  editable?: boolean;
+};
 
 export function TextField({
   label,
@@ -13,56 +26,84 @@ export function TextField({
   keyboardType = "default",
   autoCapitalize = "none",
   editable = true
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  secure?: boolean;
-  hint?: string;
-  error?: string;
-  keyboardType?: "default" | "email-address" | "number-pad" | "decimal-pad";
-  autoCapitalize?: "none" | "sentences";
-  editable?: boolean;
-}) {
+}: TextFieldProps) {
   const { tokens } = useTheme();
+  const { fontScale } = useWindowDimensions();
+  const stacked = fontScale >= 1.4;
 
   return (
     <View style={styles.field}>
-      <Text size="sm" style={{ color: tokens.muted }}>{label}</Text>
-      <TextInput
-        accessibilityLabel={label}
-        autoCapitalize={autoCapitalize}
-        autoCorrect={false}
-        editable={editable}
-        keyboardType={keyboardType}
-        onChangeText={onChange}
-        placeholder={placeholder}
-        placeholderTextColor={tokens.muted}
-        secureTextEntry={secure}
-        value={value}
-        style={[
-          styles.input,
-          {
-            backgroundColor: tokens.panel,
-            borderColor: error ? tokens.danger : tokens.line,
-            color: editable ? tokens.ink : tokens.muted
-          }
-        ]}
-      />
-      {error ? <Text size="sm" style={{ color: tokens.danger }}>{error}</Text> : null}
-      {!error && hint ? <Text size="sm" style={{ color: tokens.muted }}>{hint}</Text> : null}
+      <View style={[styles.row, stacked && styles.rowStacked]}>
+        <Text
+          size="body"
+          numberOfLines={1}
+          style={[styles.label, stacked && styles.labelStacked, { color: tokens.label }]}
+        >
+          {label}
+        </Text>
+        <TextInput
+          accessibilityLabel={label}
+          autoCapitalize={autoCapitalize}
+          autoCorrect={false}
+          editable={editable}
+          keyboardType={keyboardType}
+          onChangeText={onChange}
+          placeholder={placeholder}
+          placeholderTextColor={tokens.labelTertiary}
+          secureTextEntry={secure}
+          value={value}
+          style={[
+            styles.input,
+            stacked && styles.inputStacked,
+            { color: editable ? tokens.label : tokens.labelSecondary }
+          ]}
+        />
+      </View>
+      {error ? (
+        <Text size="footnote" color={tokens.red}>
+          {error}
+        </Text>
+      ) : null}
+      {!error && hint ? (
+        <Text size="footnote" color={tokens.labelSecondary}>
+          {hint}
+        </Text>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  field: { flex: 1, gap: spacing.xs },
+  field: {
+    flex: 1,
+    gap: spacing.xs
+  },
+  row: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.md,
+    minHeight: 44,
+    paddingHorizontal: spacing.lg
+  },
+  rowStacked: {
+    alignItems: "stretch",
+    flexDirection: "column",
+    gap: spacing.xs
+  },
+  label: {
+    flexShrink: 0
+  },
+  labelStacked: {
+    width: "100%"
+  },
   input: {
-    borderRadius: radius.md,
-    borderWidth: 1,
-    fontSize: 16,
-    minHeight: 52,
-    paddingHorizontal: spacing.md
+    flex: 1,
+    fontSize: 17,
+    minHeight: 44,
+    paddingVertical: spacing.sm,
+    textAlign: "right"
+  },
+  inputStacked: {
+    textAlign: "left"
   }
 });

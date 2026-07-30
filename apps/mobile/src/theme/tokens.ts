@@ -1,40 +1,57 @@
 import { useColorScheme } from "react-native";
 
-export const lightTokens = {
-  bg: "#F6F4EE",
-  panel: "#FBFAF6",
-  panelSoft: "#F0EEE7",
-  ink: "#243129",
-  inkStrong: "#17231D",
-  muted: "#718077",
-  line: "#D9D7CF",
-  lineStrong: "#BEBFB7",
-  sage: "#718579",
-  sageStrong: "#52685C",
-  sageSoft: "#E3E8E1",
-  clay: "#C87958",
-  claySoft: "#F2E2DA",
-  danger: "#b3413f",
-  dangerSoft: "#f1e0df"
+// Warm neutral palette (spec 2026-07-29-warm-card-redesign-phase1-design.md).
+// Key names are unchanged from the iOS snapshot so every existing call site
+// keeps compiling; `orange` is the only new key. `tint` is the text-safe green;
+// `tintFill` is the brighter fill for rings and decorative arcs. Text-bearing
+// filled controls use the explicit control/destructive foreground-background
+// pairs below.
+const lightBase = {
+  bg: "#EFEEE9",
+  surface: "#FBFBF7",
+  surfaceAlt: "#EFEEE9",
+  label: "#1C1C1A",
+  labelSecondary: "#8B8B83",
+  labelTertiary: "rgba(139,139,131,0.6)",
+  separator: "#D8D6CE",
+  separatorOpaque: "#D8D6CE",
+  tint: "#3D7A55",
+  tintFill: "#4C9A6B",
+  controlFill: "#22221F",
+  controlLabel: "#FBFBF7",
+  fill: "#E3E1D9",
+  red: "#C4534A",
+  redFill: "rgba(196,83,74,0.12)",
+  destructiveFill: "#A8463E",
+  destructiveLabel: "#FBFBF7",
+  orange: "#E8823A"
 } as const;
 
-export const darkTokens = {
-  bg: "#1f2a24",
-  panel: "#28332c",
-  panelSoft: "#324039",
-  ink: "#d6ddd9",
-  inkStrong: "#eef2ef",
-  muted: "#9ba8a0",
-  line: "#44524a",
-  lineStrong: "#5a6a60",
-  sage: "#7dbd8f",
-  sageStrong: "#a0d6af",
-  sageSoft: "#3a4a3f",
-  clay: "#c79866",
-  claySoft: "#4a3d2f",
-  danger: "#d36464",
-  dangerSoft: "#4a2f2f"
-} as const;
+type BaseTokens = { [K in keyof typeof lightBase]: string };
+
+const darkBase: BaseTokens = {
+  bg: "#1A1917",
+  surface: "#252421",
+  surfaceAlt: "#33322E",
+  label: "#F2F1EC",
+  labelSecondary: "#8B8B83",
+  labelTertiary: "rgba(139,139,131,0.6)",
+  separator: "#3A3934",
+  separatorOpaque: "#3A3934",
+  tint: "#5FA97E",
+  tintFill: "#5FA97E",
+  controlFill: "#F2F1EC",
+  controlLabel: "#1C1C1A",
+  fill: "#33322E",
+  red: "#D96A60",
+  redFill: "rgba(217,106,96,0.18)",
+  destructiveFill: "#D96A60",
+  destructiveLabel: "#1C1C1A",
+  orange: "#E8914F"
+};
+
+export const lightTokens = lightBase;
+export const darkTokens = darkBase;
 
 export const spacing = {
   xs: 4,
@@ -47,9 +64,11 @@ export const spacing = {
 
 export const radius = {
   sm: 8,
+  card: 28,
   md: 12,
-  lg: 16,
-  xl: 22
+  sheet: 32,
+  bubble: 20,
+  pill: 999
 } as const;
 
 export const opacity = {
@@ -57,19 +76,39 @@ export const opacity = {
   disabled: 0.5
 } as const;
 
-export const typography = {
-  xs: 12,
-  sm: 14,
-  md: 16,
-  lg: 18,
-  xl: 22,
-  xxl: 28,
-  display: 36,
-  hero: 44,
-  metric: 56
+/**
+ * The one sanctioned shadow of the warm card language. Spread it onto card
+ * surfaces; iOS clips shadows on views with `overflow: "hidden"`, so cards
+ * that need clipping split into a shadow-bearing outer view and a clipping
+ * inner view (see InsetGroup).
+ */
+export function cardShadow(scheme: "light" | "dark") {
+  return {
+    shadowColor: scheme === "dark" ? "#000000" : "#6B675C",
+    shadowOpacity: 0.14,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4
+  } as const;
+}
+
+// iOS text styles at the default Dynamic Type size; unchanged by the warm redesign.
+export const textStyles = {
+  largeTitle: { fontSize: 34, lineHeight: 41 },
+  title1: { fontSize: 28, lineHeight: 34 },
+  title2: { fontSize: 22, lineHeight: 28 },
+  title3: { fontSize: 20, lineHeight: 25 },
+  headline: { fontSize: 17, lineHeight: 22 },
+  body: { fontSize: 17, lineHeight: 22 },
+  callout: { fontSize: 16, lineHeight: 21 },
+  subheadline: { fontSize: 15, lineHeight: 20 },
+  footnote: { fontSize: 13, lineHeight: 18 },
+  caption: { fontSize: 12, lineHeight: 16 },
+  caption2: { fontSize: 11, lineHeight: 13 },
+  metric: { fontSize: 40, lineHeight: 44 }
 } as const;
 
-export type ThemeTokens = { [K in keyof typeof lightTokens]: string };
+export type ThemeTokens = { [K in keyof BaseTokens]: string };
 
 export function useTheme(): { tokens: ThemeTokens; isDark: boolean } {
   const scheme = useColorScheme();

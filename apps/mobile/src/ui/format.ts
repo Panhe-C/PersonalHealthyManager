@@ -72,6 +72,18 @@ function localDateParts(date: Date, timeZone: string) {
   };
 }
 
+/** Local calendar day (`YYYY-MM-DD`) of a timestamp in `timeZone`; "" for
+ *  unparseable input. This is the single day-bucketing primitive — insights
+ *  aggregations must bucket by it, never by UTC date. */
+export function localDateKey(value: string | Date, timeZone = APP_TIME_ZONE): string {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = localDateParts(date, timeZone);
+  const month = String(parts.month).padStart(2, "0");
+  const day = String(parts.day).padStart(2, "0");
+  return `${parts.year}-${month}-${day}`;
+}
+
 function zonedMidnightToUtcIso(year: number, month: number, day: number, timeZone: string) {
   const utcGuess = new Date(Date.UTC(year, month - 1, day));
   const guessedLocal = new Intl.DateTimeFormat("en-CA", {

@@ -1,23 +1,23 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
-import { Screen } from "../../src/components/Screen";
-import { Text } from "../../src/components/Text";
-import { Button } from "../../src/components/Button";
-import { ChoiceGroup } from "../../src/components/ChoiceGroup";
-import { useFeedback } from "../../src/components/Feedback";
-import { Section } from "../../src/components/Section";
-import { TextField } from "../../src/components/TextField";
+import { Screen } from "../../../../src/components/Screen";
+import { Text } from "../../../../src/components/Text";
+import { Button } from "../../../../src/components/Button";
+import { ChoiceGroup } from "../../../../src/components/ChoiceGroup";
+import { useFeedback } from "../../../../src/components/Feedback";
+import { InsetGroup } from "../../../../src/components/InsetGroup";
+import { Row } from "../../../../src/components/Row";
+import { TextField } from "../../../../src/components/TextField";
 
-import { useSettingsQuery } from "../../src/api/hooks";
+import { useSettingsQuery } from "../../../../src/api/hooks";
 import {
   modelProviderOptions,
   providerModelDefaults,
   providerNeedsManualModel,
   saveSettings,
   type MobileSettings
-} from "../../src/api/settings";
-import { radius, spacing, useTheme } from "../../src/theme/tokens";
+} from "../../../../src/api/settings";
+import { spacing, useTheme } from "../../../../src/theme/tokens";
 
 export default function ModelSettingsScreen() {
   const query = useSettingsQuery();
@@ -65,21 +65,19 @@ export default function ModelSettingsScreen() {
 
   if (!draft) {
     return (
-      <Screen>
-        <Text style={{ color: tokens.muted }}>{query.error ? "配置加载失败" : "正在读取服务器配置…"}</Text>
+      <Screen contentContainerStyle={{ paddingTop: spacing.lg }}>
+        <Text style={{ color: tokens.labelSecondary }}>{query.error ? "配置加载失败" : "正在读取服务器配置…"}</Text>
       </Screen>
     );
   }
 
   return (
-    <Screen>
-      <Text style={{ color: tokens.muted }}>选择服务商并填入 API Key 即可；模型与地址自动匹配。密钥由服务端加密保存，留空会保留现有密钥。</Text>
-
-      <Section title="服务商">
+    <Screen contentContainerStyle={{ paddingTop: spacing.lg }}>
+      <InsetGroup header="模型提供方">
         <ChoiceGroup options={modelProviderOptions} value={draft.modelProvider} onChange={selectProvider} />
-      </Section>
+      </InsetGroup>
 
-      <Section title="模型">
+      <InsetGroup header="模型">
         {providerNeedsManualModel(draft.modelProvider) ? (
           <>
             <TextField
@@ -96,36 +94,24 @@ export default function ModelSettingsScreen() {
             />
           </>
         ) : (
-          <View style={[styles.readOnly, { backgroundColor: tokens.panel, borderColor: tokens.line }]}>
-            <Text weight="medium">{draft.modelName}</Text>
-            <Text size="sm" style={{ color: tokens.muted }}>{draft.modelBaseUrl}</Text>
-          </View>
+          <Row title={draft.modelName} subtitle={draft.modelBaseUrl} />
         )}
-      </Section>
+      </InsetGroup>
 
-      <Section title="凭据">
+      <InsetGroup
+        header="凭据"
+        footer="密钥由服务端加密保存，留空会保留现有密钥；模型与地址会随提供方自动匹配。"
+      >
         <TextField
           label="API Key"
           value={apiKey}
           onChange={setApiKey}
           secure
-          placeholder={draft.hasApiKey ? `已配置 ${draft.apiKeyHint ?? ""}；留空保持不变` : "输入 API Key"}
+          placeholder={draft.hasApiKey ? `已配置 ${draft.apiKeyHint ?? ""}` : "输入 API Key"}
         />
-      </Section>
+      </InsetGroup>
 
       <Button title={busy ? "保存中…" : "保存模型配置"} disabled={busy} onPress={save} />
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  readOnly: {
-    borderRadius: radius.md,
-    borderWidth: 1,
-    gap: 2,
-    justifyContent: "center",
-    minHeight: 52,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm
-  }
-});

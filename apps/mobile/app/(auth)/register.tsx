@@ -3,7 +3,7 @@ import { StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 import { useAuth } from "../../src/auth/AuthContext";
 import { Button } from "../../src/components/Button";
-import { PageHeader } from "../../src/components/QuietHealth";
+import { InsetGroup } from "../../src/components/InsetGroup";
 import { Screen } from "../../src/components/Screen";
 import { Text } from "../../src/components/Text";
 import { TextField } from "../../src/components/TextField";
@@ -64,13 +64,15 @@ export default function RegisterScreen() {
   if (sentTo) {
     return (
       <Screen>
-        <PageHeader
-          title="请查收邮件"
-          subtitle={`我们已向 ${sentTo} 发送验证链接，24 小时内有效。完成验证后即可返回登录。`}
-        />
-        {notice && <Text style={{ color: tokens.muted }}>{notice}</Text>}
+        <View style={styles.header}>
+          <Text size="title1" weight="strong" style={styles.pageTitle}>请查收邮件</Text>
+          <Text size="subheadline" color={tokens.labelSecondary}>
+            {`我们已向 ${sentTo} 发送验证链接，24 小时内有效。完成验证后即可返回登录。`}
+          </Text>
+        </View>
+        {notice && <Text style={{ color: tokens.labelSecondary, paddingHorizontal: spacing.lg }}>{notice}</Text>}
         <View style={styles.actions}>
-          <Button title={busy ? "发送中…" : "重新发送验证邮件"} variant="ghost" onPress={resend} disabled={busy} />
+          <Button title={busy ? "发送中…" : "重新发送验证邮件"} variant="plain" onPress={resend} disabled={busy} />
           <Button title="返回登录" onPress={() => router.replace("/(auth)/login")} />
         </View>
       </Screen>
@@ -79,9 +81,12 @@ export default function RegisterScreen() {
 
   return (
     <Screen>
-      <PageHeader title="创建账号" subtitle="验证邮箱后即可登录" />
+      <View style={styles.header}>
+        <Text size="title1" weight="strong" style={styles.pageTitle}>注册</Text>
+        <Text size="subheadline" color={tokens.labelSecondary}>验证邮箱后即可登录</Text>
+      </View>
 
-      <View style={styles.form}>
+      <InsetGroup>
         <TextField
           label="邮箱"
           value={email}
@@ -104,13 +109,13 @@ export default function RegisterScreen() {
           placeholder="••••••••"
           secure
         />
-      </View>
+      </InsetGroup>
 
-      {error && <Text style={{ color: tokens.danger }}>{error}</Text>}
+      {error && <Text style={{ color: tokens.red, paddingHorizontal: spacing.lg }}>{error}</Text>}
 
       <View style={styles.actions}>
         <Button title={busy ? "注册中…" : "注册"} onPress={submit} disabled={busy} />
-        <Button title="已有账号？去登录" variant="ghost" onPress={() => router.replace("/(auth)/login")} />
+        <Button title="已有账号？去登录" variant="plain" onPress={() => router.replace("/(auth)/login")} />
       </View>
     </Screen>
   );
@@ -118,5 +123,6 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   actions: { gap: spacing.md },
-  form: { gap: spacing.lg }
+  header: { gap: spacing.xs, paddingHorizontal: spacing.lg, paddingTop: spacing.xxl },
+  pageTitle: { fontSize: 30, letterSpacing: -0.5, lineHeight: 36, marginTop: 2 }
 });
