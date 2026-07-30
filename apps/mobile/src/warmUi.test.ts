@@ -320,4 +320,48 @@ describe("warm card mobile UI", () => {
       expect(source).not.toContain('size="largeTitle"');
     }
   });
+
+  it("builds the Insights visualisation cards from the shared charts", () => {
+    const source = read("../app/(app)/(tabs)/insights/index.tsx");
+
+    expect(source).toContain("本周运动");
+    expect(source).toContain("本周睡眠");
+    expect(source).toContain("运动频率");
+    expect(source).toContain("useActivitiesQuery(90)");
+    expect(source).toContain("useSleepQuery(7)");
+    expect(source).toContain("useRecoveryQuery(8)");
+    expect(source).toContain("WeekBars");
+    expect(source).toContain("ActivityHeatmap");
+    expect(source).toContain("buildHeatmapWeeks");
+    expect(source).toContain("buildWeek");
+    expect(source).toContain("minutesByDay");
+    expect(source).toContain("dominantIntensityByDay");
+  });
+
+  it("extends the Insights analysis group with HRV and resting heart rate", () => {
+    const source = read("../app/(app)/(tabs)/insights/index.tsx");
+
+    expect(source).toContain("HRV");
+    expect(source).toContain("静息心率");
+    expect(source).toContain("hrvMs");
+    expect(source).toContain("restingHeartRateBpm");
+    expect(source).toContain("HeartPulse");
+  });
+
+  it("ships the visualisation components as dumb charts", () => {
+    const weekBars = read("./components/WeekBars.tsx");
+
+    expect(weekBars).toContain("export function WeekBars");
+    expect(weekBars).toContain("accessible");
+    expect(weekBars).not.toContain("useActivitiesQuery");
+    expect(weekBars).not.toContain("useSleepQuery");
+
+    const heatmap = read("./components/ActivityHeatmap.tsx");
+
+    expect(heatmap).toContain("export function ActivityHeatmap");
+    expect(heatmap).toContain("intensityScale");
+    expect(heatmap).toContain("少");
+    expect(heatmap).toContain("多");
+    expect(heatmap).not.toContain("useActivitiesQuery");
+  });
 });
