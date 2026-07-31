@@ -92,3 +92,15 @@ export function intensityScale(minutes: number): 0 | 1 | 2 | 3 | 4 {
   if (minutes < 90) return 3;
   return 4;
 }
+
+/** Activities whose local start day falls in `dateKeys`, newest first. */
+export function activitiesForDateKeys<T extends { startedAt: string }>(
+  activities: readonly T[],
+  dateKeys: ReadonlySet<string>,
+  timeZone = APP_TIME_ZONE
+): T[] {
+  return activities
+    .filter((item) => dateKeys.has(localDateKey(item.startedAt, timeZone)))
+    .slice()
+    .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+}

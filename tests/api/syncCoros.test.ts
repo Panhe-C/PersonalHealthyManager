@@ -24,9 +24,23 @@ describe("COROS sync API", () => {
 
     const response = await POST(new Request("http://localhost/api/sync/coros", { method: "POST", body: "{}" }));
 
-    expect(syncCorosFromSettings).toHaveBeenCalledWith("user-1");
+    expect(syncCorosFromSettings).toHaveBeenCalledWith("user-1", undefined);
     expect(importCorosPayload).not.toHaveBeenCalled();
     expect(await response.json()).toEqual({ activities: 1, sleep: 1, recovery: 1 });
+  });
+
+  it("forwards a short lookback window for pull-to-refresh syncs", async () => {
+    vi.mocked(syncCorosFromSettings).mockResolvedValue({ activities: 0, sleep: 1, recovery: 1 });
+
+    const response = await POST(
+      new Request("http://localhost/api/sync/coros", {
+        method: "POST",
+        body: JSON.stringify({ days: 2 })
+      })
+    );
+
+    expect(syncCorosFromSettings).toHaveBeenCalledWith("user-1", { days: 2 });
+    expect(await response.json()).toEqual({ activities: 0, sleep: 1, recovery: 1 });
   });
 
   it("keeps explicit COROS payload imports for development fixtures", async () => {

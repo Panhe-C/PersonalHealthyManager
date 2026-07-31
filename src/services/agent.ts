@@ -14,7 +14,26 @@ export type AgentResponse = {
   modelProvider?: string;
   modelName?: string;
   error?: string;
+  /** True when the model hit its output token limit; partial text may still be usable. */
+  truncated?: boolean;
 };
+
+/** Default completion budget for coach replies (raised to reduce mid-answer cutoffs). */
+export const DEFAULT_AGENT_MAX_TOKENS = 8192;
+
+class IncompleteModelResponseError extends Error {
+  readonly partialContent: string;
+
+  constructor(message: string, partialContent: string) {
+    super(message);
+    this.name = "IncompleteModelResponseError";
+    this.partialContent = partialContent;
+  }
+}
+
+function isIncompleteModelResponseError(error: unknown): error is IncompleteModelResponseError {
+  return error instanceof IncompleteModelResponseError;
+}
 
 export type AgentConversationMessage = {
   role: string;
@@ -179,25 +198,34 @@ function systemPrompt(intent: AgentIntent, context?: AgentContext) {
 
 function extractOpenAiCompatibleMessage(body: unknown, providerLabel: string) {
   const choice = (body as { choices?: Array<{ finish_reason?: unknown; message?: { content?: unknown } }> })?.choices?.[0];
+  const content = choice?.message?.content;
+  const text = typeof content === "string" ? content.trim() : "";
+
   if (choice?.finish_reason === "length") {
-    throw new Error(`${providerLabel} response was cut off before completion.`);
+    throw new IncompleteModelResponseError(
+      `${providerLabel} response was cut off before completion.`,
+      text
+    );
   }
 
-  const content = choice?.message?.content;
-  if (typeof content === "string" && content.trim()) return content.trim();
+  if (text) return text;
   throw new Error("Model response did not include a message.");
 }
 
 function extractAnthropicMessage(body: unknown, providerLabel: string) {
-  if ((body as { stop_reason?: unknown })?.stop_reason === "max_tokens") {
-    throw new Error(`${providerLabel} response was cut off before completion.`);
-  }
-
   const parts = (body as { content?: Array<{ type?: string; text?: unknown }> })?.content ?? [];
   const text = parts
     .map((part) => (part.type === "text" && typeof part.text === "string" ? part.text : ""))
     .join("")
     .trim();
+
+  if ((body as { stop_reason?: unknown })?.stop_reason === "max_tokens") {
+    throw new IncompleteModelResponseError(
+      `${providerLabel} response was cut off before completion.`,
+      text
+    );
+  }
+
   if (text) return text;
   throw new Error("Model response did not include a message.");
 }
@@ -243,7 +271,7 @@ async function callAnthropicModel(
     },
     body: JSON.stringify({
       model: config.modelName,
-      max_tokens: 3000,
+      max_tokens: DEFAULT_AGENT_MAX_TOKENS,
       system: systemPrompt(intent, context),
       messages: [...compactHistory(history), { role: "user", content: message }]
     })
@@ -268,7 +296,7 @@ async function callOpenAiCompatibleModel(
     body: JSON.stringify({
       model: config.modelName,
       temperature: 0.3,
-      max_tokens: 3000,
+      max_tokens: DEFAULT_AGENT_MAX_TOKENS,
       messages: [
         { role: "system", content: systemPrompt(intent, context) },
         ...compactHistory(history),
@@ -329,7 +357,7 @@ async function streamOpenAiCompatibleModel(
     body: JSON.stringify({
       model: config.modelName,
       temperature: 0.3,
-      max_tokens: 3000,
+      max_tokens: DEFAULT_AGENT_MAX_TOKENS,
       stream: true,
       messages: [
         { role: "system", content: systemPrompt(intent, context) },
@@ -342,6 +370,7 @@ async function streamOpenAiCompatibleModel(
   const body = await requireStreamingBody(response, config);
   let finishReason: string | undefined;
   let sawDone = false;
+  let rawMessage = "";
 
   for await (const event of readSseEvents(body, signal)) {
     if (event.data === "[DONE]") {
@@ -361,12 +390,18 @@ async function streamOpenAiCompatibleModel(
     }
     const choice = payload.choices?.[0];
     const content = choice?.delta?.content;
-    if (typeof content === "string" && content) await onRawDelta(content);
+    if (typeof content === "string" && content) {
+      rawMessage += content;
+      await onRawDelta(content);
+    }
     if (typeof choice?.finish_reason === "string") finishReason = choice.finish_reason;
   }
 
   if (finishReason === "length") {
-    throw new Error(`${config.providerLabel} response was cut off before completion.`);
+    throw new IncompleteModelResponseError(
+      `${config.providerLabel} response was cut off before completion.`,
+      rawMessage
+    );
   }
   if (!sawDone) {
     throw new Error(`${config.providerLabel} stream ended before completion.`);
@@ -394,7 +429,7 @@ async function streamAnthropicModel(
     },
     body: JSON.stringify({
       model: config.modelName,
-      max_tokens: 3000,
+      max_tokens: DEFAULT_AGENT_MAX_TOKENS,
       stream: true,
       system: systemPrompt(intent, context),
       messages: [...compactHistory(history), { role: "user", content: message }]
@@ -404,6 +439,7 @@ async function streamAnthropicModel(
   const body = await requireStreamingBody(response, config);
   let stopReason: string | undefined;
   let sawStop = false;
+  let rawMessage = "";
 
   for await (const event of readSseEvents(body, signal)) {
     const payload = JSON.parse(event.data) as {
@@ -419,6 +455,7 @@ async function streamAnthropicModel(
       payload.delta?.type === "text_delta" &&
       typeof payload.delta.text === "string"
     ) {
+      rawMessage += payload.delta.text;
       await onRawDelta(payload.delta.text);
     }
     if (payload.type === "message_delta" && typeof payload.delta?.stop_reason === "string") {
@@ -428,7 +465,10 @@ async function streamAnthropicModel(
   }
 
   if (stopReason === "max_tokens") {
-    throw new Error(`${config.providerLabel} response was cut off before completion.`);
+    throw new IncompleteModelResponseError(
+      `${config.providerLabel} response was cut off before completion.`,
+      rawMessage
+    );
   }
   if (!sawStop) {
     throw new Error(`${config.providerLabel} stream ended before completion.`);
@@ -514,6 +554,17 @@ export async function createAgentResponseForUser(
       message: await callConfiguredModel(config, message, history, intent, context)
     };
   } catch (error) {
+    if (isIncompleteModelResponseError(error) && error.partialContent.trim()) {
+      return {
+        intent,
+        source: "model",
+        modelProvider: config.providerLabel,
+        modelName: config.modelName,
+        message: error.partialContent,
+        error: error.message,
+        truncated: true
+      };
+    }
     const errorMessage = error instanceof Error ? error.message : "Model call failed.";
     const normalizedErrorMessage = errorMessage.replace(/[.。]+$/, "");
     return {
@@ -577,6 +628,32 @@ export async function createStreamingAgentResponseForUser(
     };
   } catch (error) {
     if (isAbortError(error, signal)) throw error;
+
+    if (isIncompleteModelResponseError(error)) {
+      const partial = error.partialContent.trim() ? error.partialContent : rawMessage;
+      if (partial.trim()) {
+        const trailing = filter.finish();
+        if (trailing) {
+          emittedVisibleText = true;
+          await onDelta(trailing);
+        }
+        if (!emittedVisibleText) {
+          const visible = createVisibleTextFilter();
+          const text = visible.push(partial) + visible.finish();
+          if (text) await onDelta(text);
+        }
+        return {
+          intent,
+          source: "model",
+          modelProvider: config.providerLabel,
+          modelName: config.modelName,
+          message: partial,
+          error: error.message,
+          truncated: true
+        };
+      }
+    }
+
     const errorMessage = error instanceof Error ? error.message : "Model call failed.";
     const normalizedErrorMessage = errorMessage.replace(/[.。]+$/, "");
     const response = {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ElementRef } fr
 import { Animated, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { ArrowDown, Brain, History, Leaf, Pencil, Send, SquarePen, Trash2 } from "lucide-react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigation } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FLOATING_TAB_BAR_CLEARANCE } from "../../../../src/navigation/tabBarMetrics";
 import { Text } from "../../../../src/components/Text";
@@ -92,6 +92,8 @@ function buildSuggestions(messages: AgentMessage[]) {
 
 export default function CoachTab() {
   const navigation = useNavigation();
+  const router = useRouter();
+  const params = useLocalSearchParams<{ prompt?: string | string[]; askId?: string | string[] }>();
   const queryClient = useQueryClient();
   const conversationsQuery = useConversationsQuery();
   const memoriesQuery = useAgentMemoriesQuery();
@@ -110,6 +112,7 @@ export default function CoachTab() {
   const [showCoachTools, setShowCoachTools] = useState(false);
   const [showConversationDrawer, setShowConversationDrawer] = useState(false);
   const autoCreateAttemptedRef = useRef(false);
+  const consumedAskIdRef = useRef<string | null>(null);
   const messageScrollRef = useRef<ElementRef<typeof ScrollView>>(null);
   const activeSendRef = useRef<{ controller: AbortController; conversationId: string } | null>(null);
 
@@ -323,6 +326,38 @@ export default function CoachTab() {
       }
     }
   }
+
+  const incomingPrompt = Array.isArray(params.prompt) ? params.prompt[0] : params.prompt;
+  const incomingAskId = Array.isArray(params.askId) ? params.askId[0] : params.askId;
+
+  useEffect(() => {
+    const prompt = incomingPrompt?.trim() ?? "";
+    const askId = incomingAskId?.trim() ?? "";
+    if (!prompt || !askId) return;
+    if (consumedAskIdRef.current === askId) return;
+    if (
+      !selectedConversationId ||
+      sending ||
+      conversationMutationPending ||
+      createConversationMutation.isPending ||
+      conversationDetailQuery.isLoading
+    ) {
+      return;
+    }
+
+    consumedAskIdRef.current = askId;
+    router.setParams({ prompt: undefined, askId: undefined });
+    void submitMessage(prompt);
+  }, [
+    conversationDetailQuery.isLoading,
+    conversationMutationPending,
+    createConversationMutation.isPending,
+    incomingAskId,
+    incomingPrompt,
+    router,
+    selectedConversationId,
+    sending
+  ]);
 
   /** The drawer is a Modal, so it closes before the confirm sheet opens to avoid stacked modals. */
   function requestDeleteConversation(conversation: Conversation) {

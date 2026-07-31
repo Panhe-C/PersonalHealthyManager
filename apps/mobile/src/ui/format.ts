@@ -58,6 +58,55 @@ export function numberLabel(value: number | null | undefined, suffix = ""): stri
   return typeof value === "number" ? `${value}${suffix}` : "无记录";
 }
 
+const SPORT_TYPE_LABELS: Record<string, string> = {
+  run: "跑步",
+  ride: "骑行",
+  strength: "力量",
+  walk: "步行",
+  jump_rope: "跳绳",
+  elliptical: "椭圆机",
+  boxing: "拳击",
+  other: "其他运动"
+};
+
+/** Maps normalized sport codes (and common English names) to short Chinese labels. */
+export function sportTypeLabel(sportType: string): string {
+  const key = sportType.trim().toLowerCase();
+  if (SPORT_TYPE_LABELS[key]) return SPORT_TYPE_LABELS[key];
+  if (/run|跑步/.test(key)) return "跑步";
+  if (/ride|cycl|骑/.test(key)) return "骑行";
+  if (/walk|步行|走/.test(key)) return "步行";
+  if (/strength|力量|力量训练/.test(key)) return "力量";
+  return sportType.trim() || "运动";
+}
+
+/** Compact intensity label for activity rows. */
+export function intensityLabel(intensity: string): string {
+  const value = intensity.trim().toLowerCase();
+  if (/easy|轻松|recovery|低|low/.test(value)) return "轻松";
+  if (/high|hard|vigorous|强度/.test(value) && !/中等|moderate|medium/.test(value)) return "高强度";
+  if (/moderate|中等|medium/.test(value)) return "中等";
+  return intensity.trim() || "—";
+}
+
+/** Subtitle bits for an activity row: date · duration · optional distance/HR. */
+export function formatActivitySubtitle(activity: {
+  startedAt: string;
+  durationMinutes: number;
+  distanceKm?: number | null;
+  averageHeartRateBpm?: number | null;
+}): string {
+  const parts = [formatDateLabel(activity.startedAt), formatDuration(activity.durationMinutes)];
+  if (typeof activity.distanceKm === "number") {
+    const km = activity.distanceKm >= 10 ? activity.distanceKm.toFixed(1) : activity.distanceKm.toFixed(2);
+    parts.push(`${Number(km)} km`);
+  }
+  if (typeof activity.averageHeartRateBpm === "number") {
+    parts.push(`${activity.averageHeartRateBpm} bpm`);
+  }
+  return parts.join(" · ");
+}
+
 function localDateParts(date: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,

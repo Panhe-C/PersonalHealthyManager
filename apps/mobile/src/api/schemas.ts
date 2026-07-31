@@ -148,6 +148,10 @@ export const sleepRecordSchema = z.object({
   sleepEnd: z.string().nullable(),
   durationMinutes: z.number().int(),
   qualityScore: z.number().int().nullable(),
+  deepSleepMinutes: z.number().int().nullable().optional(),
+  lightSleepMinutes: z.number().int().nullable().optional(),
+  remSleepMinutes: z.number().int().nullable().optional(),
+  awakeMinutes: z.number().int().nullable().optional(),
   metadataJson: z.string(),
   createdAt: z.string()
 });

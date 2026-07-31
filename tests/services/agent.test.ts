@@ -175,7 +175,7 @@ describe("agent response shell", () => {
     expect(payload.messages[0].content).not.toContain("Calendar confirmation instructions:");
   });
 
-  it("falls back instead of using an incomplete OpenAI-compatible model response", async () => {
+  it("keeps a truncated OpenAI-compatible model response instead of local fallback", async () => {
     vi.mocked(loadModelRuntimeConfig).mockResolvedValue({
       provider: "deepseek",
       providerLabel: "DeepSeek",
@@ -197,11 +197,36 @@ describe("agent response shell", () => {
 
     const response = await createAgentResponseForUser("user-1", "分析我这周的运动数据");
 
+    expect(response.source).toBe("model");
+    expect(response.truncated).toBe(true);
+    expect(response.error).toBe("DeepSeek response was cut off before completion.");
+    expect(response.message).toContain("这一周运动");
+    expect(response.message).not.toContain("using local guidance instead");
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body))).toMatchObject({
+      max_tokens: 8192
+    });
+  });
+
+  it("falls back when a truncated OpenAI-compatible response has no usable text", async () => {
+    vi.mocked(loadModelRuntimeConfig).mockResolvedValue({
+      provider: "deepseek",
+      providerLabel: "DeepSeek",
+      modelName: "deepseek-v4-flash",
+      baseUrl: "https://api.deepseek.com",
+      apiKey: "sk-configured"
+    });
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ finish_reason: "length", message: { content: "   " } }]
+      })
+    } as never);
+
+    const response = await createAgentResponseForUser("user-1", "分析我这周的运动数据");
+
     expect(response.source).toBe("rules");
     expect(response.error).toBe("DeepSeek response was cut off before completion.");
-    expect(response.message).toContain("DeepSeek response was cut off");
     expect(response.message).toContain("using local guidance instead");
-    expect(response.message).not.toContain("这一周运动");
   });
 
   it("shows the provider error when the configured model call fails", async () => {
@@ -318,7 +343,7 @@ describe("agent response shell", () => {
     expect(result).toMatchObject({ source: "model", modelProvider: "Anthropic" });
   });
 
-  it("falls back without appending fallback text after a truncated partial delta", async () => {
+  it("keeps truncated stream text without replacing it with local guidance", async () => {
     vi.mocked(loadModelRuntimeConfig).mockResolvedValue(deepSeekConfig);
     vi.mocked(fetch).mockResolvedValue(sseResponse([
       'data: {"choices":[{"delta":{"content":"<explanation>不完整"},' +
@@ -334,9 +359,14 @@ describe("agent response shell", () => {
     );
 
     expect(deltas.join("")).toBe("不完整");
-    expect(result.source).toBe("rules");
+    expect(result.source).toBe("model");
+    expect(result.truncated).toBe(true);
     expect(result.error).toContain("cut off");
+    expect(result.message).toContain("不完整");
     expect(deltas.join("")).not.toContain("using local guidance instead");
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body))).toMatchObject({
+      max_tokens: 8192
+    });
   });
 
   it("falls back when an OpenAI-compatible stream ends without DONE", async () => {

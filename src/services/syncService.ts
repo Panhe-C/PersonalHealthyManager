@@ -229,12 +229,12 @@ export async function importCorosPayload(
   return { activities: activities.length, sleep: sleepRecords.length, recovery: recoveryRecords.length };
 }
 
-export async function syncCorosFromSettings(userId: string) {
+export async function syncCorosFromSettings(userId: string, options?: { days?: number }) {
   const connection = await loadDataMcpConnection(userId, "coros");
   if (!connection?.enabled) throw new Error("COROS MCP connection is disabled.");
   if (!connection.endpoint) throw new Error("COROS MCP endpoint is not configured.");
 
-  const snapshot = await fetchCorosRemoteMcpSnapshot(connection);
+  const snapshot = await fetchCorosRemoteMcpSnapshot(connection, options);
   return importCorosPayload(userId, snapshot);
 }
 

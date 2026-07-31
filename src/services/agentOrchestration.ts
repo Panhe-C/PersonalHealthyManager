@@ -23,6 +23,8 @@ import type { TimeWindow } from "@/src/domain/models";
 
 const EXPLICIT_MEMORY_PATTERN = /记住|记下|别忘了|记一下|帮我记|remember(?:\s+to)?/i;
 
+const TRUNCATION_NOTE = "回复因长度限制被截断，如需完整内容请再问一次。";
+
 export interface AgentMessageResult {
   status: number;
   body: unknown;
@@ -138,6 +140,10 @@ export async function finalizeAgentMessage(
   const explanation = stripMemoryBlock(parsed.explanation || response.message);
   const executed: ExecutedAdjustment[] = [];
   const notes: string[] = [];
+  const allowSideEffects = !response.truncated;
+  if (response.truncated) {
+    notes.push(TRUNCATION_NOTE);
+  }
   if (
     agentContext.freshSync.authRequired &&
     !/重新(?:连接|授权)\s*COROS|reconnect COROS/i.test(explanation)
@@ -160,6 +166,7 @@ export async function finalizeAgentMessage(
         modelProvider: response.modelProvider,
         modelName: response.modelName,
         error: response.error,
+        truncated: response.truncated === true,
         freshSync: agentContext.freshSync,
         contextSections: agentContext.sections.map((section) => section.title),
         proposedActions: parsed.actions.map((action) => action.id),
@@ -169,38 +176,40 @@ export async function finalizeAgentMessage(
     }
   });
 
-  for (const action of parsed.actions) {
-    const definition = agentActionRegistry[action.id];
-    if (!definition || definition.reversibility === "readonly") continue;
-    if (definition.reversibility === "external_irreversible") continue;
+  if (allowSideEffects) {
+    for (const action of parsed.actions) {
+      const definition = agentActionRegistry[action.id];
+      if (!definition || definition.reversibility === "readonly") continue;
+      if (definition.reversibility === "external_irreversible") continue;
 
-    const signals = await loadGuardSignals(userId, action.id, action.args);
-    const guarded = signals
-      ? guardAction(action, signals)
-      : { accepted: true, args: action.args };
+      const signals = await loadGuardSignals(userId, action.id, action.args);
+      const guarded = signals
+        ? guardAction(action, signals)
+        : { accepted: true, args: action.args };
 
-    if (!guarded.accepted) {
-      notes.push(`已尝试 ${action.id} 但被安全规则拦下：${guarded.fallbackReason ?? ""}`);
-      continue;
-    }
+      if (!guarded.accepted) {
+        notes.push(`已尝试 ${action.id} 但被安全规则拦下：${guarded.fallbackReason ?? ""}`);
+        continue;
+      }
 
-    try {
-      const adjustment = await executeAgentAction(
-        userId,
-        { id: action.id, args: guarded.args },
-        assistantMessage.id
-      );
-      executed.push(adjustment);
-      if (guarded.fallbackReason) notes.push(guarded.fallbackReason);
-    } catch (error) {
-      notes.push(`${action.id} 执行失败：${error instanceof Error ? error.message : "未知错误"}`);
+      try {
+        const adjustment = await executeAgentAction(
+          userId,
+          { id: action.id, args: guarded.args },
+          assistantMessage.id
+        );
+        executed.push(adjustment);
+        if (guarded.fallbackReason) notes.push(guarded.fallbackReason);
+      } catch (error) {
+        notes.push(`${action.id} 执行失败：${error instanceof Error ? error.message : "未知错误"}`);
+      }
     }
   }
 
   const memorySource = EXPLICIT_MEMORY_PATTERN.test(content) ? "explicit" : "auto";
   let appliedMemories: Awaited<ReturnType<typeof applyMemories>>["applied"] = [];
   let memoryWarnings: string[] = [];
-  if (memoryParsed.memories.length > 0) {
+  if (allowSideEffects && memoryParsed.memories.length > 0) {
     try {
       const outcome = await applyMemories(userId, memoryParsed.memories, {
         messageId: assistantMessage.id,
@@ -230,6 +239,7 @@ export async function finalizeAgentMessage(
         modelProvider: response.modelProvider,
         modelName: response.modelName,
         error: response.error,
+        truncated: response.truncated === true,
         freshSync: agentContext.freshSync,
         contextSections: agentContext.sections.map((section) => section.title),
         proposedActions: parsed.actions.map((action) => action.id),

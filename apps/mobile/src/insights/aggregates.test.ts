@@ -6,7 +6,8 @@ import {
   dominantIntensityByDay,
   intensityScale,
   minutesByDay,
-  normalizeIntensity
+  normalizeIntensity,
+  activitiesForDateKeys
 } from "./aggregates";
 
 const TIME_ZONE = "Asia/Shanghai";
@@ -149,5 +150,24 @@ describe("intensityScale", () => {
     expect(intensityScale(89)).toBe(3);
     expect(intensityScale(90)).toBe(4);
     expect(intensityScale(240)).toBe(4);
+  });
+});
+
+describe("activitiesForDateKeys", () => {
+  it("keeps activities on the given local days and sorts newest first", () => {
+    const records = [
+      { id: "a", startedAt: "2026-07-27T10:00:00Z" },
+      { id: "b", startedAt: "2026-07-28T02:00:00Z" }, // 10:00 Shanghai on the 28th
+      { id: "c", startedAt: "2026-07-29T01:00:00Z" },
+      { id: "d", startedAt: "2026-07-26T10:00:00Z" }
+    ];
+
+    expect(
+      activitiesForDateKeys(records, new Set(["2026-07-27", "2026-07-28"]), TIME_ZONE).map((item) => item.id)
+    ).toEqual(["b", "a"]);
+  });
+
+  it("returns an empty list when nothing falls in the window", () => {
+    expect(activitiesForDateKeys([{ startedAt: "2026-07-20T10:00:00Z" }], new Set(["2026-07-27"]), TIME_ZONE)).toEqual([]);
   });
 });
