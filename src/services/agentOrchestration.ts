@@ -107,12 +107,12 @@ export async function prepareAgentMessage(
     orderBy: { createdAt: "desc" },
     take: 8
   });
-  const routed = createAgentResponse(content);
-  const context = await buildAgentContext(userId, routed.intent, content, conversationId);
   const history = historyRows.reverse().map((message) => ({
     role: message.role,
     content: message.content
   }));
+  const routed = createAgentResponse(content, history);
+  const context = await buildAgentContext(userId, routed.intent, content, conversationId);
 
   return {
     ok: true,
@@ -138,6 +138,12 @@ export async function finalizeAgentMessage(
   const explanation = stripMemoryBlock(parsed.explanation || response.message);
   const executed: ExecutedAdjustment[] = [];
   const notes: string[] = [];
+  if (
+    agentContext.freshSync.authRequired &&
+    !/重新(?:连接|授权)\s*COROS|reconnect COROS/i.test(explanation)
+  ) {
+    notes.push("COROS 授权已过期，请到设置中重新连接 COROS 后再试。");
+  }
 
   await prisma.agentMessage.create({
     data: { userId, conversationId, role: "user", content, metadataJson: "{}" }

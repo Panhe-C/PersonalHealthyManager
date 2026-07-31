@@ -178,6 +178,10 @@ export async function importCorosPayload(
         sleepEnd: sleep.sleepEnd,
         durationMinutes: sleep.durationMinutes,
         qualityScore: sleep.qualityScore,
+        deepSleepMinutes: sleep.deepSleepMinutes,
+        lightSleepMinutes: sleep.lightSleepMinutes,
+        remSleepMinutes: sleep.remSleepMinutes,
+        awakeMinutes: sleep.awakeMinutes,
         metadataJson: JSON.stringify(sleep.metadata)
       };
 

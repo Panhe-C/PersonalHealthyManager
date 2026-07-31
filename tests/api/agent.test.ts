@@ -167,6 +167,60 @@ describe("agent API", () => {
     );
   });
 
+  it("adds a deterministic COROS reconnect instruction after an auth failure", async () => {
+    vi.mocked(prisma.agentConversation.findFirst).mockResolvedValue({
+      id: "conv-1",
+      title: "睡眠数据",
+      updatedAt: new Date("2026-07-31T09:00:00+08:00")
+    } as never);
+    vi.mocked(prisma.agentMessage.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.agentMessage.create).mockResolvedValue({
+      id: "msg-assistant",
+      role: "assistant",
+      content: "暂时无法获取实时数据。"
+    } as never);
+    vi.mocked(prisma.agentMessage.update).mockResolvedValue({ id: "msg-assistant" } as never);
+    vi.mocked(prisma.agentConversation.update).mockResolvedValue({
+      id: "conv-1",
+      title: "睡眠数据",
+      updatedAt: new Date("2026-07-31T09:00:01+08:00")
+    } as never);
+    vi.mocked(buildAgentContext).mockResolvedValue({
+      intent: "recovery_check",
+      freshSync: {
+        attempted: true,
+        succeeded: false,
+        authRequired: true,
+        error: "COROS authorization expired (HTTP 401). Reconnect COROS in Settings."
+      },
+      sections: []
+    });
+    vi.mocked(createAgentResponseForUser).mockResolvedValue({
+      intent: "recovery_check",
+      message: "暂时无法获取实时数据。",
+      source: "model",
+      modelProvider: "DeepSeek",
+      modelName: "deepseek-v4-flash"
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/agent", {
+        method: "POST",
+        body: JSON.stringify({
+          conversationId: "conv-1",
+          message: "看下我昨晚的睡眠数据"
+        })
+      })
+    );
+
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        message:
+          "暂时无法获取实时数据。\nCOROS 授权已过期，请到设置中重新连接 COROS 后再试。"
+      })
+    );
+  });
+
   it("streams ordered NDJSON events for opted-in callers", async () => {
     vi.mocked(prisma.agentConversation.findFirst).mockResolvedValue({
       id: "conv-1",

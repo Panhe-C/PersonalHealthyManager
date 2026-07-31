@@ -284,6 +284,10 @@ type CorosTextSleep = {
   date: string;
   durationMinutes: number;
   qualityScore?: number;
+  deepSleepMinutes?: number;
+  lightSleepMinutes?: number;
+  remSleepMinutes?: number;
+  awakeMinutes?: number;
 };
 type CorosTextRecovery = {
   date: string;
@@ -726,11 +730,28 @@ function parseSleepDataText(text: string): CorosTextSleep[] {
     if (durationMinutes == null) return [];
 
     const score = block.match(/Sleep Score:\s*(\d+)/);
+    const stageMinutes = (label: string) => {
+      const direct = block.match(new RegExp(`${label}(?: Sleep)?(?: Duration)?:\\s*([^\\n]+)`, "i"));
+      if (direct) {
+        const parsed = parseDurationMinutes(direct[1]);
+        if (parsed != null) return parsed;
+      }
+      const ratio = block.match(new RegExp(`${label}(?: Sleep)? Ratio:\\s*(\\d+(?:\\.\\d+)?)%`, "i"));
+      return ratio ? Math.round(durationMinutes * Number(ratio[1]) / 100) : undefined;
+    };
+    const deepSleepMinutes = stageMinutes("Deep");
+    const lightSleepMinutes = stageMinutes("Light");
+    const remSleepMinutes = stageMinutes("REM");
+    const awakeMinutes = stageMinutes("Awake");
     return [
       {
         date: date[1],
         durationMinutes,
-        ...(score ? { qualityScore: Number(score[1]) } : {})
+        ...(score ? { qualityScore: Number(score[1]) } : {}),
+        ...(deepSleepMinutes != null ? { deepSleepMinutes } : {}),
+        ...(lightSleepMinutes != null ? { lightSleepMinutes } : {}),
+        ...(remSleepMinutes != null ? { remSleepMinutes } : {}),
+        ...(awakeMinutes != null ? { awakeMinutes } : {})
       }
     ];
   });

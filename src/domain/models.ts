@@ -32,6 +32,10 @@ export type NormalizedSleepRecord = {
   sleepEnd?: Date;
   durationMinutes: number;
   qualityScore?: number;
+  deepSleepMinutes?: number;
+  lightSleepMinutes?: number;
+  remSleepMinutes?: number;
+  awakeMinutes?: number;
   metadata: Record<string, unknown>;
 };
 

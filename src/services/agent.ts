@@ -21,7 +21,10 @@ export type AgentConversationMessage = {
   content: string;
 };
 
-export function createAgentResponse(message: string): AgentResponse {
+export function createAgentResponse(
+  message: string,
+  history: AgentConversationMessage[] = []
+): AgentResponse {
   if (/睡|sleep|恢复|recovery/i.test(message)) {
     return {
       intent: "recovery_check",
@@ -64,11 +67,25 @@ export function createAgentResponse(message: string): AgentResponse {
     };
   }
 
-  return {
+  const fallback: AgentResponse = {
     intent: "general",
     source: "rules",
     message: "Ask me about today's training, menu choices, recovery, or calendar confirmation."
   };
+
+  if (/coros|高驰|mcp|继续查|再查|查一下|看一下/i.test(message)) {
+    const priorUserMessage = [...history]
+      .reverse()
+      .find((item) => item.role === "user" && item.content.trim());
+    if (priorUserMessage) {
+      const prior = createAgentResponse(priorUserMessage.content);
+      if (prior.intent === "recovery_check" || prior.intent === "training_analysis") {
+        return { ...fallback, intent: prior.intent };
+      }
+    }
+  }
+
+  return fallback;
 }
 
 function normalizeBaseUrl(baseUrl: string) {
@@ -482,7 +499,7 @@ export async function createAgentResponseForUser(
   history: AgentConversationMessage[] = [],
   context?: AgentContext
 ): Promise<AgentResponse> {
-  const fallback = createAgentResponse(message);
+  const fallback = createAgentResponse(message, history);
   const config = await loadModelRuntimeConfig(userId);
   const intent = context?.intent ?? fallback.intent;
 
@@ -515,7 +532,7 @@ export async function createStreamingAgentResponseForUser(
   onDelta: ModelDeltaHandler,
   signal?: AbortSignal
 ): Promise<AgentResponse> {
-  const fallback = createAgentResponse(message);
+  const fallback = createAgentResponse(message, history);
   const config = await loadModelRuntimeConfig(userId);
   const intent = context?.intent ?? fallback.intent;
 

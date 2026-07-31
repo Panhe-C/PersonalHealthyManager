@@ -706,7 +706,8 @@ Sleep Score: 78
 Main Sleep: 7h 22min
 Deep Sleep Ratio: 15%
 Light Sleep Ratio: 58%
-REM Ratio: 24%`)
+REM Ratio: 24%
+Awake Ratio: 3%`)
                 }
               ]
             }
@@ -741,7 +742,15 @@ Estimated Full Recovery: 11h`)
     expect(result).toEqual({ activities: 0, sleep: 1, recovery: 1 });
     expect(mocks.tx.sleepRecord.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        create: expect.objectContaining({ date: new Date("2026-06-08T00:00:00+08:00"), durationMinutes: 442, qualityScore: 78 })
+        create: expect.objectContaining({
+          date: new Date("2026-06-08T00:00:00+08:00"),
+          durationMinutes: 442,
+          qualityScore: 78,
+          deepSleepMinutes: 66,
+          lightSleepMinutes: 256,
+          remSleepMinutes: 106,
+          awakeMinutes: 13
+        })
       })
     );
     expect(mocks.tx.recoveryRecord.upsert).toHaveBeenCalledWith(

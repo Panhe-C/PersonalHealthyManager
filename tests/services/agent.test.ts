@@ -59,6 +59,24 @@ describe("agent response shell", () => {
     expect(response.intent).toBe("menu_advice");
   });
 
+  it("keeps the prior health intent for an explicit COROS follow-up", () => {
+    const response = createAgentResponse("从 coros 的 mcp 查一下看看", [
+      { role: "user", content: "看下我昨晚的睡眠数据" },
+      { role: "assistant", content: "目前没有昨晚的同步结果。" }
+    ]);
+
+    expect(response.intent).toBe("recovery_check");
+  });
+
+  it("does not carry an unrelated intent into a COROS follow-up", () => {
+    const response = createAgentResponse("从 coros 的 mcp 查一下看看", [
+      { role: "user", content: "帮我把训练写入飞书日历" },
+      { role: "assistant", content: "我可以先生成日历草稿。" }
+    ]);
+
+    expect(response.intent).toBe("general");
+  });
+
   it("calls the configured OpenAI-compatible model when settings are available", async () => {
     vi.mocked(loadModelRuntimeConfig).mockResolvedValue({
       provider: "deepseek",
