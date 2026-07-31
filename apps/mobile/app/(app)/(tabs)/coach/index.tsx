@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ElementRef } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import { Animated, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { ArrowDown, Brain, History, Leaf, Pencil, Send, SquarePen, Trash2 } from "lucide-react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigation } from "expo-router";
@@ -374,8 +374,7 @@ export default function CoachTab() {
                   contentContainerStyle={styles.messageList}
                   onContentSizeChange={() => messageScrollRef.current?.scrollToEnd({ animated: false })}
                 >
-                {sending ? <Text size="subheadline" color={tokens.labelSecondary}>Coach 正在回复...</Text> : null}
-                  {visibleMessages.map((message) => (
+                {visibleMessages.map((message) => (
                     <MessageBubble key={message.id} message={message} onUndo={(adjustment) => undoMutation.mutate(adjustment.id)} />
                   ))}
                 </ScrollView>
@@ -585,14 +584,72 @@ export default function CoachTab() {
   );
 }
 
+const THINKING_WORDS = ["思考中", "分析中", "整理回答中"];
+
+/** Animated pre-delta indicator: three staggered pulsing dots plus a label
+ *  that cycles through 思考中 / 分析中 / 整理回答中. */
+function ThinkingIndicator() {
+  const { tokens } = useTheme();
+  const [wordIndex, setWordIndex] = useState(0);
+  const dots = useRef([0, 1, 2].map(() => new Animated.Value(0.35))).current;
+
+  useEffect(() => {
+    const loops = dots.map((dot, index) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(index * 180),
+          Animated.timing(dot, { toValue: 1, duration: 320, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0.35, duration: 320, useNativeDriver: true })
+        ])
+      )
+    );
+    loops.forEach((loop) => loop.start());
+    const timer = setInterval(() => setWordIndex((index) => (index + 1) % THINKING_WORDS.length), 1800);
+    return () => {
+      loops.forEach((loop) => loop.stop());
+      clearInterval(timer);
+    };
+  }, [dots]);
+
+  return (
+    <View
+      style={styles.thinkingRow}
+      accessible
+      accessibilityLabel="教练正在思考，请稍候"
+      accessibilityLiveRegion="polite"
+    >
+      <View style={styles.thinkingDots}>
+        {dots.map((dot, index) => (
+          <Animated.View
+            key={index}
+            style={[styles.thinkingDot, { backgroundColor: tokens.labelSecondary, opacity: dot }]}
+          />
+        ))}
+      </View>
+      <Text size="subheadline" color={tokens.labelSecondary}>
+        {THINKING_WORDS[wordIndex]}…
+      </Text>
+    </View>
+  );
+}
+
 function MessageBubble({ message, onUndo }: { message: AgentMessage; onUndo: (adjustment: AgentAdjustment) => void }) {
   const { tokens, isDark } = useTheme();
   const isUser = message.role === "user";
 
-  // The streaming flow appends an empty assistant placeholder up front; keep
-  // it invisible until the first delta lands, so there is no blank bubble.
+  // The streaming flow appends an empty assistant placeholder up front; while
+  // it is empty, show the animated thinking bubble instead of a blank one.
   if (!isUser && message.content.trim() === "" && !message.adjustments?.length) {
-    return null;
+    return (
+      <View style={[styles.messageRow, styles.assistantMessageRow]}>
+        <View style={[styles.assistantAvatar, { borderColor: tokens.tint }]}>
+          <Leaf color={tokens.tint} size={19} strokeWidth={1.6} />
+        </View>
+        <View style={[styles.assistantContent, styles.thinkingBubble, { backgroundColor: tokens.surface }, cardShadow(isDark ? "dark" : "light")]}>
+          <ThinkingIndicator />
+        </View>
+      </View>
+    );
   }
 
   if (!isUser) {
@@ -806,6 +863,10 @@ const styles = StyleSheet.create({
   suggestionCard: { borderRadius: radius.sheet, borderWidth: 1, maxWidth: 240, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   suggestionList: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   suggestionStrip: { flexGrow: 0 },
+  thinkingBubble: { flex: 0, flexGrow: 0 },
+  thinkingDot: { borderRadius: 3, height: 6, width: 6 },
+  thinkingDots: { flexDirection: "row", gap: 4 },
+  thinkingRow: { alignItems: "center", flexDirection: "row", gap: spacing.sm, paddingVertical: 2 },
   userBubble: { borderRadius: radius.bubble, maxWidth: "82%", paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   userMessageRow: { justifyContent: "flex-end" }
 });
