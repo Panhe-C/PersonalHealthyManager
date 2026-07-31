@@ -137,6 +137,10 @@ model SleepRecord {
   sleepEnd        DateTime?
   durationMinutes Int
   qualityScore    Int?
+  deepSleepMinutes  Int?
+  lightSleepMinutes Int?
+  remSleepMinutes   Int?
+  awakeMinutes      Int?
   metadataJson    String
   createdAt       DateTime  @default(now())
 

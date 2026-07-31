@@ -29,6 +29,14 @@ export type CorosSleepPayload = {
   durationMinutes: number;
   score?: number;
   qualityScore?: number;
+  deepSleepMinutes?: number;
+  lightSleepMinutes?: number;
+  remSleepMinutes?: number;
+  awakeMinutes?: number;
+  deepSleepRatio?: number;
+  lightSleepRatio?: number;
+  remRatio?: number;
+  awakeRatio?: number;
 };
 
 export type CorosRecoveryPayload = {
@@ -106,6 +114,16 @@ function normalizeDateOnly(date: string): Date {
   return parseRequiredDate(date, "date");
 }
 
+function sleepStageMinutes(
+  minutes: number | undefined,
+  ratio: number | undefined,
+  durationMinutes: number
+) {
+  if (minutes !== undefined) return minutes;
+  if (ratio === undefined) return undefined;
+  return Math.round(durationMinutes * ratio / 100);
+}
+
 function getSourceId(payload: CorosActivityPayload, startedAt: Date, endedAt: Date): string {
   const labelId = payload.labelId?.trim();
 
@@ -149,6 +167,10 @@ export function normalizeCorosSleep(payload: CorosSleepPayload): NormalizedSleep
     sleepEnd: toValidDate(payload.sleepEnd) ?? undefined,
     durationMinutes: payload.durationMinutes,
     qualityScore: payload.qualityScore ?? payload.score,
+    deepSleepMinutes: sleepStageMinutes(payload.deepSleepMinutes, payload.deepSleepRatio, payload.durationMinutes),
+    lightSleepMinutes: sleepStageMinutes(payload.lightSleepMinutes, payload.lightSleepRatio, payload.durationMinutes),
+    remSleepMinutes: sleepStageMinutes(payload.remSleepMinutes, payload.remRatio, payload.durationMinutes),
+    awakeMinutes: sleepStageMinutes(payload.awakeMinutes, payload.awakeRatio, payload.durationMinutes),
     metadata: { ...payload }
   };
 }

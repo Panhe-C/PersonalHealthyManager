@@ -134,7 +134,7 @@ The adapter parses SSE `data:` records:
 - Append `choices[0].delta.content` when it is a string.
 - Record `choices[0].finish_reason`.
 - Treat `[DONE]` as transport completion, not proof of a successful finish.
-- Reject a `length` finish reason as incomplete.
+- Mark a `length` finish reason as truncated and keep the accumulated text.
 - Reject an EOF without a recognized terminal record.
 - Parse an error response as JSON when the provider returns a non-2xx status.
 
@@ -150,7 +150,7 @@ events:
 - `message_delta` records `delta.stop_reason`.
 - `message_stop` marks transport completion.
 - `error` fails the model stream.
-- `max_tokens` is treated as incomplete.
+- `max_tokens` is treated as truncated, keeping the accumulated text.
 
 ### Rule Fallback
 
@@ -161,12 +161,18 @@ If the provider fails before any safe visible text is emitted, the existing
 local fallback response is streamed and finalized with `source: "rules"` and
 the provider error attached.
 
-If the provider fails, disconnects, or reports truncation after visible deltas
-have been emitted, the server must not execute actions or apply memories from
-the incomplete output. The `final` event replaces the partial draft with the
-existing local fallback response and includes the provider error. This keeps
-the current fail-closed behavior even though the user may briefly see partial
-model text.
+If the provider fails or disconnects after visible deltas have been emitted,
+the server must not execute actions or apply memories from the incomplete
+output. The `final` event replaces the partial draft with the existing local
+fallback response and includes the provider error. This keeps the current
+fail-closed behavior even though the user may briefly see partial model text.
+
+Truncation is handled differently from failure. When the provider reports that
+it hit the output token limit but produced usable text, the answer is kept:
+`final` carries `source: "model"`, `truncated: true`, the provider error, and
+the partial explanation plus a server note telling the user the reply was cut
+short. Actions and memories from a truncated reply are still skipped, so the
+turn stays fail-closed for side effects while the user keeps the analysis.
 
 ## Safe Visible-Text Filtering
 
@@ -287,7 +293,8 @@ platform-specific because Web uses global `fetch` while iOS uses `expo/fetch`.
   server can still write; otherwise the client detects abrupt EOF.
 - Client cancellation aborts the provider call and skips finalization.
 - No action or memory is executed until the provider reports a complete,
-  non-truncated response.
+  non-truncated response. A truncated reply keeps its text but executes
+  nothing.
 - A malformed control block may produce warnings, as it does today, but cannot
   leak into visible deltas.
 

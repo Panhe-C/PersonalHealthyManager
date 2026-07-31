@@ -319,6 +319,9 @@ describe("warm card mobile UI", () => {
     expect(source).toContain("压力");
     expect(source).toContain("较周均");
     expect(source).toContain("styles.submitWrap");
+    expect(source).toContain("RefreshControl");
+    expect(source).toContain("syncCoros({ days: RECENT_SYNC_DAYS })");
+    expect(source).toContain("days={RECENT_SYNC_DAYS}");
   });
 
   it("aligns the settings detail pages with the in-page-header rhythm", () => {
@@ -355,6 +358,49 @@ describe("warm card mobile UI", () => {
     expect(source).toContain("buildWeek");
     expect(source).toContain("minutesByDay");
     expect(source).toContain("dominantIntensityByDay");
+    expect(source).toContain("activitiesForDateKeys");
+    expect(source.match(/<ExpandingCard/g)).toHaveLength(3);
+    expect(source).toContain("RecordsDetailScreen");
+    expect(source).toContain("ActivityFrequencyDashboard");
+    expect(source).toContain("ActivitySessionDetails");
+    expect(source).toContain("SleepWeekDashboard");
+    expect(source).not.toContain("expandedCard ===");
+
+    const dashboard = read("./components/ActivityFrequencyDashboard.tsx");
+    expect(dashboard).toContain("活跃日");
+    expect(dashboard).toContain("每周运动次数");
+    expect(dashboard).toContain("运动类型");
+    expect(dashboard).toContain("强度构成");
+    expect(dashboard).toContain("strokeDashoffset");
+
+    const sessionDetails = read("./components/ActivitySessionDetails.tsx");
+    expect(sessionDetails).toContain("平均心率");
+    expect(sessionDetails).toContain("平均配速");
+    expect(sessionDetails).toContain("训练负荷");
+    expect(sessionDetails).toContain("平均速度");
+    expect(sessionDetails).toContain("AskAiButton");
+    expect(sessionDetails).toContain("onAskAi");
+
+    const sleepDashboard = read("./components/SleepWeekDashboard.tsx");
+    expect(sleepDashboard).toContain("时长达标");
+    expect(sleepDashboard).toContain("平均质量");
+    expect(sleepDashboard).toContain("睡眠阶段占比");
+    expect(sleepDashboard).toContain("本周睡眠质量");
+    expect(sleepDashboard).toContain("逐晚记录");
+    expect(sleepDashboard).toContain("AskAiButton");
+    expect(sleepDashboard).toContain("onAskAi");
+
+    expect(source).toContain("openCoachWithPrompt");
+    expect(source).toContain('pathname: "/(app)/(tabs)/coach"');
+
+    const expandingCard = read("./components/ExpandingCard.tsx");
+    expect(expandingCard).toContain("measureInWindow");
+    expect(expandingCard).toContain('animationType="none"');
+    expect(expandingCard).toContain("Easing.bezier(0.32, 0.72, 0, 1)");
+    expect(expandingCard).toContain("reduceMotion");
+    expect(expandingCard).toContain("accessibilityState={{ expanded: visible }}");
+    expect(expandingCard).toContain("translateY");
+    expect(expandingCard).toContain("0.72, 0.9, 1");
   });
 
   it("extends the Insights analysis group with HRV and resting heart rate", () => {

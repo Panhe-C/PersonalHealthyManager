@@ -260,7 +260,9 @@ const PROFILE_TOOL_PATTERNS = ["userinfo", "user_info", "profile"];
 const RESTING_HR_TOOL_PATTERNS = ["restingheartrate", "resting_heart_rate", "resting_hr"];
 const STRESS_TOOL_PATTERNS = ["stresslevel", "stress_level"];
 const SLEEP_HRV_TOOL_PATTERNS = ["sleephrv", "sleep_hrv"];
-const COROS_SYNC_LOOKBACK_DAYS = 14;
+export const COROS_SYNC_LOOKBACK_DAYS = 14;
+export const COROS_SYNC_MIN_DAYS = 1;
+export const COROS_SYNC_MAX_DAYS = 30;
 const COROS_SYNC_TIMEZONE = "Asia/Shanghai";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -284,6 +286,10 @@ type CorosTextSleep = {
   date: string;
   durationMinutes: number;
   qualityScore?: number;
+  deepSleepMinutes?: number;
+  lightSleepMinutes?: number;
+  remSleepMinutes?: number;
+  awakeMinutes?: number;
 };
 type CorosTextRecovery = {
   date: string;
@@ -322,10 +328,16 @@ function compactDateInTimeZone(date: Date, timeZone: string): string {
   return `${year}${month}${day}`;
 }
 
-function recentCorosSyncWindow(now = new Date()): CorosSyncWindow {
+export function clampCorosSyncDays(days: number | undefined): number {
+  if (typeof days !== "number" || !Number.isFinite(days)) return COROS_SYNC_LOOKBACK_DAYS;
+  return Math.min(COROS_SYNC_MAX_DAYS, Math.max(COROS_SYNC_MIN_DAYS, Math.round(days)));
+}
+
+export function recentCorosSyncWindow(now = new Date(), days = COROS_SYNC_LOOKBACK_DAYS): CorosSyncWindow {
+  const lookbackDays = clampCorosSyncDays(days);
   return {
-    days: COROS_SYNC_LOOKBACK_DAYS,
-    startDate: compactDateInTimeZone(new Date(now.getTime() - (COROS_SYNC_LOOKBACK_DAYS - 1) * DAY_MS), COROS_SYNC_TIMEZONE),
+    days: lookbackDays,
+    startDate: compactDateInTimeZone(new Date(now.getTime() - (lookbackDays - 1) * DAY_MS), COROS_SYNC_TIMEZONE),
     endDate: compactDateInTimeZone(now, COROS_SYNC_TIMEZONE)
   };
 }
@@ -383,7 +395,10 @@ function toolArguments(kind: CorosSyncKind, tool: McpTool, window: CorosSyncWind
   return Object.fromEntries(Object.entries(defaults).filter(([key]) => key in properties));
 }
 
-export async function fetchCorosRemoteMcpSnapshot(connection: DataMcpConnection): Promise<CorosRemoteMcpSnapshot> {
+export async function fetchCorosRemoteMcpSnapshot(
+  connection: DataMcpConnection,
+  options?: { days?: number }
+): Promise<CorosRemoteMcpSnapshot> {
   if (!connection.endpoint) throw new Error("COROS MCP endpoint is not configured.");
 
   const authHeaders = buildDataMcpAuthHeaders(connection);
@@ -423,7 +438,7 @@ export async function fetchCorosRemoteMcpSnapshot(connection: DataMcpConnection)
   };
 
   const errors: string[] = [];
-  const syncWindow = recentCorosSyncWindow();
+  const syncWindow = recentCorosSyncWindow(new Date(), options?.days);
 
   if (activityTool) {
     try {
@@ -726,11 +741,28 @@ function parseSleepDataText(text: string): CorosTextSleep[] {
     if (durationMinutes == null) return [];
 
     const score = block.match(/Sleep Score:\s*(\d+)/);
+    const stageMinutes = (label: string) => {
+      const direct = block.match(new RegExp(`${label}(?: Sleep)?(?: Duration)?:\\s*([^\\n]+)`, "i"));
+      if (direct) {
+        const parsed = parseDurationMinutes(direct[1]);
+        if (parsed != null) return parsed;
+      }
+      const ratio = block.match(new RegExp(`${label}(?: Sleep)? Ratio:\\s*(\\d+(?:\\.\\d+)?)%`, "i"));
+      return ratio ? Math.round(durationMinutes * Number(ratio[1]) / 100) : undefined;
+    };
+    const deepSleepMinutes = stageMinutes("Deep");
+    const lightSleepMinutes = stageMinutes("Light");
+    const remSleepMinutes = stageMinutes("REM");
+    const awakeMinutes = stageMinutes("Awake");
     return [
       {
         date: date[1],
         durationMinutes,
-        ...(score ? { qualityScore: Number(score[1]) } : {})
+        ...(score ? { qualityScore: Number(score[1]) } : {}),
+        ...(deepSleepMinutes != null ? { deepSleepMinutes } : {}),
+        ...(lightSleepMinutes != null ? { lightSleepMinutes } : {}),
+        ...(remSleepMinutes != null ? { remSleepMinutes } : {}),
+        ...(awakeMinutes != null ? { awakeMinutes } : {})
       }
     ];
   });

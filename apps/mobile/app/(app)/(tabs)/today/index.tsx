@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { useCallback, useState } from "react";
+import { RefreshControl, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -12,8 +12,10 @@ import { useFeedback } from "../../../../src/components/Feedback";
 import { EmptyState, Spinner } from "../../../../src/components/States";
 import { TextField } from "../../../../src/components/TextField";
 import { ReadinessRing } from "../../../../src/components/QuietHealth";
+import { RecentSyncIndicator } from "../../../../src/components/RecentSyncIndicator";
 import { WarmHeader, WarmHeaderButton } from "../../../../src/components/WarmHeader";
 import { useRecoveryQuery, useTodayOverviewQuery } from "../../../../src/api/hooks";
+import { syncCoros } from "../../../../src/api/sync";
 import { completeTrainingTask } from "../../../../src/api/training";
 import {
   APP_TIME_ZONE,
@@ -27,6 +29,8 @@ import type { TodayOverview } from "../../../../src/api/schemas";
 type TodayTask = TodayOverview["todayTasks"][number];
 type ChecklistStatus = TodayTask["checklistItems"][number]["status"];
 
+const RECENT_SYNC_DAYS = 2;
+
 const weekdayFormat = new Intl.DateTimeFormat("zh-CN", {
   timeZone: APP_TIME_ZONE,
   weekday: "short"
@@ -38,9 +42,11 @@ function weekdayLabel(value: string): string {
 }
 
 /** Latest value vs the week's average for one recovery metric (resting heart
- *  rate, stress). Nulls are dropped from the average; missing latest → null. */
+ *  rate, stress). The newest record often has only the recovery percent, so
+ *  the value comes from the most recent record that carries the field; nulls
+ *  are dropped from the average; missing data → null. */
 function vitalDelta(records: { restingHeartRateBpm?: number | null; stressLevel?: number | null }[], key: "restingHeartRateBpm" | "stressLevel") {
-  const latest = records[0]?.[key] ?? null;
+  const latest = records.find((record) => record[key] != null)?.[key] ?? null;
   const values = records.flatMap((record) => (record[key] == null ? [] : [record[key]!]));
   const average = values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : null;
   const delta = latest != null && average != null ? latest - average : null;
@@ -53,6 +59,9 @@ export default function TodayTab() {
   const { tokens, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { notify } = useFeedback();
+  const [refreshing, setRefreshing] = useState(false);
   const shadow = cardShadow(isDark ? "dark" : "light");
   const recovery = typeof data?.latestRecovery?.recoveryPercent === "number" ? data.latestRecovery.recoveryPercent : 0;
   const sleepMinutes = typeof data?.latestSleep?.durationMinutes === "number" ? data.latestSleep.durationMinutes : null;
@@ -61,12 +70,50 @@ export default function TodayTab() {
   const heartRate = vitalDelta(recoveryWeek.data ?? [], "restingHeartRateBpm");
   const stress = vitalDelta(recoveryWeek.data ?? [], "stressLevel");
 
+  const refreshRecentData = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const result = await syncCoros({ days: RECENT_SYNC_DAYS });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["today"] }),
+        queryClient.invalidateQueries({ queryKey: ["insights"] }),
+        queryClient.invalidateQueries({ queryKey: ["plan", "active"] })
+      ]);
+      notify({
+        title: "近两日数据已同步",
+        description: `运动 ${result.activities} · 睡眠 ${result.sleep} · 恢复 ${result.recovery}`
+      });
+    } catch (err) {
+      notify({
+        tone: "danger",
+        title: "同步失败",
+        description: err instanceof Error ? err.message : "请稍后重试。"
+      });
+    } finally {
+      setRefreshing(false);
+    }
+  }, [notify, queryClient]);
+
   return (
-    <Screen contentContainerStyle={{ gap: spacing.lg, paddingTop: insets.top + spacing.lg }}>
-      {isLoading ? <Spinner /> : error ? (
-        <EmptyState title="今日数据加载失败" description="请确认后端和登录状态仍然可用。" />
-      ) : data ? (
-        <>
+    <View style={[styles.screen, { backgroundColor: tokens.bg }]}>
+      <Screen
+        contentContainerStyle={{ gap: spacing.lg, paddingTop: insets.top + spacing.lg }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              void refreshRecentData();
+            }}
+            tintColor="transparent"
+            colors={["transparent"]}
+            progressBackgroundColor="transparent"
+          />
+        }
+      >
+        {isLoading ? <Spinner /> : error ? (
+          <EmptyState title="今日数据加载失败" description="请确认后端和登录状态仍然可用。" />
+        ) : data ? (
+          <>
           {/* In-page header: the native header is hidden for this tab, so the
               safe-area top inset is applied manually via contentContainerStyle. */}
           <WarmHeader
@@ -180,9 +227,11 @@ export default function TodayTab() {
               </Text>
             </View>
           )}
-        </>
-      ) : null}
-    </Screen>
+          </>
+        ) : null}
+      </Screen>
+      <RecentSyncIndicator visible={refreshing} top={insets.top + spacing.sm} days={RECENT_SYNC_DAYS} />
+    </View>
   );
 }
 
@@ -392,5 +441,6 @@ const styles = StyleSheet.create({
   mealItemName: { flex: 1 },
   mealItemRow: { alignItems: "baseline", flexDirection: "row", gap: spacing.sm, justifyContent: "space-between" },
   rowDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: spacing.lg },
+  screen: { flex: 1 },
   submitWrap: { marginHorizontal: spacing.xs }
 });

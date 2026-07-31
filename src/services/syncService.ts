@@ -178,6 +178,10 @@ export async function importCorosPayload(
         sleepEnd: sleep.sleepEnd,
         durationMinutes: sleep.durationMinutes,
         qualityScore: sleep.qualityScore,
+        deepSleepMinutes: sleep.deepSleepMinutes,
+        lightSleepMinutes: sleep.lightSleepMinutes,
+        remSleepMinutes: sleep.remSleepMinutes,
+        awakeMinutes: sleep.awakeMinutes,
         metadataJson: JSON.stringify(sleep.metadata)
       };
 
@@ -225,12 +229,12 @@ export async function importCorosPayload(
   return { activities: activities.length, sleep: sleepRecords.length, recovery: recoveryRecords.length };
 }
 
-export async function syncCorosFromSettings(userId: string) {
+export async function syncCorosFromSettings(userId: string, options?: { days?: number }) {
   const connection = await loadDataMcpConnection(userId, "coros");
   if (!connection?.enabled) throw new Error("COROS MCP connection is disabled.");
   if (!connection.endpoint) throw new Error("COROS MCP endpoint is not configured.");
 
-  const snapshot = await fetchCorosRemoteMcpSnapshot(connection);
+  const snapshot = await fetchCorosRemoteMcpSnapshot(connection, options);
   return importCorosPayload(userId, snapshot);
 }
 

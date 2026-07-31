@@ -21,4 +21,15 @@ describe("coach conversation lifecycle", () => {
     expect(source).not.toContain("sendMutation");
     expect(source).not.toContain("sendAgentMessage");
   });
+
+  it("auto-sends analysis prompts passed from Insights Ask AI", () => {
+    expect(source).toContain("useLocalSearchParams");
+    expect(source).toContain("consumedAskIdRef");
+    expect(source).toContain("incomingPrompt");
+    expect(source).toContain("if (!submitMessage(prompt)) return;");
+    expect(source).toContain('router.setParams({ prompt: undefined, askId: undefined })');
+    expect(source.indexOf("if (!submitMessage(prompt)) return;")).toBeLessThan(
+      source.indexOf("consumedAskIdRef.current = askId;")
+    );
+  });
 });

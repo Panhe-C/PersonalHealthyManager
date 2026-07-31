@@ -221,6 +221,39 @@ describe("agent action execution", () => {
     );
   });
 
+  it("keeps a truncated reply but skips its actions and memories", async () => {
+    vi.mocked(createAgentResponseForUser).mockResolvedValue({
+      intent: "replan",
+      message: replyWithActions,
+      source: "model",
+      error: "DeepSeek response was cut off before completion.",
+      truncated: true
+    });
+    vi.mocked(prisma.trainingTask.findFirst).mockResolvedValue({
+      id: "t1",
+      intensity: "moderate",
+      planId: "plan-1",
+      date: new Date("2026-06-24"),
+      plan: { id: "plan-1", status: "active" }
+    } as never);
+
+    const response = await POST(
+      new Request("http://localhost/api/agent", {
+        method: "POST",
+        body: JSON.stringify({ conversationId: "conv-1", message: "把周三降为 easy" })
+      })
+    );
+
+    expect(executeAgentAction).not.toHaveBeenCalled();
+    expect(applyMemories).not.toHaveBeenCalled();
+    const body = await response.json();
+    expect(body.source).toBe("model");
+    expect(body.truncated).toBe(true);
+    expect(body.message).toContain("已为你把周三降为 easy");
+    expect(body.message).toContain("回复因长度限制被截断");
+    expect(body.adjustments).toEqual([]);
+  });
+
   it("does not execute actions until streaming generation completes", async () => {
     let complete!: () => void;
     const gate = new Promise<void>((resolve) => {
