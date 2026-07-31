@@ -39,8 +39,12 @@ function weekdayLabel(value: string): string {
 
 /** Latest value vs the week's average for one recovery metric (resting heart
  *  rate, stress). Nulls are dropped from the average; missing latest → null. */
+/** Latest value vs the week's average for one recovery metric (resting heart
+ *  rate, stress). The newest record often has only the recovery percent, so
+ *  the value comes from the most recent record that actually carries the
+ *  field; nulls are dropped from the average; missing data → null. */
 function vitalDelta(records: { restingHeartRateBpm?: number | null; stressLevel?: number | null }[], key: "restingHeartRateBpm" | "stressLevel") {
-  const latest = records[0]?.[key] ?? null;
+  const latest = records.find((record) => record[key] != null)?.[key] ?? null;
   const values = records.flatMap((record) => (record[key] == null ? [] : [record[key]!]));
   const average = values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : null;
   const delta = latest != null && average != null ? latest - average : null;
