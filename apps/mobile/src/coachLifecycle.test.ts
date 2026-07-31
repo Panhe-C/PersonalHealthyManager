@@ -26,7 +26,10 @@ describe("coach conversation lifecycle", () => {
     expect(source).toContain("useLocalSearchParams");
     expect(source).toContain("consumedAskIdRef");
     expect(source).toContain("incomingPrompt");
+    expect(source).toContain("if (!submitMessage(prompt)) return;");
     expect(source).toContain('router.setParams({ prompt: undefined, askId: undefined })');
-    expect(source).toContain("void submitMessage(prompt)");
+    expect(source.indexOf("if (!submitMessage(prompt)) return;")).toBeLessThan(
+      source.indexOf("consumedAskIdRef.current = askId;")
+    );
   });
 });

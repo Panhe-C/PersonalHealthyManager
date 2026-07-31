@@ -266,14 +266,19 @@ export default function CoachTab() {
     createConversationMutation.mutate
   ]);
 
-  async function submitMessage(text = draft) {
+  /** Returns true only after the send gate passes and the optimistic turn is
+   *  queued. Callers that consume one-shot navigation params must check this
+   *  before clearing them, otherwise a rejected gate silently drops the prompt. */
+  function submitMessage(text = draft): boolean {
     const content = text.trim();
     if (!selectedConversationId || !canSubmitCoachMessage({
       content,
       conversationId: selectedConversationId,
       sending,
       conversationMutationPending
-    })) return;
+    })) {
+      return false;
+    }
     const timestamp = Date.now();
     const conversationId = selectedConversationId;
     const userMessage: AgentMessage = { id: `local-user-${timestamp}`, role: "user", content };
@@ -289,42 +294,46 @@ export default function CoachTab() {
     setError(null);
     setMessages((items) => [...items, userMessage, assistantMessage]);
 
-    try {
-      await streamAgentMessage(conversationId, content, {
-        signal: controller.signal,
-        onEvent: (event) => {
-          if (activeSendRef.current?.controller !== controller) return;
-          if (event.type === "delta") {
-            hasVisibleDelta = true;
-            setMessages((items) => appendAssistantDelta(items, assistantMessageId, event.text));
+    void (async () => {
+      try {
+        await streamAgentMessage(conversationId, content, {
+          signal: controller.signal,
+          onEvent: (event) => {
+            if (activeSendRef.current?.controller !== controller) return;
+            if (event.type === "delta") {
+              hasVisibleDelta = true;
+              setMessages((items) => appendAssistantDelta(items, assistantMessageId, event.text));
+            }
+            if (event.type === "final") {
+              completed = true;
+              setMessages((items) => finalizeAssistantMessage(items, assistantMessageId, event));
+              queryClient.setQueryData<Conversation[]>(["agent", "conversations"], (items) => [
+                event.conversation as Conversation,
+                ...(items ?? []).filter((item) => item.id !== event.conversation.id)
+              ]);
+            }
           }
-          if (event.type === "final") {
-            completed = true;
-            setMessages((items) => finalizeAssistantMessage(items, assistantMessageId, event));
-            queryClient.setQueryData<Conversation[]>(["agent", "conversations"], (items) => [
-              event.conversation as Conversation,
-              ...(items ?? []).filter((item) => item.id !== event.conversation.id)
-            ]);
-          }
+        });
+        setError(null);
+        void queryClient.invalidateQueries({ queryKey: ["agent", "conversations", conversationId] });
+        void queryClient.invalidateQueries({ queryKey: ["agent", "memories"] });
+      } catch (err) {
+        if (activeSendRef.current?.controller !== controller) return;
+        if (!hasVisibleDelta && !completed) {
+          setMessages((items) => items.filter((item) => item.id !== assistantMessageId));
         }
-      });
-      setError(null);
-      void queryClient.invalidateQueries({ queryKey: ["agent", "conversations", conversationId] });
-      void queryClient.invalidateQueries({ queryKey: ["agent", "memories"] });
-    } catch (err) {
-      if (activeSendRef.current?.controller !== controller) return;
-      if (!hasVisibleDelta && !completed) {
-        setMessages((items) => items.filter((item) => item.id !== assistantMessageId));
+        if (!(err instanceof Error && err.name === "AbortError")) {
+          setError(hasVisibleDelta ? "回复中断，请重试。" : err instanceof Error ? err.message : "发送失败");
+        }
+      } finally {
+        if (activeSendRef.current?.controller === controller) {
+          activeSendRef.current = null;
+          setSending(false);
+        }
       }
-      if (!(err instanceof Error && err.name === "AbortError")) {
-        setError(hasVisibleDelta ? "回复中断，请重试。" : err instanceof Error ? err.message : "发送失败");
-      }
-    } finally {
-      if (activeSendRef.current?.controller === controller) {
-        activeSendRef.current = null;
-        setSending(false);
-      }
-    }
+    })();
+
+    return true;
   }
 
   const incomingPrompt = Array.isArray(params.prompt) ? params.prompt[0] : params.prompt;
@@ -345,9 +354,9 @@ export default function CoachTab() {
       return;
     }
 
+    if (!submitMessage(prompt)) return;
     consumedAskIdRef.current = askId;
     router.setParams({ prompt: undefined, askId: undefined });
-    void submitMessage(prompt);
   }, [
     conversationDetailQuery.isLoading,
     conversationMutationPending,

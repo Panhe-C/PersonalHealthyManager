@@ -321,6 +321,7 @@ describe("warm card mobile UI", () => {
     expect(source).toContain("styles.submitWrap");
     expect(source).toContain("RefreshControl");
     expect(source).toContain("syncCoros({ days: RECENT_SYNC_DAYS })");
+    expect(source).toContain("days={RECENT_SYNC_DAYS}");
   });
 
   it("aligns the settings detail pages with the in-page-header rhythm", () => {

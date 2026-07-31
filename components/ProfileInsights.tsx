@@ -71,7 +71,14 @@ function hasDateOnlyMetadata(activity: ProfileInsightActivity) {
 
 function formatActivityTimestamp(activity: ProfileInsightActivity) {
   if (hasDateOnlyMetadata(activity)) {
-    return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(activity.startedAt);
+    // Date-only COROS rows are calendar dates in the app timezone; pin the
+    // formatter so UTC CI runners don't shift the day backward.
+    return new Intl.DateTimeFormat("en", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "Asia/Shanghai"
+    }).format(activity.startedAt);
   }
 
   return activity.startedAt.toLocaleString();

@@ -8,11 +8,15 @@ const enterEasing = Easing.bezier(0.23, 1, 0.32, 1);
 
 export function RecentSyncIndicator({
   visible,
-  top
+  top,
+  days = 2
 }: {
   visible: boolean;
   top: number;
+  days?: number;
 }) {
+  const dayLabel = days === 2 ? "近两日" : `近 ${days} 日`;
+
   const { tokens, isDark } = useTheme();
   const [reduceMotion, setReduceMotion] = useState(false);
   const presence = useRef(new Animated.Value(0)).current;
@@ -58,7 +62,7 @@ export function RecentSyncIndicator({
       accessibilityElementsHidden={!visible}
       accessibilityLiveRegion="polite"
       accessibilityRole="progressbar"
-      accessibilityLabel="正在同步近两日数据"
+      accessibilityLabel={`正在同步${dayLabel}数据`}
       importantForAccessibility={visible ? "yes" : "no-hide-descendants"}
       pointerEvents="none"
       style={[
@@ -105,7 +109,7 @@ export function RecentSyncIndicator({
           </Animated.View>
         </View>
         <View style={styles.copy}>
-          <Text size="footnote" weight="semibold">同步近两日</Text>
+          <Text size="footnote" weight="semibold">同步{dayLabel}</Text>
           <Text size="caption2" color={tokens.labelSecondary}>运动 · 睡眠 · 恢复</Text>
         </View>
       </View>

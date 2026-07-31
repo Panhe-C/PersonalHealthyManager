@@ -230,7 +230,7 @@ export default function TodayTab() {
           </>
         ) : null}
       </Screen>
-      <RecentSyncIndicator visible={refreshing} top={insets.top + spacing.sm} />
+      <RecentSyncIndicator visible={refreshing} top={insets.top + spacing.sm} days={RECENT_SYNC_DAYS} />
     </View>
   );
 }
