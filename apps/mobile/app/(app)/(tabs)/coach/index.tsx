@@ -589,6 +589,12 @@ function MessageBubble({ message, onUndo }: { message: AgentMessage; onUndo: (ad
   const { tokens, isDark } = useTheme();
   const isUser = message.role === "user";
 
+  // The streaming flow appends an empty assistant placeholder up front; keep
+  // it invisible until the first delta lands, so there is no blank bubble.
+  if (!isUser && message.content.trim() === "" && !message.adjustments?.length) {
+    return null;
+  }
+
   if (!isUser) {
     return (
       <View style={[styles.messageRow, styles.assistantMessageRow]}>
