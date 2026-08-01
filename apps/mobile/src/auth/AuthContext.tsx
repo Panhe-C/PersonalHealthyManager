@@ -13,7 +13,13 @@ interface AuthContextValue {
    * tokens until the email address is verified.
    */
   signUp: (email: string, password: string) => Promise<void>;
+  /** signUp now requires terms acceptance; the flag is sent with the request. */
   resendVerification: (email: string) => Promise<void>;
+  /**
+   * Resolves for unknown addresses too, so callers must not report back whether
+   * an account exists.
+   */
+  requestPasswordReset: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -44,10 +50,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStatus("authed");
       },
       signUp: async (email, password) => {
-        await api.auth.register(email, password, Intl.DateTimeFormat().resolvedOptions().timeZone);
+        await api.auth.register(email, password, Intl.DateTimeFormat().resolvedOptions().timeZone, true);
       },
       resendVerification: async (email) => {
         await api.auth.resendVerification(email);
+      },
+      requestPasswordReset: async (email) => {
+        await api.auth.forgotPassword(email);
       },
       signOut: async () => {
         const refreshToken = getRefreshToken();

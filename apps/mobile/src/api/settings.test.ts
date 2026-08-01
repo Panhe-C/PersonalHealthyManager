@@ -13,7 +13,7 @@ const tokenStore = vi.hoisted(() => ({
 
 vi.mock("../auth/tokenStore", () => tokenStore);
 
-import { providerModelDefaults, saveSettings, type MobileSettings } from "./settings";
+import { providerCredentialSource, providerModelDefaults, saveSettings, type MobileSettings } from "./settings";
 
 const settings: MobileSettings = {
   modelProvider: "openai",
@@ -89,5 +89,11 @@ describe("mobile settings API", () => {
       baseUrl: "https://api.moonshot.ai/v1"
     });
     expect(providerModelDefaults("custom")).toEqual({ model: "", baseUrl: "" });
+  });
+
+  it("names where a working key comes from before the user pastes one", () => {
+    expect(providerCredentialSource("kimi")).toContain("Kimi 开放平台");
+    expect(providerCredentialSource("glm")).toContain("open.bigmodel.cn");
+    expect(providerCredentialSource("custom")).toBe("");
   });
 });

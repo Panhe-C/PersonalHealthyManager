@@ -12,6 +12,7 @@ import { TextField } from "../../../../src/components/TextField";
 import { useSettingsQuery } from "../../../../src/api/hooks";
 import {
   modelProviderOptions,
+  providerCredentialSource,
   providerModelDefaults,
   providerNeedsManualModel,
   saveSettings,
@@ -100,7 +101,12 @@ export default function ModelSettingsScreen() {
 
       <InsetGroup
         header="凭据"
-        footer="密钥由服务端加密保存，留空会保留现有密钥；模型与地址会随提供方自动匹配。"
+        footer={[
+          providerCredentialSource(draft.modelProvider),
+          "密钥由服务端加密保存，留空会保留现有密钥；模型与地址会随提供方自动匹配。"
+        ]
+          .filter(Boolean)
+          .join("\n\n")}
       >
         <TextField
           label="API Key"

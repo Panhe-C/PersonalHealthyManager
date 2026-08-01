@@ -31,16 +31,16 @@ export default function LoginPage() {
         const body = await response.json().catch(() => null);
         if (body?.code === "email_unverified") {
           setNeedsVerification(true);
-          setError("Verify your email address before signing in.");
+          setError("请先完成邮箱验证再登录。");
           return;
         }
-        setError("Invalid email or password");
+        setError("邮箱或密码不正确");
         return;
       }
 
       window.location.href = "/plan";
     } catch {
-      setError("Invalid email or password");
+      setError("邮箱或密码不正确");
     } finally {
       setIsSubmitting(false);
     }
@@ -59,11 +59,11 @@ export default function LoginPage() {
 
       setResendNotice(
         response.ok
-          ? "A new verification link is on its way."
-          : "Too many requests just now. Wait a few minutes before trying again."
+          ? "新的验证邮件已发出。"
+          : "请求过于频繁，请稍后再试。"
       );
     } catch {
-      setResendNotice("Could not reach the server. Try again later.");
+      setResendNotice("无法连接服务器，请稍后再试。");
     } finally {
       setIsResending(false);
     }
@@ -74,30 +74,30 @@ export default function LoginPage() {
       <div className="login-layout">
         <section className="login-preview" aria-label="Product preview">
           <div className="preview-header">
-            <span className="eyebrow">Today&apos;s coaching view</span>
-            <h2>Plan around recovery, schedule, and meals.</h2>
+            <span className="eyebrow">今日教练视图</span>
+            <h2>围绕恢复、日程与饮食做计划。</h2>
             <p className="page-subtitle">
-              Sign in to use your own recovery, calendar, training, and meal data.
+              登录后使用你自己的恢复、日历、训练与饮食数据。
             </p>
           </div>
           <div className="preview-grid">
             <article className="preview-card preview-card-primary">
               <HeartPulse aria-hidden="true" size={18} />
-              <span>Recovery</span>
+              <span>恢复</span>
               <strong>82%</strong>
-              <p>Suitable for a moderate session.</p>
+              <p>适合一次中等强度训练。</p>
             </article>
             <article className="preview-card">
               <Moon aria-hidden="true" size={18} />
-              <span>Sleep</span>
+              <span>睡眠</span>
               <strong>7.6h</strong>
-              <p>Latest synced duration.</p>
+              <p>最近一次同步时长。</p>
             </article>
             <article className="preview-card preview-card-wide">
               <CalendarCheck2 aria-hidden="true" size={18} />
-              <span>Next training window</span>
-              <strong>Tue 18:00</strong>
-              <p>Draft events stay pending until you confirm them.</p>
+              <span>下一个训练窗口</span>
+              <strong>周二 18:00</strong>
+              <p>草稿事件需你确认后才会写入日历。</p>
             </article>
           </div>
         </section>
@@ -108,14 +108,14 @@ export default function LoginPage() {
               <Activity aria-hidden="true" size={18} />
             </span>
             <div>
-              <span className="eyebrow">Personal recovery journal</span>
-              <h1>Healthy Body Manager</h1>
-              <p className="page-subtitle">Sign in to continue</p>
+              <span className="eyebrow">个人恢复日记</span>
+              <h1>健康身体管家</h1>
+              <p className="page-subtitle">登录以继续</p>
             </div>
           </div>
 
           <label className="field">
-            Email
+            邮箱
             <input
               autoComplete="email"
               name="email"
@@ -127,7 +127,7 @@ export default function LoginPage() {
           </label>
 
           <label className="field">
-            Password
+            密码
             <input
               autoComplete="current-password"
               name="password"
@@ -157,18 +157,22 @@ export default function LoginPage() {
                 onClick={resendVerification}
                 disabled={isResending}
               >
-                {isResending ? "Sending..." : "Resend the verification email"}
+                {isResending ? "发送中…" : "重新发送验证邮件"}
               </button>
             </>
           ) : null}
 
           <button className="button login-submit" type="submit" disabled={isSubmitting}>
             <LogIn aria-hidden="true" size={18} />
-            {isSubmitting ? "Signing in..." : "Sign in"}
+            {isSubmitting ? "登录中…" : "登录"}
           </button>
 
           <p className="auth-alt">
-            No account yet? <Link href="/register">Create one</Link>
+            <Link href="/forgot-password">忘记密码？</Link>
+          </p>
+
+          <p className="auth-alt">
+            还没有账号？ <Link href="/register">去注册</Link>
           </p>
         </form>
       </div>

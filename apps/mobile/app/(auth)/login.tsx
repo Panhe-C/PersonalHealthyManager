@@ -79,6 +79,7 @@ export default function LoginScreen() {
           <Button title={busy ? "发送中…" : "重新发送验证邮件"} variant="plain" onPress={resend} disabled={busy} />
         )}
         <Button title={busy ? "登录中…" : "登录"} onPress={submit} disabled={busy} />
+        <Button title="忘记密码？" variant="plain" onPress={() => router.push("/(auth)/forgot-password")} />
         <Button title="还没有账号？去注册" variant="plain" onPress={() => router.push("/(auth)/register")} />
       </View>
     </Screen>

@@ -6,6 +6,7 @@ import { MessageSquare, Plus, Send, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ActionButton } from "@/components/ActionButton";
 import { AgentMemoryPanel } from "@/components/AgentMemoryPanel";
+import { HealthDisclaimer } from "@/components/HealthDisclaimer";
 import {
   AGENT_STREAM_MEDIA_TYPE,
   createAgentStreamParser,
@@ -614,6 +615,9 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
                         </div>
                       ))
                     : null}
+                  {item.role === "assistant" && item.content ? (
+                    <HealthDisclaimer />
+                  ) : null}
                 </div>
               </div>
             ))

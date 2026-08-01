@@ -1522,6 +1522,238 @@ h3 {
   margin-bottom: 7px;
 }
 
+.disclaimer-footnote,
+.disclaimer-callout {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+  font-size: 12.5px;
+}
+
+.disclaimer-footnote {
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+
+.disclaimer-callout {
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--clay-soft);
+  border: 1px solid color-mix(in oklch, var(--clay) 22%, var(--line));
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.disclaimer-footnote svg,
+.disclaimer-callout svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--clay);
+}
+
+.disclaimer-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: color-mix(in oklch, var(--ink) 45%, transparent);
+  backdrop-filter: blur(3px);
+}
+
+.disclaimer-gate-card {
+  max-width: 460px;
+  display: grid;
+  gap: 14px;
+  padding: 28px;
+  text-align: left;
+}
+
+.disclaimer-gate-card .brand-mark {
+  background: var(--clay-soft);
+  color: var(--clay);
+}
+
+.disclaimer-gate-card h2 {
+  margin: 0;
+  font-size: 19px;
+}
+
+.disclaimer-gate-card p {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.6;
+  font-size: 14.5px;
+}
+
+.onboarding-card {
+  max-width: 560px;
+}
+
+.onboarding-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.onboarding-step {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel-soft);
+}
+
+.onboarding-step-done {
+  background: var(--sage-soft);
+  border-color: color-mix(in oklch, var(--sage) 24%, var(--line));
+}
+
+.onboarding-step-icon {
+  display: grid;
+  place-items: center;
+  color: var(--sage);
+}
+
+.onboarding-step-body {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.onboarding-step-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-strong);
+  font-size: 14.5px;
+}
+
+.onboarding-step-title svg {
+  color: var(--muted);
+}
+
+.onboarding-step-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.onboarding-step-status {
+  color: var(--sage);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.onboarding-step-cta {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+.onboarding-disclaimer {
+  margin: 4px 0;
+}
+
+.public-shell {
+  min-height: 100dvh;
+  background: var(--bg);
+  padding: 32px 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.public-card {
+  width: 100%;
+  max-width: 720px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: clamp(24px, 4vw, 40px);
+}
+
+.public-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.public-back {
+  color: var(--tint, var(--sage));
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.policy-doc {
+  color: var(--ink);
+  line-height: 1.7;
+  font-size: 15px;
+}
+
+.policy-doc h1 {
+  font-size: 26px;
+  margin: 0 0 6px;
+}
+
+.policy-doc h2 {
+  font-size: 18px;
+  margin: 28px 0 10px;
+}
+
+.policy-doc p,
+.policy-doc ul {
+  margin: 0 0 12px;
+}
+
+.policy-doc ul {
+  padding-left: 20px;
+}
+
+.policy-doc li {
+  margin-bottom: 6px;
+}
+
+.policy-doc a {
+  color: var(--sage-strong);
+}
+
+.policy-meta {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 20px !important;
+}
+
+.field-checkbox {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.field-checkbox input {
+  margin-top: 3px;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--sage);
+}
+
+.field-checkbox a {
+  color: var(--sage-strong);
+}
+
 .setup-steps {
   display: grid;
   gap: 10px;

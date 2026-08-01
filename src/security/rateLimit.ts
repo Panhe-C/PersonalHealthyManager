@@ -1,7 +1,11 @@
-type Bucket = {
-  count: number;
-  resetAt: number;
-};
+import {
+  getRateLimitStore,
+  resetRateLimitStoreForTests,
+  resolveRateLimitStore,
+  setRateLimitStore
+} from "@/src/security/rateLimitStore";
+
+setRateLimitStore(resolveRateLimitStore());
 
 type RateLimitOptions = {
   key: string;
@@ -18,38 +22,40 @@ type RateLimitResult = {
   retryAfterSeconds: number;
 };
 
-const globalState = globalThis as typeof globalThis & {
-  __hbmRateLimitBuckets?: Map<string, Bucket>;
-};
-
-const buckets = globalState.__hbmRateLimitBuckets ?? new Map<string, Bucket>();
-globalState.__hbmRateLimitBuckets = buckets;
-
-function pruneExpired(now: number) {
-  if (buckets.size < 1_000) return;
-  for (const [key, bucket] of buckets) {
-    if (bucket.resetAt <= now) buckets.delete(key);
-  }
-}
-
 export function consumeRateLimit(options: RateLimitOptions): RateLimitResult {
   const now = options.now ?? Date.now();
-  pruneExpired(now);
-  const current = buckets.get(options.key);
-  const bucket = !current || current.resetAt <= now
-    ? { count: 0, resetAt: now + options.windowMs }
-    : current;
+  const store = getRateLimitStore();
+  const bucketOrPromise = store.consume(options.key, options.limit, options.windowMs, now);
 
-  bucket.count += 1;
-  buckets.set(options.key, bucket);
+  // The default memory store is synchronous; Redis is async. Callers today are
+  // sync API routes, so we only accept a Promise when the result is already
+  // settled (tests) and otherwise require the sync memory path. Async Redis
+  // call sites should use consumeRateLimitAsync.
+  if (bucketOrPromise instanceof Promise) {
+    throw new Error("Use consumeRateLimitAsync when the rate-limit store is asynchronous");
+  }
+
+  const bucket = bucketOrPromise;
   const remaining = Math.max(0, options.limit - bucket.count);
-
   return {
     allowed: bucket.count <= options.limit,
     limit: options.limit,
     remaining,
     resetAt: bucket.resetAt,
-    retryAfterSeconds: Math.max(1, Math.ceil((bucket.resetAt - now) / 1_000)),
+    retryAfterSeconds: Math.max(1, Math.ceil((bucket.resetAt - now) / 1_000))
+  };
+}
+
+export async function consumeRateLimitAsync(options: RateLimitOptions): Promise<RateLimitResult> {
+  const now = options.now ?? Date.now();
+  const bucket = await getRateLimitStore().consume(options.key, options.limit, options.windowMs, now);
+  const remaining = Math.max(0, options.limit - bucket.count);
+  return {
+    allowed: bucket.count <= options.limit,
+    limit: options.limit,
+    remaining,
+    resetAt: bucket.resetAt,
+    retryAfterSeconds: Math.max(1, Math.ceil((bucket.resetAt - now) / 1_000))
   };
 }
 
@@ -63,10 +69,10 @@ export function rateLimitHeaders(result: RateLimitResult) {
     "RateLimit-Limit": String(result.limit),
     "RateLimit-Remaining": String(result.remaining),
     "RateLimit-Reset": String(Math.ceil(result.resetAt / 1_000)),
-    ...(result.allowed ? {} : { "Retry-After": String(result.retryAfterSeconds) }),
+    ...(result.allowed ? {} : { "Retry-After": String(result.retryAfterSeconds) })
   };
 }
 
 export function resetRateLimitsForTests() {
-  buckets.clear();
+  resetRateLimitStoreForTests();
 }

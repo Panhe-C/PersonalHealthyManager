@@ -4,3 +4,4 @@ export * from "./plan";
 export * from "./agent";
 export * from "./agentStream";
 export * from "./insights";
+export * from "./onboarding";

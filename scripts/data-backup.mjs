@@ -33,6 +33,19 @@ async function main() {
   await writeFile(`${outputPath}.json`, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 });
   console.log(`Backup ready: ${outputPath}`);
   console.log(`SHA-256: ${manifest.sha256}`);
+
+  // Optional offsite copy (another volume, rclone mount, NAS). Failures here
+  // must not undo a successful local backup — they only surface as an error exit
+  // so LaunchAgent/cron can alert.
+  const offsiteDir = process.env.HBM_BACKUP_OFFSITE_DIR?.trim();
+  if (offsiteDir) {
+    const { copyFile, mkdir } = await import("node:fs/promises");
+    await mkdir(offsiteDir, { recursive: true });
+    const offsiteDb = path.join(offsiteDir, path.basename(outputPath));
+    await copyFile(outputPath, offsiteDb);
+    await copyFile(`${outputPath}.json`, `${offsiteDb}.json`);
+    console.log(`Offsite copy: ${offsiteDb}`);
+  }
 }
 
 main().catch((error) => {

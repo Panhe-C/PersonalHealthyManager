@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { registerRequestSchema } from "@hbm/contracts";
 import { normalizeEmail, registerUser } from "@/src/auth/registration";
+import { captureError } from "@/src/observability/logger";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/src/security/rateLimit";
 
 export async function POST(request: Request) {
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json(
       {
-        error: "A valid email and a password of 12 to 128 characters are required",
+        error: "A valid email, a password of 12 to 128 characters, and acceptance of the terms are required",
         code: "invalid_registration",
       },
       { status: 400, headers: rateLimitHeaders(ipLimit) },
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
   try {
     await registerUser({ email, password: parsed.data.password, timezone: parsed.data.timezone });
   } catch (error) {
-    console.error("Registration failed", error);
+    captureError("registration_failed", error);
     return NextResponse.json(
       { error: "Could not send the verification email. Try again later.", code: "verification_send_failed" },
       { status: 502, headers: rateLimitHeaders(addressLimit) },

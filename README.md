@@ -4,13 +4,16 @@ Healthy Body Manager is a personal training, recovery, schedule, and nutrition p
 
 ## First Version
 
-- Self-service registration with email verification, plus email/password login and user-scoped data.
+- Self-service registration with email verification, email/password login, password reset, and user-scoped data.
+- First-run onboarding that walks through body profile, goal, schedule, and plan generation in dependency order, with a standing health disclaimer.
+- Structured JSON logging with redaction, optional error webhook, and request IDs on authenticated routes.
+- Automated SQLite backups with retention, optional offsite copy, LaunchAgent scheduler, and recovery drills.
 - Body profile and active goal management.
 - COROS-style activity, sleep, and recovery import APIs.
 - Feishu Calendar-style schedule import APIs.
 - Conservative weekly training generation from goals, recovery, sleep, injuries, and calendar availability.
 - Daily training checklists that update training history and conservatively adjust the remaining weekly plan.
-- Mock daily menu recommendations and nutrition guidance.
+- Nutrition guidance derived from the goal and the training intensity, plus per-dish recommendations when a meal menu connection is configured.
 - Calendar event drafts that require explicit user confirmation.
 - Persisted Agent conversations for recovery, replanning, menu, and calendar workflows.
 
@@ -40,6 +43,8 @@ The Web App includes a `Sync demo data` command that exercises those same endpoi
 
 Calendar write-back is confirmation-first. Confirming a draft invokes the locally authenticated `lark-cli` user identity to create, update, or delete the corresponding Feishu event. Failed writes retain their error and can be retried; the app never records a mock event ID.
 
+That identity belongs to whoever deployed the server, and the target calendar comes from a single `HBM_LARK_CALENDAR_ID`, so a confirmation from any other account would create the event on the deployer's calendar. Write-back therefore serves exactly one account: set `HBM_LARK_CALENDAR_ACCOUNT_EMAIL` to it. An unset value disables write-back instead of writing to the wrong calendar. Moving this to per-user OAuth is tracked in the [production readiness plan](docs/production-readiness-plan.md).
+
 Generating the same week again supersedes the previous active plan and its calendar drafts, so only the latest proposal remains actionable. Existing external event IDs are carried into replacement drafts to avoid duplicate calendar events, while events that no longer fit the plan become cancellation drafts.
 When checklist feedback changes a future scheduled task, its calendar draft is updated too. Previously confirmed events return to draft status with the same external event ID so the change requires confirmation.
 
@@ -48,6 +53,8 @@ When checklist feedback changes a future scheduled task, its calendar draft is u
 Anyone can create an account at `/register`. Registration stores the account in an unverified state and emails a verification link that is valid for 24 hours; login returns `403 email_unverified` until that link is opened, so an unverified account can never obtain a session. `/login`, `/register`, and the expired-link screen can all request a fresh email.
 
 Registration and resend responses are deliberately identical whether or not the address already has an account, so neither endpoint can be used to discover which emails are registered. Registering an address that already has a verified account notifies its owner by email instead of creating a duplicate. Both endpoints are rate limited per IP and per address.
+
+A forgotten password is recovered from `/forgot-password`, which emails a single-use link valid for one hour. Setting the new password signs every existing device out, since a reset is what someone does when they believe the account is compromised. This endpoint answers identically for unknown addresses too, and it sends nothing to an unverified account — a reset that produced a working password would be a way around the verification step.
 
 `npm run owner:setup` still works and remains the way to provision an account without a working mailbox, for example during the initial deployment. Accounts it creates are marked verified and skip the email flow.
 
@@ -58,6 +65,8 @@ Verification links are built from `HBM_APP_BASE_URL` rather than the request `Ho
 | `POST /api/v1/auth/register` | Create an unverified account and send a verification link |
 | `POST /api/v1/auth/verify-email` | Exchange a link token for a verified account |
 | `POST /api/v1/auth/resend-verification` | Send a fresh verification link |
+| `POST /api/v1/auth/forgot-password` | Email a password reset link |
+| `POST /api/v1/auth/reset-password` | Exchange a reset token for a new password |
 
 ### Email delivery
 
@@ -65,7 +74,11 @@ Verification links are built from `HBM_APP_BASE_URL` rather than the request `Ho
 
 ## Model configuration
 
+The coach runs on the user's own provider account: every account brings its own API key, and there is no hosted key. Without one the rest of the app still works, but the coach does not.
+
 Choosing a provider is the whole configuration; the model name and base URL come from the provider table in `src/settings/defaults.ts` and are never accepted from the client. The only field either client asks for is the API key, which is stored encrypted.
+
+A newly entered key is checked against the provider before it is stored. A `401` or `403` fails the save with the provider's own explanation, so a key issued by the wrong platform is caught on the field the user just filled in. Any other failure still saves: a provider that cannot be reached at that moment is not evidence that the key is wrong.
 
 Because the identity is derived on read rather than copied into the row, bumping a provider's `defaultModel` moves every existing account onto the newer model on their next request, with no migration. Both clients keep a mirror of the table purely to preview the model when the user taps a different provider; the server's answer always wins after a save.
 
@@ -80,7 +93,15 @@ Because the identity is derived on read rather than copied into the row, bumping
 
 `Custom` is the exception and the escape hatch for relays and self-hosted gateways: it is the one provider that asks for a model name and base URL, and it rejects a save that omits either.
 
-Every provider in that table has a neighbouring product whose keys look identical but are issued by a separate account system, and the resulting `401` is indistinguishable from an expired key. Each entry therefore carries a `credentialSource` string naming the platform that issues a working key, and both the chat path and `Test model` append it to any 401 or 403. Kimi is the sharpest case: a `sk-kim` key from the Kimi Code coding membership (`api.kimi.com/coding/v1`) is rejected by the Open Platform endpoint this provider targets. Point `Custom` at the coding endpoint with model `kimi-for-coding` to use one of those keys.
+Every provider in that table has a neighbouring product whose keys look identical but are issued by a separate account system, and the resulting `401` is indistinguishable from an expired key. Each entry therefore carries a `credentialSource` string naming the platform that issues a working key. Both clients show it next to the API key field before the user pastes anything, and the chat path and `Test model` append it to any 401 or 403. Kimi is the sharpest case: a `sk-kim` key from the Kimi Code coding membership (`api.kimi.com/coding/v1`) is rejected by the Open Platform endpoint this provider targets. Point `Custom` at the coding endpoint with model `kimi-for-coding` to use one of those keys.
+
+### Meal menus
+
+Menus are only ever imported. An account with no meal menu connection has no menu section at all: the Today tab, the plan page, and the coach context omit it rather than substituting sample dishes. The nutrition targets and the carbohydrate guidance come from the goal and the training intensity, so they are shown either way; only the per-dish recommendations depend on an imported menu.
+
+A configured connection that fails is reported rather than silently treated as empty, so a broken session or canteen name is visible instead of looking like "no menu today".
+
+The stdio command and its arguments are fixed by the server and ignored if a client submits them. They are handed to `spawn`, so accepting them from a client would let any account run an arbitrary program on the server. The per-account part of the connection is the Feishu session and the canteen name. The child process also receives an explicit environment allowlist rather than the server's own, keeping `SESSION_SECRET`, `SETTINGS_ENCRYPTION_KEY`, and `DATABASE_URL` out of it.
 
 ### COROS authorization from the iOS app
 

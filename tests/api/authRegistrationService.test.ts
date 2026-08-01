@@ -64,6 +64,34 @@ describe("registerUser", () => {
     expect(email?.text).toContain("https://hbm.example.com/verify-email?token=");
   });
 
+  it("stamps the terms acceptance time and version on a new account", async () => {
+    await registerUser({ email: "new@example.com", password: VALID_PASSWORD });
+
+    const created = vi.mocked(prisma.user.create).mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(created.data.termsAcceptedAt).toBeInstanceOf(Date);
+    expect(created.data.termsAcceptedVersion).toBe("2026-08-01");
+  });
+
+  it("re-stamps the terms acceptance when an unverified account re-registers", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: "user-1", emailVerifiedAt: null } as never);
+    vi.mocked(prisma.user.update).mockResolvedValue({} as never);
+
+    await registerUser({ email: "pending@example.com", password: VALID_PASSWORD });
+
+    const updated = vi.mocked(prisma.user.update).mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(updated.data.termsAcceptedAt).toBeInstanceOf(Date);
+    expect(updated.data.termsAcceptedVersion).toBe("2026-08-01");
+  });
+
+  it("does not touch terms acceptance for an already-verified account", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: "user-1", emailVerifiedAt: new Date() } as never);
+
+    await registerUser({ email: "taken@example.com", password: VALID_PASSWORD });
+
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.user.create).not.toHaveBeenCalled();
+  });
+
   it("stores only a hash of the verification token", async () => {
     await registerUser({ email: "new@example.com", password: VALID_PASSWORD });
 

@@ -20,6 +20,10 @@ export function releaseChecks(env, privacyPolicy) {
   const apiBaseUrl = env.EXPO_PUBLIC_API_BASE_URL?.trim() || "";
   const bundleIdentifier = env.EXPO_IOS_BUNDLE_IDENTIFIER?.trim() || "";
   const appleTeamId = env.EXPO_APPLE_TEAM_ID?.trim() || "";
+  const operatorName = env.HBM_OPERATOR_NAME?.trim() || "";
+  const privacyEmail = env.HBM_PRIVACY_EMAIL?.trim() || "";
+  const policyDate = env.HBM_POLICY_EFFECTIVE_DATE?.trim() || "";
+  const deploymentRegion = env.HBM_DEPLOYMENT_REGION?.trim() || "";
 
   return [
     {
@@ -43,9 +47,29 @@ export function releaseChecks(env, privacyPolicy) {
       message: "EXPO_APPLE_TEAM_ID is a 10-character Apple Team ID",
     },
     {
-      id: "privacy-metadata",
+      id: "privacy-operator",
+      ok: Boolean(operatorName),
+      message: "HBM_OPERATOR_NAME is set (shown on /privacy and /terms)",
+    },
+    {
+      id: "privacy-email",
+      ok: Boolean(privacyEmail) && /.+@.+\..+/.test(privacyEmail),
+      message: "HBM_PRIVACY_EMAIL is a valid address",
+    },
+    {
+      id: "privacy-date",
+      ok: /^\d{4}-\d{2}-\d{2}$/.test(policyDate),
+      message: "HBM_POLICY_EFFECTIVE_DATE is a YYYY-MM-DD date",
+    },
+    {
+      id: "privacy-region",
+      ok: Boolean(deploymentRegion),
+      message: "HBM_DEPLOYMENT_REGION is set",
+    },
+    {
+      id: "privacy-placeholders",
       ok: !privacyPolicy.includes("待填写"),
-      message: "privacy notice has no release placeholders",
+      message: "privacy notice markdown has no leftover placeholders",
     },
   ];
 }

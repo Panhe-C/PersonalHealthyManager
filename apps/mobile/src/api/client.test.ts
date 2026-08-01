@@ -46,4 +46,24 @@ describe("mobile API client auth login", () => {
     expect(tokenStore.getRefreshToken).not.toHaveBeenCalled();
     expect(tokenStore.resetTokens).not.toHaveBeenCalled();
   });
+
+  it("requests a password reset without an access token, since the caller is locked out", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, status: "reset_sent", email: "owner@example.test" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      })
+    );
+
+    await expect(api.auth.forgotPassword("owner@example.test")).resolves.toEqual({
+      ok: true,
+      status: "reset_sent",
+      email: "owner@example.test"
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      "http://localhost:3000/api/auth/forgot-password",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ email: "owner@example.test" }) })
+    );
+    expect(tokenStore.getRefreshToken).not.toHaveBeenCalled();
+  });
 });

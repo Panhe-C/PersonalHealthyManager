@@ -1,4 +1,5 @@
 import type {
+  MealMenu,
   NormalizedActivityRecord,
   NormalizedRecoveryRecord,
   NormalizedSleepRecord,
@@ -8,7 +9,6 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/src/db/client";
 import { createCalendarDraftsFromTasks, reconcileCalendarDrafts } from "@/src/planning/calendarDrafts";
 import { generateWeeklyPlan } from "@/src/planning/engine";
-import { getMockMealMenu } from "@/src/providers/meal-menu";
 import { fetchMealMenusFromStdioMcp } from "@/src/providers/meal-menu-mcp";
 import { findCalendarSnapshotForWeek } from "@/src/services/planQueryService";
 import { loadDataMcpConnection } from "@/src/settings/service";
@@ -69,18 +69,26 @@ export async function supersedePreviousPlansAndReadExternalEvents(
   return previousExternalEvents;
 }
 
-export async function resolveMealMenusForPlan(userId: string, weekStart: Date) {
+/**
+ * An account without a meal menu connection plans without menus. The nutrition
+ * guidance the engine derives from the goal and the training intensity does not
+ * depend on them; only the per-dish recommendations do.
+ */
+export async function resolveMealMenusForPlan(userId: string, weekStart: Date): Promise<MealMenu[]> {
   const connection = await loadDataMcpConnection(userId, "meal_menu");
-  if (connection?.enabled && connection.transport === "stdio") {
-    try {
-      const menus = await fetchMealMenusFromStdioMcp(connection, weekStart);
-      if (menus.length > 0) return menus;
-    } catch {
-      return getMockMealMenu(weekStart);
-    }
-  }
+  if (!connection?.enabled || connection.transport !== "stdio") return [];
 
-  return getMockMealMenu(weekStart);
+  try {
+    return await fetchMealMenusFromStdioMcp(connection, weekStart);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Meal menu request failed";
+    console.error("[meal-menu] plan generation could not read menus", {
+      userId,
+      weekStart: weekStart.toISOString(),
+      message
+    });
+    return [];
+  }
 }
 
 export async function generatePlanForUser(userId: string, weekStart: Date) {

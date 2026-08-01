@@ -68,6 +68,9 @@ export function getV1ApiUrl(path: string) {
   return path.startsWith("http") ? path : `${V1}${path}`;
 }
 
+/** Origin of the deployed web app — used for linking to public pages like /privacy. */
+export const WEB_ORIGIN = API_BASE_URL;
+
 export async function getValidAccessToken(forceRefresh = false) {
   return forceRefresh ? refreshAccessToken() : getAccessToken();
 }
@@ -152,10 +155,10 @@ export const api = {
         `${API_BASE_URL}/api/auth/login`,
         { method: "POST", body: { email, password }, skipAuthRefresh: true }
       ),
-    register: (email: string, password: string, timezone?: string) =>
+    register: (email: string, password: string, timezone?: string, acceptTerms = false) =>
       request<{ ok: true; status: "verification_sent"; email: string }>(`${API_BASE_URL}/api/auth/register`, {
         method: "POST",
-        body: { email, password, ...(timezone ? { timezone } : {}) },
+        body: { email, password, ...(timezone ? { timezone } : {}), acceptTerms },
         skipAuthRefresh: true
       }),
     resendVerification: (email: string) =>
@@ -163,6 +166,14 @@ export const api = {
         `${API_BASE_URL}/api/auth/resend-verification`,
         { method: "POST", body: { email }, skipAuthRefresh: true }
       ),
+    // Resolves the same way for unknown addresses, so the caller must not treat
+    // success as proof that an account exists.
+    forgotPassword: (email: string) =>
+      request<{ ok: true; status: "reset_sent"; email: string }>(`${API_BASE_URL}/api/auth/forgot-password`, {
+        method: "POST",
+        body: { email },
+        skipAuthRefresh: true
+      }),
     logout: (refreshToken?: string) =>
       request<{ ok: true }>(`${API_BASE_URL}/api/auth/logout`, { method: "POST", body: refreshToken ? { refreshToken } : {} })
   }

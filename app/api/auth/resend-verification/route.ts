@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resendVerificationRequestSchema } from "@hbm/contracts";
 import { normalizeEmail, resendVerification } from "@/src/auth/registration";
+import { captureError } from "@/src/observability/logger";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/src/security/rateLimit";
 
 export async function POST(request: Request) {
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
   try {
     await resendVerification(email);
   } catch (error) {
-    console.error("Resending the verification email failed", error);
+    captureError("resend_verification_failed", error);
     return NextResponse.json(
       { error: "Could not send the verification email. Try again later.", code: "verification_send_failed" },
       { status: 502, headers: rateLimitHeaders(addressLimit) },

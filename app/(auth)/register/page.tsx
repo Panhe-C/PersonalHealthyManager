@@ -10,6 +10,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [error, setError] = useState("");
   const [sentTo, setSentTo] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -30,6 +31,11 @@ export default function RegisterPage() {
       return;
     }
 
+    if (!acceptTerms) {
+      setError("Please review and accept the privacy policy and terms to continue.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -39,7 +45,8 @@ export default function RegisterPage() {
         body: JSON.stringify({
           email,
           password,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          acceptTerms: true
         })
       });
 
@@ -207,7 +214,23 @@ export default function RegisterPage() {
               </p>
             ) : null}
 
-            <button className="button login-submit" type="submit" disabled={isSubmitting}>
+            <label className="field field-checkbox">
+              <input
+                type="checkbox"
+                name="acceptTerms"
+                checked={acceptTerms}
+                onChange={(event) => setAcceptTerms(event.target.checked)}
+                required
+              />
+              <span>
+                我已阅读并同意
+                <Link href="/privacy" target="_blank" rel="noopener">隐私说明</Link>
+                与
+                <Link href="/terms" target="_blank" rel="noopener">服务条款</Link>。
+              </span>
+            </label>
+
+            <button className="button login-submit" type="submit" disabled={isSubmitting || !acceptTerms}>
               <UserPlus aria-hidden="true" size={18} />
               {isSubmitting ? "Creating account..." : "Create account"}
             </button>

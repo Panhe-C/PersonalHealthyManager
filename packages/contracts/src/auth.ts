@@ -3,6 +3,13 @@ import { z } from "zod";
 /** Shared with change-password so both entry points enforce one policy. */
 export const passwordSchema = z.string().min(12).max(128);
 
+/**
+ * The version of the privacy policy and terms a user agrees to at registration.
+ * Bumped when either document changes materially; the accepted version is
+ * stored on the user so a future "re-accept on change" gate can compare.
+ */
+export const CURRENT_TERMS_VERSION = "2026-08-01";
+
 export const loginRequestSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1)
@@ -11,7 +18,10 @@ export const loginRequestSchema = z.object({
 export const registerRequestSchema = z.object({
   email: z.string().email().max(254),
   password: passwordSchema,
-  timezone: z.string().min(1).max(64).optional()
+  timezone: z.string().min(1).max(64).optional(),
+  // Must be explicitly true — a missing field is not the same as declining, so
+  // this is a literal rather than a boolean default.
+  acceptTerms: z.literal(true)
 });
 
 /**
@@ -36,6 +46,15 @@ export const verifyEmailResponseSchema = z.object({
 
 export const resendVerificationRequestSchema = z.object({
   email: z.string().email().max(254)
+});
+
+export const forgotPasswordRequestSchema = z.object({
+  email: z.string().email().max(254)
+});
+
+export const resetPasswordRequestSchema = z.object({
+  token: z.string().min(1),
+  password: passwordSchema
 });
 
 export const tokenPairSchema = z.object({
@@ -85,6 +104,8 @@ export type RegisterResponse = z.infer<typeof registerResponseSchema>;
 export type VerifyEmailRequest = z.infer<typeof verifyEmailRequestSchema>;
 export type VerifyEmailResponse = z.infer<typeof verifyEmailResponseSchema>;
 export type ResendVerificationRequest = z.infer<typeof resendVerificationRequestSchema>;
+export type ForgotPasswordRequest = z.infer<typeof forgotPasswordRequestSchema>;
+export type ResetPasswordRequest = z.infer<typeof resetPasswordRequestSchema>;
 export type TokenPair = z.infer<typeof tokenPairSchema>;
 export type RefreshRequest = z.infer<typeof refreshRequestSchema>;
 export type RefreshResponse = z.infer<typeof refreshResponseSchema>;
