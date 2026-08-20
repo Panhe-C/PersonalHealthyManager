@@ -2,6 +2,7 @@ import { fetch as expoFetch } from "expo/fetch";
 import {
   AGENT_STREAM_MEDIA_TYPE,
   createAgentStreamParser,
+  type AgentAttachment,
   type AgentStreamEvent
 } from "@hbm/contracts";
 import { ApiError, getV1ApiUrl, getValidAccessToken, handleUnauthorized } from "./client";
@@ -24,7 +25,8 @@ async function requestAgentStream(
   conversationId: string,
   message: string,
   signal: AbortSignal | undefined,
-  forceRefresh: boolean
+  forceRefresh: boolean,
+  attachments: AgentAttachment[]
 ) {
   const accessToken = await getValidAccessToken(forceRefresh);
   if (forceRefresh && !accessToken) {
@@ -41,7 +43,7 @@ async function requestAgentStream(
   return expoFetch(getV1ApiUrl("/agent"), {
     method: "POST",
     headers,
-    body: JSON.stringify({ conversationId, message }),
+    body: JSON.stringify({ conversationId, message, ...(attachments.length ? { attachments } : {}) }),
     signal
   });
 }
@@ -49,11 +51,12 @@ async function requestAgentStream(
 export async function streamAgentMessage(
   conversationId: string,
   message: string,
-  options: StreamAgentMessageOptions
+  options: StreamAgentMessageOptions,
+  attachments: AgentAttachment[] = []
 ) {
-  let response = await requestAgentStream(conversationId, message, options.signal, false);
+  let response = await requestAgentStream(conversationId, message, options.signal, false, attachments);
   if (response.status === 401) {
-    response = await requestAgentStream(conversationId, message, options.signal, true);
+    response = await requestAgentStream(conversationId, message, options.signal, true, attachments);
   }
   if (!response.ok) {
     if (response.status === 401) await handleUnauthorized();

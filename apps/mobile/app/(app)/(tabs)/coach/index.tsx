@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ElementRef } from "react";
-import { Animated, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
-import { ArrowDown, Brain, History, Leaf, Pencil, Send, SquarePen, Trash2 } from "lucide-react-native";
+import { Animated, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import { ArrowDown, Brain, FileText, History, Leaf, Paperclip, Pencil, Send, SquarePen, Trash2, X } from "lucide-react-native";
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -34,6 +36,12 @@ import {
 import { formatDateLabel } from "../../../../src/ui/format";
 import { cardShadow, opacity, radius, spacing, useTheme } from "../../../../src/theme/tokens";
 import type { AgentAdjustment, AgentMessage, Conversation, Memory } from "../../../../src/api/schemas";
+import {
+  AGENT_ATTACHMENT_MAX_BYTES,
+  AGENT_ATTACHMENT_MAX_COUNT,
+  AGENT_ATTACHMENTS_MAX_TOTAL_BYTES,
+  type AgentAttachment
+} from "@hbm/contracts";
 
 const fallbackSuggestions = [
   "我昨晚没睡好，今天还适合跑吗？",
@@ -103,6 +111,7 @@ export default function CoachTab() {
   const [selectedConversationId, setSelectedConversationId] = useState<string | undefined>();
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const [attachments, setAttachments] = useState<AgentAttachment[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [addingMemory, setAddingMemory] = useState(false);
@@ -132,6 +141,7 @@ export default function CoachTab() {
       setSelectedConversationId(conversation.id);
       setMessages(conversation.messages);
       setDraft("");
+      setAttachments([]);
       setError(null);
     },
     onError: (err) => setError(err instanceof Error ? err.message : "新建会话失败")
@@ -239,6 +249,8 @@ export default function CoachTab() {
     if (!selectedConversationId && conversations[0]) setSelectedConversationId(conversations[0].id);
   }, [conversations, selectedConversationId]);
 
+  useEffect(() => setAttachments([]), [selectedConversationId]);
+
   useEffect(() => {
     if (conversationDetailQuery.data) {
       setMessages((items) => mergeConversationMessages(conversationDetailQuery.data.messages, items));
@@ -269,19 +281,25 @@ export default function CoachTab() {
   /** Returns true only after the send gate passes and the optimistic turn is
    *  queued. Callers that consume one-shot navigation params must check this
    *  before clearing them, otherwise a rejected gate silently drops the prompt. */
-  function submitMessage(text = draft): boolean {
+  function submitMessage(text = draft, selectedAttachments = attachments): boolean {
     const content = text.trim();
     if (!selectedConversationId || !canSubmitCoachMessage({
       content,
       conversationId: selectedConversationId,
       sending,
-      conversationMutationPending
+      conversationMutationPending,
+      attachmentCount: selectedAttachments.length
     })) {
       return false;
     }
     const timestamp = Date.now();
     const conversationId = selectedConversationId;
-    const userMessage: AgentMessage = { id: `local-user-${timestamp}`, role: "user", content };
+    const userMessage: AgentMessage = {
+      id: `local-user-${timestamp}`,
+      role: "user",
+      content: content || "请分析这些附件。",
+      attachments: selectedAttachments
+    };
     const assistantMessageId = `local-assistant-${timestamp}`;
     const assistantMessage: AgentMessage = { id: assistantMessageId, role: "assistant", content: "" };
     const controller = new AbortController();
@@ -291,6 +309,7 @@ export default function CoachTab() {
     activeSendRef.current = { controller, conversationId };
     setSending(true);
     setDraft("");
+    setAttachments([]);
     setError(null);
     setMessages((items) => [...items, userMessage, assistantMessage]);
 
@@ -313,7 +332,7 @@ export default function CoachTab() {
               ]);
             }
           }
-        });
+        }, selectedAttachments);
         setError(null);
         void queryClient.invalidateQueries({ queryKey: ["agent", "conversations", conversationId] });
         void queryClient.invalidateQueries({ queryKey: ["agent", "memories"] });
@@ -334,6 +353,42 @@ export default function CoachTab() {
     })();
 
     return true;
+  }
+
+  async function pickAttachments() {
+    setError(null);
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf", "text/plain", "text/markdown", "text/csv", "application/json"],
+      multiple: true,
+      copyToCacheDirectory: true
+    });
+    if (result.canceled) return;
+    if (attachments.length + result.assets.length > AGENT_ATTACHMENT_MAX_COUNT) {
+      setError(`最多添加 ${AGENT_ATTACHMENT_MAX_COUNT} 个附件。`);
+      return;
+    }
+    if (result.assets.some((asset) => (asset.size ?? 0) > AGENT_ATTACHMENT_MAX_BYTES)) {
+      setError("单个附件不能超过 5 MB。");
+      return;
+    }
+    const next: AgentAttachment[] = [];
+    for (const asset of result.assets) {
+      const extension = asset.name.split(".").pop()?.toLowerCase();
+      const mimeType = asset.mimeType || (extension === "md" ? "text/markdown" : extension === "csv" ? "text/csv" : extension === "json" ? "application/json" : "text/plain");
+      const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 });
+      const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+      const size = asset.size ?? Math.floor((base64.length * 3) / 4) - padding;
+      if (size > AGENT_ATTACHMENT_MAX_BYTES) {
+        setError("单个附件不能超过 5 MB。");
+        return;
+      }
+      next.push({ id: `${Date.now()}-${next.length}`, name: asset.name, mimeType, size, dataUrl: `data:${mimeType};base64,${base64}` });
+    }
+    if (attachments.reduce((sum, item) => sum + item.size, 0) + next.reduce((sum, item) => sum + item.size, 0) > AGENT_ATTACHMENTS_MAX_TOTAL_BYTES) {
+      setError("附件总大小不能超过 10 MB。");
+      return;
+    }
+    setAttachments((items) => [...items, ...next]);
   }
 
   const incomingPrompt = Array.isArray(params.prompt) ? params.prompt[0] : params.prompt;
@@ -441,55 +496,76 @@ export default function CoachTab() {
             ) : null}
           </View>
 
-          <View style={[styles.composerDock, { backgroundColor: tokens.bg, borderTopColor: tokens.separator, paddingBottom: spacing.sm + insets.bottom + FLOATING_TAB_BAR_CLEARANCE }]}>
-            <TextInput
-              multiline
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="问问你的教练…"
-              placeholderTextColor={tokens.labelTertiary}
-              style={[styles.input, { borderColor: tokens.separator, color: tokens.label, backgroundColor: tokens.surface }]}
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="发送消息"
-              onPress={() => submitMessage()}
-              disabled={!canSubmitCoachMessage({
-                content: draft,
-                conversationId: selectedConversationId,
-                sending,
-                conversationMutationPending
-              })}
-              style={({ pressed }) => [
-                styles.sendButton,
-                {
-                  backgroundColor: canSubmitCoachMessage({
-                    content: draft,
-                    conversationId: selectedConversationId,
-                    sending,
-                    conversationMutationPending
-                  })
-                    ? tokens.controlFill
-                    : tokens.fill
-                },
-                pressed && styles.pressed
-              ]}
-            >
-              <Send
-                color={
-                  canSubmitCoachMessage({
-                    content: draft,
-                    conversationId: selectedConversationId,
-                    sending,
-                    conversationMutationPending
-                  })
-                    ? tokens.controlLabel
-                    : tokens.labelTertiary
-                }
-                size={18}
-                strokeWidth={2.2}
+          <View style={[styles.composerArea, { backgroundColor: tokens.bg, borderTopColor: tokens.separator, paddingBottom: spacing.sm + insets.bottom + FLOATING_TAB_BAR_CLEARANCE }]}>
+            {attachments.length ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.attachmentTray}>
+                {attachments.map((attachment) => (
+                  <View key={attachment.id} style={[styles.attachmentChip, { backgroundColor: tokens.surface, borderColor: tokens.separator }]}>
+                    {attachment.mimeType.startsWith("image/") ? <Image source={{ uri: attachment.dataUrl }} style={styles.attachmentThumb} /> : <FileText color={tokens.labelSecondary} size={16} />}
+                    <Text size="footnote" numberOfLines={1} style={styles.attachmentName}>{attachment.name}</Text>
+                    <Pressable accessibilityRole="button" accessibilityLabel={`移除 ${attachment.name}`} onPress={() => setAttachments((items) => items.filter((item) => item.id !== attachment.id))}>
+                      <X color={tokens.labelSecondary} size={15} />
+                    </Pressable>
+                  </View>
+                ))}
+              </ScrollView>
+            ) : null}
+            <View style={styles.composerDock}>
+              <Pressable accessibilityRole="button" accessibilityLabel="添加图片或文件" onPress={() => void pickAttachments().catch((pickerError) => setError(pickerError instanceof Error ? pickerError.message : "附件读取失败。"))} style={[styles.attachButton, { borderColor: tokens.separator }]}>
+                <Paperclip color={tokens.labelSecondary} size={18} />
+              </Pressable>
+              <TextInput
+                multiline
+                value={draft}
+                onChangeText={setDraft}
+                placeholder="问问你的教练…"
+                placeholderTextColor={tokens.labelTertiary}
+                style={[styles.input, { borderColor: tokens.separator, color: tokens.label, backgroundColor: tokens.surface }]}
               />
-            </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="发送消息"
+                onPress={() => submitMessage()}
+                disabled={!canSubmitCoachMessage({
+                  content: draft,
+                  conversationId: selectedConversationId,
+                  sending,
+                  conversationMutationPending,
+                  attachmentCount: attachments.length
+                })}
+                style={({ pressed }) => [
+                  styles.sendButton,
+                  {
+                    backgroundColor: canSubmitCoachMessage({
+                      content: draft,
+                      conversationId: selectedConversationId,
+                      sending,
+                      conversationMutationPending,
+                      attachmentCount: attachments.length
+                    })
+                      ? tokens.controlFill
+                      : tokens.fill
+                  },
+                  pressed && styles.pressed
+                ]}
+              >
+                <Send
+                  color={
+                    canSubmitCoachMessage({
+                      content: draft,
+                      conversationId: selectedConversationId,
+                      sending,
+                      conversationMutationPending,
+                      attachmentCount: attachments.length
+                    })
+                      ? tokens.controlLabel
+                      : tokens.labelTertiary
+                  }
+                  size={18}
+                  strokeWidth={2.2}
+                />
+              </Pressable>
+            </View>
           </View>
         </KeyboardAvoidingView>
       </View>
@@ -720,7 +796,12 @@ function MessageBubble({ message, onUndo }: { message: AgentMessage; onUndo: (ad
           { backgroundColor: tokens.controlFill }
         ]}
       >
-        <Text color={tokens.controlLabel}>{message.content}</Text>
+        {message.attachments?.map((attachment) => attachment.mimeType.startsWith("image/") ? (
+          <Image key={attachment.id} source={{ uri: attachment.dataUrl }} accessibilityLabel={attachment.name} style={styles.messageImage} />
+        ) : (
+          <View key={attachment.id} style={styles.messageFile}><FileText color={tokens.controlLabel} size={16} /><Text color={tokens.controlLabel} numberOfLines={1}>{attachment.name}</Text></View>
+        ))}
+        {message.content ? <Text color={tokens.controlLabel}>{message.content}</Text> : null}
       </View>
     </View>
   );
@@ -841,6 +922,11 @@ function MemoryRow({
 }
 
 const styles = StyleSheet.create({
+  attachButton: { alignItems: "center", borderRadius: radius.pill, borderWidth: StyleSheet.hairlineWidth, height: 36, justifyContent: "center", width: 36 },
+  attachmentChip: { alignItems: "center", borderRadius: radius.sm, borderWidth: StyleSheet.hairlineWidth, flexDirection: "row", gap: spacing.xs, maxWidth: 220, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  attachmentName: { flexShrink: 1 },
+  attachmentThumb: { borderRadius: 5, height: 28, width: 28 },
+  attachmentTray: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   assistantAvatar: { alignItems: "center", borderRadius: 24, borderWidth: 1, height: 46, justifyContent: "center", width: 46 },
   assistantContent: { borderRadius: radius.bubble, flex: 1, gap: spacing.lg, padding: spacing.md },
   assistantMessageRow: { alignItems: "flex-start", gap: spacing.md, justifyContent: "flex-start" },
@@ -848,12 +934,12 @@ const styles = StyleSheet.create({
   chatBody: { flex: 1 },
   composerDock: {
     alignItems: "flex-end",
-    borderTopWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm
+    paddingTop: spacing.sm
   },
+  composerArea: { borderTopWidth: StyleSheet.hairlineWidth },
   drawerConversationItem: {
     alignItems: "center",
     borderRadius: radius.card,
@@ -890,6 +976,8 @@ const styles = StyleSheet.create({
   memoryTrayHeader: { alignItems: "center", flexDirection: "row", gap: spacing.md },
   messageBubble: { borderRadius: radius.bubble, gap: spacing.xs, maxWidth: "88%", padding: spacing.md },
   messageList: { flexGrow: 1, gap: spacing.md, justifyContent: "flex-end", padding: spacing.md },
+  messageFile: { alignItems: "center", flexDirection: "row", gap: spacing.xs, maxWidth: 240 },
+  messageImage: { borderRadius: radius.md, height: 180, resizeMode: "contain", width: 240 },
   messageRow: { flexDirection: "row" },
   messageScroll: { flex: 1 },
   messageStage: { flex: 1 },

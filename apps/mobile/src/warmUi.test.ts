@@ -343,6 +343,17 @@ describe("warm card mobile UI", () => {
     }
   });
 
+  it("enters the app directly after registration without email verification UI", () => {
+    const register = read("../app/(auth)/register.tsx");
+    const login = read("../app/(auth)/login.tsx");
+
+    expect(register).toContain('router.replace("/(app)/(tabs)/today")');
+    expect(register).not.toContain("请查收邮件");
+    expect(register).not.toContain("重新发送验证邮件");
+    expect(login).not.toContain("email_unverified");
+    expect(login).not.toContain("重新发送验证邮件");
+  });
+
   it("builds the Insights visualisation cards from the shared charts", () => {
     const source = read("../app/(app)/(tabs)/insights/index.tsx");
 

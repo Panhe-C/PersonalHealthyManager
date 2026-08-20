@@ -1,4 +1,4 @@
-import { StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
+import { StyleSheet, TextInput, useWindowDimensions, View, type TextInputProps } from "react-native";
 import { spacing, useTheme } from "../theme/tokens";
 import { Text } from "./Text";
 
@@ -12,6 +12,7 @@ type TextFieldProps = {
   error?: string;
   keyboardType?: "default" | "email-address" | "number-pad" | "decimal-pad";
   autoCapitalize?: "none" | "sentences";
+  autoComplete?: TextInputProps["autoComplete"];
   editable?: boolean;
 };
 
@@ -25,6 +26,7 @@ export function TextField({
   error,
   keyboardType = "default",
   autoCapitalize = "none",
+  autoComplete = "off",
   editable = true
 }: TextFieldProps) {
   const { tokens } = useTheme();
@@ -44,6 +46,7 @@ export function TextField({
         <TextInput
           accessibilityLabel={label}
           autoCapitalize={autoCapitalize}
+          autoComplete={autoComplete}
           autoCorrect={false}
           editable={editable}
           keyboardType={keyboardType}
@@ -60,12 +63,12 @@ export function TextField({
         />
       </View>
       {error ? (
-        <Text size="footnote" color={tokens.red}>
+        <Text size="footnote" color={tokens.red} style={styles.hint}>
           {error}
         </Text>
       ) : null}
       {!error && hint ? (
-        <Text size="footnote" color={tokens.labelSecondary}>
+        <Text size="footnote" color={tokens.labelSecondary} style={styles.hint}>
           {hint}
         </Text>
       ) : null}
@@ -105,5 +108,9 @@ const styles = StyleSheet.create({
   },
   inputStacked: {
     textAlign: "left"
+  },
+  hint: {
+    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.lg
   }
 });

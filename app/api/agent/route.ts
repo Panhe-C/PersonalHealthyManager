@@ -59,14 +59,25 @@ export const POST = withUser(async (user, request: Request) => {
 
       try {
         enqueue({ type: "start", requestId: crypto.randomUUID() });
-        const modelResponse = await createStreamingAgentResponseForUser(
-          user.id,
-          prepared.value.content,
-          prepared.value.history,
-          prepared.value.context,
-          (text) => enqueue({ type: "delta", text }),
-          abortController.signal
-        );
+        const onDelta = (text: string) => enqueue({ type: "delta", text } as AgentStreamEvent);
+        const modelResponse = prepared.value.attachments.length
+          ? await createStreamingAgentResponseForUser(
+              user.id,
+              prepared.value.content,
+              prepared.value.history,
+              prepared.value.context,
+              onDelta,
+              abortController.signal,
+              prepared.value.attachments
+            )
+          : await createStreamingAgentResponseForUser(
+              user.id,
+              prepared.value.content,
+              prepared.value.history,
+              prepared.value.context,
+              onDelta,
+              abortController.signal
+            );
         abortController.signal.throwIfAborted();
         const result = await finalizeAgentMessage(prepared.value, modelResponse);
         enqueue({

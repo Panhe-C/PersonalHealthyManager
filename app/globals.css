@@ -2844,6 +2844,85 @@ body:has(.agent-page) .nav-link {
   outline: none;
 }
 
+.agent-attach-button {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+
+.agent-attach-button:hover {
+  background: var(--panel-soft);
+  color: var(--ink);
+}
+
+.agent-attach-button input {
+  display: none;
+}
+
+.agent-composer-attachments {
+  display: flex;
+  flex: 1 0 100%;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.agent-composer-attachment,
+.agent-message-file {
+  align-items: center;
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: inline-flex;
+  gap: 6px;
+  max-width: 240px;
+  padding: 6px 8px;
+}
+
+.agent-composer-attachment > span,
+.agent-message-file {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-composer-attachment img {
+  border-radius: 5px;
+  height: 28px;
+  object-fit: cover;
+  width: 28px;
+}
+
+.agent-composer-attachment button {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  padding: 2px;
+}
+
+.agent-message-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.agent-message-image {
+  border-radius: 12px;
+  display: block;
+  max-height: 240px;
+  max-width: min(100%, 320px);
+  object-fit: contain;
+}
+
 .action-stack {
   display: grid;
   gap: 6px;
