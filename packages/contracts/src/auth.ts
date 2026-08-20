@@ -26,12 +26,12 @@ export const registerRequestSchema = z.object({
 
 /**
  * Registration never reveals whether an address is already taken, so the
- * response carries no account data — only an acknowledgement that a message
- * was dispatched.
+ * response carries no account data — only an acknowledgement that registration
+ * completed. Clients authenticate with the submitted credentials afterwards.
  */
 export const registerResponseSchema = z.object({
   ok: z.literal(true),
-  status: z.literal("verification_sent"),
+  status: z.literal("registered"),
   email: z.string().email()
 });
 

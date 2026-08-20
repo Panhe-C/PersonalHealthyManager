@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { agentAttachmentSchema } from "@hbm/contracts";
 
 export const checklistItemSchema = z.object({
   id: z.string(),
@@ -196,6 +197,7 @@ export const agentMessageSchema = z.object({
   id: z.string(),
   role: z.string(),
   content: z.string(),
+  attachments: z.array(agentAttachmentSchema).optional(),
   adjustments: z.array(agentAdjustmentSchema).optional()
 }).passthrough();
 

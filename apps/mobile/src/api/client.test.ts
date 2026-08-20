@@ -66,4 +66,49 @@ describe("mobile API client auth login", () => {
     );
     expect(tokenStore.getRefreshToken).not.toHaveBeenCalled();
   });
+
+  it("registers the account and then creates a login session", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: true, status: "registered", email: "new@example.com" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            accessToken: "access-new",
+            refreshToken: "refresh-new",
+            accessExpiresAt: "2026-08-07T17:00:00.000Z",
+            refreshExpiresAt: "2026-09-07T17:00:00.000Z"
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      );
+
+    await expect(api.auth.register("new@example.com", "long-enough-password", "Asia/Shanghai", true)).resolves.toEqual(
+      expect.objectContaining({ accessToken: "access-new", refreshToken: "refresh-new" })
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      "http://localhost:3000/api/auth/register",
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      "http://localhost:3000/api/auth/login",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ email: "new@example.com", password: "long-enough-password" })
+      })
+    );
+    expect(tokenStore.setTokens).toHaveBeenCalledWith({
+      accessToken: "access-new",
+      refreshToken: "refresh-new",
+      accessExpiresAt: "2026-08-07T17:00:00.000Z",
+      refreshExpiresAt: "2026-09-07T17:00:00.000Z"
+    });
+  });
 });

@@ -56,15 +56,6 @@ export async function POST(request: Request) {
     return invalidCredentialsResponse(rateLimitHeaders(accountLimit));
   }
 
-  // Only reported once the password checks out, so it cannot be used to probe
-  // which addresses have accounts.
-  if (!user.emailVerifiedAt) {
-    return NextResponse.json(
-      { error: "Verify your email address before signing in", code: "email_unverified" },
-      { status: 403, headers: rateLimitHeaders(accountLimit) },
-    );
-  }
-
   const tokens = await createSession(user.id);
   // Web clients keep using the httpOnly cookie (set by createSession) and ignore the body tokens.
   // Native clients ignore the cookie and persist accessToken/refreshToken in SecureStore.

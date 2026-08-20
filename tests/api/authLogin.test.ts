@@ -75,8 +75,14 @@ describe("POST /api/auth/login", () => {
     expect(body.accessExpiresAt).toBe("2026-06-29T15:00:00.000Z");
   });
 
-  it("refuses to issue a session while the email is unverified", async () => {
+  it("allows a legacy pending account to sign in with the correct password", async () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue({ ...user, emailVerifiedAt: null } as never);
+    vi.mocked(createSession).mockResolvedValue({
+      accessToken: "legacy-access",
+      refreshToken: "legacy-refresh",
+      accessExpiresAt: new Date("2026-08-07T16:00:00Z"),
+      refreshExpiresAt: new Date("2026-09-07T16:00:00Z")
+    });
 
     const response = await POST(
       new Request("http://localhost/api/auth/login", {
@@ -85,9 +91,9 @@ describe("POST /api/auth/login", () => {
       })
     );
 
-    expect(response.status).toBe(403);
-    expect((await response.json()).code).toBe("email_unverified");
-    expect(createSession).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect((await response.json()).accessToken).toBe("legacy-access");
+    expect(createSession).toHaveBeenCalledWith("user-1");
   });
 
   it("normalizes email to lowercase before lookup", async () => {

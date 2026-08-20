@@ -1,10 +1,18 @@
 import { NextResponse } from "next/server";
 import { registerRequestSchema } from "@hbm/contracts";
 import { normalizeEmail, registerUser } from "@/src/auth/registration";
+import { isRegistrationEnabled } from "@/src/auth/registrationPolicy";
 import { captureError } from "@/src/observability/logger";
 import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/src/security/rateLimit";
 
 export async function POST(request: Request) {
+  if (!isRegistrationEnabled()) {
+    return NextResponse.json(
+      { error: "Self-service registration is not available", code: "registration_disabled" },
+      { status: 403 },
+    );
+  }
+
   const clientKey = requestClientKey(request);
   const ipLimit = consumeRateLimit({
     key: `register-ip:${clientKey}`,
@@ -47,15 +55,15 @@ export async function POST(request: Request) {
   } catch (error) {
     captureError("registration_failed", error);
     return NextResponse.json(
-      { error: "Could not send the verification email. Try again later.", code: "verification_send_failed" },
-      { status: 502, headers: rateLimitHeaders(addressLimit) },
+      { error: "Could not create the account. Try again later.", code: "registration_failed" },
+      { status: 500, headers: rateLimitHeaders(addressLimit) },
     );
   }
 
   // Identical response whether or not the address was already registered, so
   // this endpoint cannot be used to discover which emails have accounts.
   return NextResponse.json(
-    { ok: true, status: "verification_sent", email },
+    { ok: true, status: "registered", email },
     { headers: rateLimitHeaders(addressLimit) },
   );
 }

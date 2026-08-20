@@ -3,21 +3,17 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Activity, CalendarCheck2, HeartPulse, LogIn, Moon } from "lucide-react";
+import { RegistrationEntry } from "../_components/RegistrationEntry";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [needsVerification, setNeedsVerification] = useState(false);
-  const [resendNotice, setResendNotice] = useState("");
-  const [isResending, setIsResending] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-    setNeedsVerification(false);
-    setResendNotice("");
     setIsSubmitting(true);
 
     try {
@@ -28,12 +24,6 @@ export default function LoginPage() {
       });
 
       if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        if (body?.code === "email_unverified") {
-          setNeedsVerification(true);
-          setError("请先完成邮箱验证再登录。");
-          return;
-        }
         setError("邮箱或密码不正确");
         return;
       }
@@ -43,29 +33,6 @@ export default function LoginPage() {
       setError("邮箱或密码不正确");
     } finally {
       setIsSubmitting(false);
-    }
-  }
-
-  async function resendVerification() {
-    setIsResending(true);
-    setResendNotice("");
-
-    try {
-      const response = await fetch("/api/auth/resend-verification", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email })
-      });
-
-      setResendNotice(
-        response.ok
-          ? "新的验证邮件已发出。"
-          : "请求过于频繁，请稍后再试。"
-      );
-    } catch {
-      setResendNotice("无法连接服务器，请稍后再试。");
-    } finally {
-      setIsResending(false);
     }
   }
 
@@ -144,24 +111,6 @@ export default function LoginPage() {
             </p>
           ) : null}
 
-          {needsVerification ? (
-            <>
-              {resendNotice ? (
-                <p className="message" role="status">
-                  {resendNotice}
-                </p>
-              ) : null}
-              <button
-                className="button button-secondary"
-                type="button"
-                onClick={resendVerification}
-                disabled={isResending}
-              >
-                {isResending ? "发送中…" : "重新发送验证邮件"}
-              </button>
-            </>
-          ) : null}
-
           <button className="button login-submit" type="submit" disabled={isSubmitting}>
             <LogIn aria-hidden="true" size={18} />
             {isSubmitting ? "登录中…" : "登录"}
@@ -171,9 +120,7 @@ export default function LoginPage() {
             <Link href="/forgot-password">忘记密码？</Link>
           </p>
 
-          <p className="auth-alt">
-            还没有账号？ <Link href="/register">去注册</Link>
-          </p>
+          <RegistrationEntry />
         </form>
       </div>
     </main>

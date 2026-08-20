@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/src/auth/registration", async () => {
   const actual = await vi.importActual<typeof import("@/src/auth/registration")>("@/src/auth/registration");
@@ -24,11 +24,27 @@ function register(body: unknown, ip = "203.0.113.1") {
 
 describe("POST /api/auth/register", () => {
   beforeEach(() => {
+    vi.stubEnv("HBM_REGISTRATION_ENABLED", "true");
     resetRateLimitsForTests();
     vi.clearAllMocks();
   });
 
-  it("creates the account and reports that verification was sent", async () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("rejects self-service registration before parsing or creating an account when disabled", async () => {
+    vi.stubEnv("HBM_REGISTRATION_ENABLED", "false");
+
+    const response = await register({ email: "new@example.com", password: VALID_PASSWORD, acceptTerms: true });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Self-service registration is not available",
+      code: "registration_disabled",
+    });
+    expect(registerUser).not.toHaveBeenCalled();
+  });
+
+  it("creates an immediately usable account", async () => {
     const response = await register({
       email: "New@Example.com",
       password: VALID_PASSWORD,
@@ -39,7 +55,7 @@ describe("POST /api/auth/register", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       ok: true,
-      status: "verification_sent",
+      status: "registered",
       email: "new@example.com"
     });
     expect(registerUser).toHaveBeenCalledWith({
@@ -91,13 +107,13 @@ describe("POST /api/auth/register", () => {
     await expect(repeat.json()).resolves.toEqual(freshBody);
   });
 
-  it("reports a failure when the verification email cannot be sent", async () => {
-    vi.mocked(registerUser).mockRejectedValueOnce(new Error("smtp down"));
+  it("reports a failure when the account cannot be created", async () => {
+    vi.mocked(registerUser).mockRejectedValueOnce(new Error("database down"));
 
     const response = await register({ email: "new@example.com", password: VALID_PASSWORD, acceptTerms: true });
 
-    expect(response.status).toBe(502);
-    expect((await response.json()).code).toBe("verification_send_failed");
+    expect(response.status).toBe(500);
+    expect((await response.json()).code).toBe("registration_failed");
   });
 
   it("rate limits repeated attempts against the same address", async () => {

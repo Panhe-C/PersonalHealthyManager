@@ -3,7 +3,7 @@ import { CURRENT_TERMS_VERSION } from "@hbm/contracts";
 import { hashPassword } from "@/src/auth/password";
 import { prisma } from "@/src/db/client";
 import { resolveAppBaseUrl, sendEmail } from "@/src/email/mailer";
-import { accountAlreadyExistsEmail, verificationEmail } from "@/src/email/templates";
+import { verificationEmail } from "@/src/email/templates";
 
 const TOKEN_TTL_HOURS = 24;
 const TOKEN_TTL_MS = TOKEN_TTL_HOURS * 60 * 60 * 1000;
@@ -50,13 +50,12 @@ async function sendVerification(email: string, userId: string): Promise<void> {
 }
 
 /**
- * Creates an unverified account and emails a verification link.
+ * Creates an immediately usable account without requiring email delivery.
  *
  * Callers get no signal about whether the address was already taken: an
- * existing unverified account receives a fresh link, an existing verified
- * account receives a notice instead, and both paths resolve the same way as a
- * brand new signup. This keeps the public endpoint from being used to
- * enumerate registered addresses.
+ * Existing pending accounts are promoted to usable accounts when they
+ * re-register. Existing usable accounts remain unchanged. All paths resolve
+ * the same way so the public endpoint does not enumerate registered addresses.
  */
 export async function registerUser(input: {
   email: string;
@@ -69,7 +68,6 @@ export async function registerUser(input: {
 
   if (existing) {
     if (existing.emailVerifiedAt) {
-      await sendEmail(accountAlreadyExistsEmail({ to: email, signInUrl: `${resolveAppBaseUrl()}/login` }));
       return;
     }
 
@@ -81,24 +79,24 @@ export async function registerUser(input: {
       data: {
         passwordHash: hashPassword(input.password),
         timezone,
+        emailVerifiedAt: new Date(),
         termsAcceptedAt: new Date(),
         termsAcceptedVersion: CURRENT_TERMS_VERSION
       }
     });
-    await sendVerification(email, existing.id);
     return;
   }
 
-  const user = await prisma.user.create({
+  await prisma.user.create({
     data: {
       email,
       passwordHash: hashPassword(input.password),
       timezone,
+      emailVerifiedAt: new Date(),
       termsAcceptedAt: new Date(),
       termsAcceptedVersion: CURRENT_TERMS_VERSION
     }
   });
-  await sendVerification(email, user.id);
 }
 
 export async function verifyEmail(token: string): Promise<VerifyEmailResult> {
