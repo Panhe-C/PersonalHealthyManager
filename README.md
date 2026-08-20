@@ -4,7 +4,7 @@ Healthy Body Manager is a personal training, recovery, schedule, and nutrition p
 
 ## First Version
 
-- Self-service registration with email verification, email/password login, password reset, and user-scoped data.
+- Direct self-service registration, email/password login, password reset, and user-scoped data.
 - First-run onboarding that walks through body profile, goal, schedule, and plan generation in dependency order, with a standing health disclaimer.
 - Structured JSON logging with redaction, optional error webhook, and request IDs on authenticated routes.
 - Automated SQLite backups with retention, optional offsite copy, LaunchAgent scheduler, and recovery drills.
@@ -50,27 +50,23 @@ When checklist feedback changes a future scheduled task, its calendar draft is u
 
 ## Accounts and registration
 
-Anyone can create an account at `/register`. Registration stores the account in an unverified state and emails a verification link that is valid for 24 hours; login returns `403 email_unverified` until that link is opened, so an unverified account can never obtain a session. `/login`, `/register`, and the expired-link screen can all request a fresh email.
+Self-service registration is available in development by default and is controlled by `HBM_REGISTRATION_ENABLED`. When enabled, `/register` creates an immediately usable account and both Web and iOS sign in with the submitted credentials. When disabled, the Web and configured mobile clients hide the registration entry, `/register` explains that the deployment is invitation-only, and the registration API returns `403 registration_disabled`. Existing owner login remains available.
 
-Registration and resend responses are deliberately identical whether or not the address already has an account, so neither endpoint can be used to discover which emails are registered. Registering an address that already has a verified account notifies its owner by email instead of creating a duplicate. Both endpoints are rate limited per IP and per address.
+Registration responses are deliberately identical whether or not the address already has an account, so the endpoint cannot be used to discover which emails are registered. An existing usable account is not changed; the follow-up login still requires its correct password. Registration is rate limited per IP and per address.
 
-A forgotten password is recovered from `/forgot-password`, which emails a single-use link valid for one hour. Setting the new password signs every existing device out, since a reset is what someone does when they believe the account is compromised. This endpoint answers identically for unknown addresses too, and it sends nothing to an unverified account — a reset that produced a working password would be a way around the verification step.
+A forgotten password is recovered from `/forgot-password`, which emails a single-use link valid for one hour. Setting the new password signs every existing device out, since a reset is what someone does when they believe the account is compromised. This endpoint answers identically for unknown addresses too.
 
-`npm run owner:setup` still works and remains the way to provision an account without a working mailbox, for example during the initial deployment. Accounts it creates are marked verified and skip the email flow.
-
-Verification links are built from `HBM_APP_BASE_URL` rather than the request `Host` header, so that value must match the public origin.
+`npm run owner:setup` still works and remains the way to provision or reset the deployment owner account.
 
 | Endpoint | Purpose |
 | --- | --- |
-| `POST /api/v1/auth/register` | Create an unverified account and send a verification link |
-| `POST /api/v1/auth/verify-email` | Exchange a link token for a verified account |
-| `POST /api/v1/auth/resend-verification` | Send a fresh verification link |
+| `POST /api/v1/auth/register` | Create an immediately usable account |
 | `POST /api/v1/auth/forgot-password` | Email a password reset link |
 | `POST /api/v1/auth/reset-password` | Exchange a reset token for a new password |
 
 ### Email delivery
 
-`HBM_EMAIL_TRANSPORT=console` (the local default) prints messages to the server log, so registration can be exercised without a mail provider: copy the verification URL out of the terminal. Production requires `HBM_EMAIL_TRANSPORT=smtp` together with `HBM_SMTP_HOST`, `HBM_EMAIL_FROM`, and, for authenticating relays, `HBM_SMTP_USER` and `HBM_SMTP_PASSWORD`. `HBM_SMTP_PORT` defaults to `587`, and port `465` implies TLS.
+Direct registration does not require email delivery. `HBM_EMAIL_TRANSPORT=console` (the local default) prints password-recovery messages to the server log; those messages are not delivered. For working password recovery, select `smtp` and configure `HBM_SMTP_HOST`, `HBM_EMAIL_FROM`, `HBM_SMTP_USER`, and `HBM_SMTP_PASSWORD`; `npm run release:web` validates the complete SMTP policy whenever that transport is selected. `HBM_SMTP_PORT` defaults to `587`, and port `465` implies TLS.
 
 ## Model configuration
 
@@ -105,14 +101,14 @@ The stdio command and its arguments are fixed by the server and ignored if a cli
 
 ### COROS authorization from the iOS app
 
-COROS authenticates over OAuth, which has to run in a real browser. The app cannot simply open the start URL, because a browser navigation carries neither the app's `Authorization: Bearer` header nor the web session cookie. Instead:
+COROS authenticates over OAuth, which has to run in a real browser. The app uses its authenticated API request to let the server prepare OAuth state, PKCE, and the callback before opening the provider:
 
 1. The app pins the COROS region via `POST /api/v1/settings/mcp/coros/prep`.
-2. `POST /api/v1/settings/mcp/oauth/handoff?connection=coros` returns a start URL carrying a single-use token that expires in five minutes.
-3. The app opens that URL in the system browser. `GET /api/settings/mcp/oauth/start` spends the token, resolves the user, and redirects to COROS.
+2. `POST /api/v1/settings/mcp/oauth/authorize?connection=coros` prepares the pending authorization and returns the final COROS authorize URL.
+3. The app opens COROS directly in the system authentication browser; the HBM domain is used only as the registered OAuth callback.
 4. The callback redirects to `HBM_APP_OAUTH_RETURN_URL` (default `hbm://mcp-oauth`) so the in-app browser dismisses itself and the app refreshes its settings.
 
-The handoff token is stored hashed under its own session kind, so it can never be replayed as an access token or a cookie session. Set `HBM_APP_OAUTH_RETURN_URL` if the app ships under a scheme other than `hbm`.
+The authorization code is single-use and is exchanged immediately by the callback; it is not persisted. Only the resulting access and refresh tokens are stored, encrypted with `SETTINGS_ENCRYPTION_KEY`. Set `HBM_APP_OAUTH_RETURN_URL` if the app ships under a scheme other than `hbm`.
 
 ## Development
 
@@ -124,7 +120,7 @@ npx prisma migrate deploy
 npm run dev
 ```
 
-Open the local URL printed by Next.js, register at `/register`, then copy the verification link from the terminal (the console email transport prints it). Alternatively, provision an account directly and skip the email step:
+Open the local URL printed by Next.js and register at `/register`. Alternatively, provision the owner account directly:
 
 ```bash
 HBM_OWNER_EMAIL=you@example.com \
@@ -158,25 +154,23 @@ The project uses SQLite for local development. Local `.env` and database files a
 
 ## Single-node production deployment
 
-The production container keeps SQLite under a named `/data` volume, applies committed Prisma migrations before every start, runs as an unprivileged user, and exposes `/api/health` as its container health check. Data is scoped per user, but the deployment is still single-instance: do not run multiple replicas against the same SQLite file. SQLite also bounds how many concurrent accounts this setup can serve, so an installation that opens registration to a wide audience should move to Postgres first.
+The production container keeps SQLite under `/data`, bind-mounted from `${HBM_DATA_HOST_DIR:-/srv/healthy-body-manager/data}` on the host, applies committed Prisma migrations before every start, runs as an unprivileged user, and exposes `/api/health` as its container health check. Data is scoped per user, but the deployment is still single-instance: do not run multiple replicas against the same SQLite file. SQLite also bounds how many concurrent accounts this setup can serve, so an installation that opens registration to a wide audience should move to Postgres first.
 
-Generate and store a stable 32-byte settings encryption key in the deployment environment, configure the public origin and an SMTP relay so verification emails can be delivered, then build and start the service behind an HTTPS reverse proxy:
+The production origin is uniquely `https://www.cbhdev.xyz`. Generate and store stable session/settings secrets, fill the real legal metadata, deliberately choose whether registration is open, then build and start the service behind Caddy:
 
 ```bash
 export SETTINGS_ENCRYPTION_KEY="$(openssl rand -base64 32)"
-export HBM_APP_BASE_URL="https://hbm.example.com"
-export HBM_EMAIL_TRANSPORT="smtp"
-export HBM_EMAIL_FROM="Healthy Body Manager <no-reply@example.com>"
-export HBM_SMTP_HOST="smtp.example.com"
-export HBM_SMTP_USER="apikey"
-export HBM_SMTP_PASSWORD="replace-with-the-smtp-password"
-docker compose -f compose.production.yml up -d --build
-docker compose -f compose.production.yml ps
+export HBM_APP_BASE_URL="https://www.cbhdev.xyz"
+export HBM_PUBLIC_BASE_URL="https://www.cbhdev.xyz"
+export HBM_REGISTRATION_ENABLED="false"
+npm run release:web
+docker compose --env-file .env -f compose.production.yml up -d --build
+docker compose --env-file .env -f compose.production.yml ps
 ```
 
-The app refuses to start a registration if `HBM_APP_BASE_URL`, `HBM_EMAIL_TRANSPORT`, or `HBM_EMAIL_FROM` are missing in production, rather than sending links that point at the wrong host.
+Do not use placeholder values for `HBM_OPERATOR_NAME`, `HBM_PRIVACY_EMAIL`, `HBM_POLICY_EFFECTIVE_DATE`, or `HBM_DEPLOYMENT_REGION`; the deployer must supply and legally review them. To open registration, set `HBM_REGISTRATION_ENABLED=true`, rerun `npm run release:web`, and set `EXPO_PUBLIC_REGISTRATION_ENABLED=true` for the matching mobile build. SMTP remains optional unless working password recovery is required.
 
-The published port binds to localhost by default (`127.0.0.1:3000`). Configure the reverse proxy to forward to it, or set `HBM_PORT` when another local port is needed. Keep the generated encryption key stable: changing it makes saved provider credentials unreadable.
+The published port binds to localhost by default (`127.0.0.1:3000`); never expose port 3000 through the cloud firewall. Install `deploy/Caddyfile`, which serves the canonical `www` HTTPS origin and redirects the apex domain. The application server firewall should expose only SSH/HTTP/HTTPS (`22`, `80`, `443`). Complete any required ICP filing before public mainland-China service. Keep the generated encryption key stable: changing it makes saved provider credentials unreadable. See [production deployment](docs/production-deployment.md) for the full runbook.
 
 Create the real owner account once inside the running container. Supply the password only for that command instead of storing it in the Compose file:
 
@@ -189,18 +183,21 @@ docker compose -f compose.production.yml --profile tools run --rm \
 
 The one-shot setup image shares only the persistent database volume with the app and exits after provisioning. The minimal runtime image does not include development tools or the setup script. Never run `npm run seed` in production.
 
-Create an online SQLite snapshot inside the persistent volume:
+Create an online SQLite snapshot with the maintenance-only backup service. First create a host directory writable by container UID/GID `1001:1001`, then set `HBM_BACKUP_HOST_DIR` (and optionally `HBM_BACKUP_RETENTION_DAYS`) in `.env`:
 
 ```bash
-docker compose -f compose.production.yml exec app \
-  node scripts/data-backup.mjs /data/backups
+sudo mkdir -p /srv/healthy-body-manager/backups
+sudo mkdir -p /srv/healthy-body-manager/data
+sudo chown 1001:1001 /srv/healthy-body-manager/data /srv/healthy-body-manager/backups
+sudo chmod 700 /srv/healthy-body-manager/data /srv/healthy-body-manager/backups
+docker compose --env-file .env -f compose.production.yml --profile maintenance run --rm backup
 ```
 
-Copy `/data/backups` to separate storage on a schedule. A named Docker volume is persistence, not an independent backup.
+The backup service mounts the host SQLite data directory read-only, writes `.sqlite` and `.sqlite.json` files to the separate host backup directory, sets those files to `0600`, and prunes files older than the retention period. It does not start the Web server or run migrations, and it receives no application secrets. Schedule the same command from Linux cron or a systemd timer; see [backup and recovery](docs/backup-and-recovery.md) for the absolute-path example, encrypted offsite copies, restore procedure, and independent `SETTINGS_ENCRYPTION_KEY` custody. A persistent host directory is still not an independent backup.
 
 ## Backup and recovery
 
-Create a consistent SQLite snapshot while the app is running:
+For local development, create a consistent SQLite snapshot while the app is running:
 
 ```bash
 npm run data:backup
@@ -213,6 +210,8 @@ npm run data:restore -- --from backups/<snapshot>.sqlite --confirm
 ```
 
 Restore validates the SQLite header and manifest, then keeps the current database in `backups/pre-restore-*` before replacing it.
+
+For production Linux scheduling, encrypted offsite storage, UID/GID `1001` directory ownership, and the stop/validate/restore/health-check runbook, see [backup and recovery](docs/backup-and-recovery.md).
 
 ## Privacy and release
 

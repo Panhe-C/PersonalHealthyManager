@@ -1,0 +1,10 @@
+[Unit]
+Description=HealthyBodyManager SQLite backup
+Requires=docker.service
+After=docker.service
+OnSuccess=healthy-body-manager-oss-upload.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/healthy-body-manager/app
+ExecStart=/usr/bin/docker compose --env-file /srv/healthy-body-manager/app/.env -f /srv/healthy-body-manager/app/compose.production.yml --profile maintenance run --rm backup

@@ -1,6 +1,6 @@
 # 发布检查清单
 
-最后更新：2026-08-01
+最后更新：2026-08-07
 
 ## 已完成的代码基线
 
@@ -30,13 +30,16 @@
 - [ ] 配置 Apple Developer Team、签名证书、Provisioning Profile、HealthKit 与 Push Notifications capability
 - [ ] 在真实 iPhone 上安装 Development Build，逐项验证 HealthKit 授权、后台读取、通知权限和推送到达
 - [ ] 创建并验证 EAS development / preview / production 构建及 APNs 凭据
-- [ ] 配置生产域名、HTTPS、数据库持久化、迁移策略和环境密钥轮换
+- [x] 代码侧固定 canonical origin `https://www.cbhdev.xyz`、Caddy HTTPS/根域跳转、本机反代与独立 Web/iOS 发布门禁
+- [ ] 完成 DNS、Caddy 证书签发与公网 HTTPS 验收；中国大陆公网服务完成适用的 ICP 备案
+- [ ] 轻量应用服务器防火墙只开放 22/80/443 并确认公网 3000 已关闭
 - [ ] 使用真实 owner 邮箱和强密码完成生产初始化，确认不运行 demo seed
 - [ ] 配置并实际安装自动任务服务，验证重启、日志、失败重试和通知去重
 - [ ] 飞书日历写回目前只服务 `HBM_LARK_CALENDAR_ACCOUNT_EMAIL` 指定的单个账号（未配置则整体禁用）。多用户开放前必须改为按用户 OAuth，并实测创建、更新、取消和账户删除后的外部事件处理
 - [ ] 对 COROS、餐食菜单、模型服务商进行真实连接验收，并确认最小权限
 - [ ] 完成备份恢复演练，并制定在线数据与离线备份的保留期限
-- [ ] 将隐私说明中的运营主体、联系邮箱、生效日期、公开 URL 和部署地域补全（现由 `HBM_OPERATOR_NAME`/`HBM_PRIVACY_EMAIL`/`HBM_POLICY_EFFECTIVE_DATE`/`HBM_DEPLOYMENT_REGION`/`HBM_PUBLIC_BASE_URL` 环境变量提供，`release:check` 门禁已就位）
+- [ ] 由实际运营者填写并法律复核运营主体、联系邮箱、生效日期和部署地域（代码不会虚构；`release:web` 门禁）
+- [ ] 决定邀请制或开放注册：邀请制保持 `HBM_REGISTRATION_ENABLED=false`；开放注册无需 SMTP，但若要提供密码找回，必须配置真实 SMTP 并验收到达/退信/SPF/DKIM/DMARC
 - [ ] 完成 App Store 隐私问卷、HealthKit 用途说明、应用截图、支持 URL 和审核备注
 
 ## 安全与依赖专项
@@ -57,9 +60,11 @@ npm test
 npx tsc --noEmit -p apps/mobile/tsconfig.json
 npm test --workspace @hbm/mobile
 npm run build
-npm run release:check
+npm run release:web
+npm run release:mobile
+# 兼容旧流程，依次运行上述两项：npm run release:check
 ```
 
-`release:check` 会读取发布环境变量和隐私说明，明确报告 EAS Project ID、HTTPS API、Bundle ID、Apple Team ID 与隐私元数据是否齐全。它在缺失项存在时返回非零状态，适合作为正式构建前的本地或 CI 门禁。
+`release:web` 检查 canonical URL、隐私元数据、部署地域与邮件 transport；选择 SMTP 时校验完整配置。`release:mobile` 检查 EAS Project ID、canonical HTTPS API、Bundle ID、Apple Team ID 与移动端注册开关。任一缺失都会返回非零状态。
 
 iOS 原生构建、真机签名和外部服务调用必须单独验收；模拟器或单元测试通过不能替代这些证据。
