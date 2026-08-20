@@ -146,17 +146,17 @@ export function prepareCorosConnection(corosRegion: CorosRegion) {
   return api.post<{ ok: true }>("/settings/mcp/coros/prep", { corosRegion });
 }
 
-const oauthHandoffSchema = z.object({ url: z.string(), expiresInMs: z.number() });
+const oauthAuthorizationSchema = z.object({ url: z.string() });
 
 /**
- * Returns a browser-openable start URL carrying a single-use handoff token. The
- * app's Bearer token cannot travel with a browser navigation, so the server
- * issues this instead.
+ * Uses the app's authenticated API request to prepare OAuth state and returns
+ * the provider URL. The browser therefore opens COROS directly and never needs
+ * to visit an HBM handoff page first.
  */
-export function createOAuthHandoffUrl(connection: "coros" | "calendar" | "meal_menu") {
-  return api.post<z.infer<typeof oauthHandoffSchema>>(
-    `/settings/mcp/oauth/handoff?connection=${connection}`,
+export function createOAuthAuthorizationUrl(connection: "coros" | "calendar" | "meal_menu") {
+  return api.post<z.infer<typeof oauthAuthorizationSchema>>(
+    `/settings/mcp/oauth/authorize?connection=${connection}`,
     {},
-    oauthHandoffSchema
+    oauthAuthorizationSchema
   );
 }

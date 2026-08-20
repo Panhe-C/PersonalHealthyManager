@@ -1270,6 +1270,18 @@ export async function handleMcpOAuthCallback(
 const APP_OAUTH_RETURN_URL = process.env.HBM_APP_OAUTH_RETURN_URL || "hbm://mcp-oauth";
 
 /**
+ * Origin for URLs that must be openable by a real browser (OAuth handoff/start/redirect URIs).
+ * The production server derives `request.url` from its own listen address (HOSTNAME=0.0.0.0 in the
+ * Docker image), not the Host header, so request origins are unusable there. Configuration wins;
+ * the request origin is only a fallback for local development.
+ */
+export function resolvePublicOrigin(requestUrl: string): string {
+  const configured = process.env.HBM_APP_BASE_URL?.trim().replace(/\/+$/, "");
+  if (configured) return new URL(configured).origin;
+  return new URL(requestUrl).origin;
+}
+
+/**
  * Where the browser is sent once the OAuth dance ends. A native flow returns to
  * the app deep link so the in-app browser dismisses itself and the app can
  * refresh; a web flow returns to the settings page it started from.

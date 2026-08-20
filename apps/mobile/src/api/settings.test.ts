@@ -13,7 +13,13 @@ const tokenStore = vi.hoisted(() => ({
 
 vi.mock("../auth/tokenStore", () => tokenStore);
 
-import { providerCredentialSource, providerModelDefaults, saveSettings, type MobileSettings } from "./settings";
+import {
+  createOAuthAuthorizationUrl,
+  providerCredentialSource,
+  providerModelDefaults,
+  saveSettings,
+  type MobileSettings
+} from "./settings";
 
 const settings: MobileSettings = {
   modelProvider: "openai",
@@ -95,5 +101,22 @@ describe("mobile settings API", () => {
     expect(providerCredentialSource("kimi")).toContain("Kimi 开放平台");
     expect(providerCredentialSource("glm")).toContain("open.bigmodel.cn");
     expect(providerCredentialSource("custom")).toBe("");
+  });
+
+  it("requests the final provider authorization URL instead of an HBM handoff URL", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
+      url: "https://api.coros.com/oauth/authorize?state=state-direct"
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    }));
+
+    await expect(createOAuthAuthorizationUrl("coros")).resolves.toEqual({
+      url: "https://api.coros.com/oauth/authorize?state=state-direct"
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      "http://localhost:3000/api/v1/settings/mcp/oauth/authorize?connection=coros",
+      expect.objectContaining({ method: "POST" })
+    );
   });
 });
