@@ -13,7 +13,7 @@ import { fetchMealMenusFromStdioMcp } from "@/src/providers/meal-menu-mcp";
 import { findCalendarSnapshotForWeek } from "@/src/services/planQueryService";
 import { loadDataMcpConnection } from "@/src/settings/service";
 
-export type PlanPreconditionCode = "body_profile_missing" | "calendar_snapshot_missing";
+export type PlanPreconditionCode = "body_profile_missing";
 
 /**
  * A missing prerequisite is the user's next action, not a server fault, so it
@@ -109,13 +109,6 @@ export async function generatePlanForUser(userId: string, weekStart: Date) {
     );
   }
 
-  if (!calendar) {
-    throw new PlanPreconditionError(
-      "生成计划前需要先同步日历，计划要避开你的忙碌时间。请到「我的 › 自动同步」同步日历。",
-      "calendar_snapshot_missing"
-    );
-  }
-
   const normalizedActivities: NormalizedActivityRecord[] = activities.map((activity) => ({
     source: "coros",
     sourceId: activity.sourceId,
@@ -170,14 +163,16 @@ export async function generatePlanForUser(userId: string, weekStart: Date) {
     activities: normalizedActivities,
     sleepRecords: normalizedSleep,
     recoveryRecords: normalizedRecovery,
-    calendar: {
-      source: "feishu",
-      rangeStart: calendar.rangeStart,
-      rangeEnd: calendar.rangeEnd,
-      busyWindows: parseJson<TimeWindow[]>(calendar.busyWindowsJson),
-      freeWindows: parseJson<TimeWindow[]>(calendar.freeWindowsJson),
-      importantEvents: parseJson<TimeWindow[]>(calendar.importantEventsJson)
-    },
+    calendar: calendar
+      ? {
+          source: "feishu",
+          rangeStart: calendar.rangeStart,
+          rangeEnd: calendar.rangeEnd,
+          busyWindows: parseJson<TimeWindow[]>(calendar.busyWindowsJson),
+          freeWindows: parseJson<TimeWindow[]>(calendar.freeWindowsJson),
+          importantEvents: parseJson<TimeWindow[]>(calendar.importantEventsJson)
+        }
+      : undefined,
     mealMenus
   });
   return prisma.$transaction(async (tx) => {
