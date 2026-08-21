@@ -66,7 +66,7 @@ export default function RegisterPage() {
         setError("Account created, but automatic sign-in failed. Sign in with your new password.");
         return;
       }
-      window.location.href = "/plan";
+      window.location.href = "/";
     } catch {
       setError("Could not reach the server. Check your connection and try again.");
     } finally {

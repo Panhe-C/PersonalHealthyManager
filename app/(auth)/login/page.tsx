@@ -28,7 +28,7 @@ export default function LoginPage() {
         return;
       }
 
-      window.location.href = "/plan";
+      window.location.href = "/";
     } catch {
       setError("邮箱或密码不正确");
     } finally {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { resetPasswordRequestSchema } from "@hbm/contracts";
 import { resetPassword } from "@/src/auth/passwordReset";
-import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/src/security/rateLimit";
+import { consumeRateLimitAsync, rateLimitHeaders, requestClientKey } from "@/src/security/rateLimit";
 
 const FAILURES = {
   invalid: { error: "This reset link is not valid.", code: "invalid_token", status: 400 },
@@ -9,7 +9,7 @@ const FAILURES = {
 } as const;
 
 export async function POST(request: Request) {
-  const ipLimit = consumeRateLimit({
+  const ipLimit = await consumeRateLimitAsync({
     key: `reset-password-ip:${requestClientKey(request)}`,
     limit: 30,
     windowMs: 15 * 60_000,

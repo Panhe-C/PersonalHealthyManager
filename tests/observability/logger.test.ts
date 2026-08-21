@@ -29,6 +29,26 @@ describe("redact", () => {
   it("scrubs long hex tokens in free text", () => {
     expect(redact(`token=${"a".repeat(40)}`)).toBe("token=[token]");
   });
+
+  it("scrubs snake_case OAuth-style keys after normalization", () => {
+    const result = redact({
+      access_token: "oauth-access-token",
+      refresh_token: "oauth-refresh-token",
+      client_secret: "oauth-client-secret",
+      api_key: "sk-live-abcdef",
+      emails: ["owner@example.test"],
+      messages: ["hello"],
+      expires_in: 3600
+    }) as Record<string, unknown>;
+
+    expect(result.access_token).toBe("[redacted]");
+    expect(result.refresh_token).toBe("[redacted]");
+    expect(result.client_secret).toBe("[redacted]");
+    expect(result.api_key).toBe("[redacted]");
+    expect(result.emails).toBe("[redacted]");
+    expect(result.messages).toBe("[redacted]");
+    expect(result.expires_in).toBe(3600);
+  });
 });
 
 describe("request context", () => {

@@ -27,7 +27,8 @@ export function HealthDisclaimerGate({
   async function accept() {
     setSubmitting(true);
     try {
-      await fetch("/api/onboarding/acknowledge-disclaimer", { method: "POST" });
+      const response = await fetch("/api/onboarding/acknowledge-disclaimer", { method: "POST" });
+      if (!response.ok) throw new Error(`Acknowledgment failed with status ${response.status}`);
       setAcknowledged(true);
     } catch {
       // Leave the modal up so the user can retry; the standing footnote is

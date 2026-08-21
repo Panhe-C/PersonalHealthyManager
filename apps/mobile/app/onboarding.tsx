@@ -3,6 +3,7 @@ import { StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 import { CheckCircle2, Circle, Compass, Dumbbell, Target, CalendarCheck2, Sparkles } from "lucide-react-native";
 import { getOnboardingState, completeOnboarding } from "../src/api/onboarding";
+import { markOnboardingBypassed } from "../src/auth/OnboardingGate";
 import type { OnboardingStateResponse } from "@hbm/contracts";
 import { Button } from "../src/components/Button";
 import { Screen } from "../src/components/Screen";
@@ -43,21 +44,53 @@ const STEP_DEFS = [
 export default function OnboardingScreen() {
   const { tokens } = useTheme();
   const [state, setState] = useState<OnboardingStateResponse | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    getOnboardingState().then(setState).catch(() => {});
+  const load = useCallback(() => {
+    setLoadFailed(false);
+    getOnboardingState()
+      .then(setState)
+      .catch(() => setLoadFailed(true));
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const finish = useCallback(async () => {
     setBusy(true);
     try {
       await completeOnboarding(true);
+      markOnboardingBypassed();
       router.replace("/(app)/(tabs)/today");
     } catch {
       setBusy(false);
     }
   }, []);
+
+  const skip = useCallback(() => {
+    markOnboardingBypassed();
+    router.replace("/(app)/(tabs)/today");
+  }, []);
+
+  if (loadFailed) {
+    return (
+      <Screen>
+        <View style={styles.header}>
+          <Compass color={tokens.tint} size={28} />
+          <Text size="title1" weight="strong" style={styles.pageTitle}>新手引导</Text>
+          <Text size="subheadline" color={tokens.labelSecondary}>
+            加载引导状态失败，请检查网络后重试。
+          </Text>
+        </View>
+        <View style={styles.actions}>
+          <Button title="重试" onPress={load} />
+          <Button title="稍后再说，先看看" variant="plain" onPress={skip} />
+        </View>
+      </Screen>
+    );
+  }
 
   if (!state) return null;
 
@@ -105,7 +138,7 @@ export default function OnboardingScreen() {
 
       <View style={styles.actions}>
         <Button title={busy ? "保存中…" : allDone ? "我已完成，进入应用" : "我已知悉，开始使用"} onPress={finish} disabled={busy} />
-        <Button title="稍后再说，先看看" variant="plain" onPress={() => router.replace("/(app)/(tabs)/today")} />
+        <Button title="稍后再说，先看看" variant="plain" onPress={skip} />
       </View>
     </Screen>
   );

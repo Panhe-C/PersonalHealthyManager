@@ -1,8 +1,9 @@
 /**
  * Shared rate-limit store. The default is process-local memory, which is fine
  * for a single Next.js instance. Set HBM_RATE_LIMIT_REDIS_URL to fan out across
- * replicas; the Redis backend uses a simple INCR + EXPIRE script over the
- * RESP protocol without taking a hard dependency at install time.
+ * replicas; the Redis backend speaks the Upstash-compatible HTTP REST API and
+ * runs INCR + PEXPIRE(NX) + PTTL as one pipeline request, without taking a
+ * hard dependency at install time.
  */
 
 export type RateLimitBucket = {
@@ -52,33 +53,36 @@ class RedisHttpRateLimitStore implements RateLimitStore {
 
   async consume(key: string, _limit: number, windowMs: number, now: number): Promise<RateLimitBucket> {
     const redisKey = `hbm:rl:${key}`;
-    const headers = {
-      Authorization: `Bearer ${this.token}`,
-      "Content-Type": "application/json"
-    };
 
-    const incrResponse = await fetch(`${this.baseUrl}/incr/${encodeURIComponent(redisKey)}`, {
+    // One pipeline request keeps INCR + PEXPIRE atomic; the NX flag makes the
+    // PEXPIRE a no-op after the first request in the window, and PTTL rides
+    // along so we can report an accurate resetAt.
+    const response = await fetch(`${this.baseUrl}/pipeline`, {
       method: "POST",
-      headers,
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify([
+        ["INCR", redisKey],
+        ["PEXPIRE", redisKey, windowMs, "NX"],
+        ["PTTL", redisKey]
+      ]),
       signal: AbortSignal.timeout(2_000)
     });
-    if (!incrResponse.ok) throw new Error(`Rate-limit Redis INCR failed: ${incrResponse.status}`);
-    const count = Number(await incrResponse.json());
+    if (!response.ok) throw new Error(`Rate-limit Redis pipeline failed: ${response.status}`);
 
-    if (count === 1) {
-      await fetch(`${this.baseUrl}/pexpire/${encodeURIComponent(redisKey)}/${windowMs}`, {
-        method: "POST",
-        headers,
-        signal: AbortSignal.timeout(2_000)
-      });
+    // Upstash answers a pipeline with [{result: …}, …] in command order.
+    const results = (await response.json()) as Array<{ result?: unknown; error?: string }>;
+    if (!Array.isArray(results) || results.length < 3) {
+      throw new Error("Rate-limit Redis pipeline returned an unexpected shape");
+    }
+    for (const entry of results) {
+      if (entry?.error) throw new Error(`Rate-limit Redis command failed: ${entry.error}`);
     }
 
-    const ttlResponse = await fetch(`${this.baseUrl}/pttl/${encodeURIComponent(redisKey)}`, {
-      method: "POST",
-      headers,
-      signal: AbortSignal.timeout(2_000)
-    });
-    const ttlMs = Number(await ttlResponse.json());
+    const count = Number(results[0].result);
+    const ttlMs = Number(results[2].result);
     const resetAt = ttlMs > 0 ? now + ttlMs : now + windowMs;
     return { count, resetAt };
   }
@@ -87,11 +91,18 @@ class RedisHttpRateLimitStore implements RateLimitStore {
 const memoryStore = new MemoryRateLimitStore();
 let activeStore: RateLimitStore = memoryStore;
 
-export function resolveRateLimitStore(env: NodeJS.ProcessEnv = process.env): RateLimitStore {
+export function resolveRateLimitStore(
+  env: Record<string, string | undefined> = process.env
+): RateLimitStore {
   const redisUrl = env.HBM_RATE_LIMIT_REDIS_URL?.trim();
   const redisToken = env.HBM_RATE_LIMIT_REDIS_TOKEN?.trim();
   if (redisUrl?.startsWith("https://") && redisToken) {
     return new RedisHttpRateLimitStore(redisUrl.replace(/\/$/, ""), redisToken);
+  }
+  if (redisUrl || redisToken) {
+    console.warn(
+      "HBM_RATE_LIMIT_REDIS_URL/TOKEN are set but the URL is not https:// or the token is missing; falling back to the in-memory rate-limit store."
+    );
   }
   return memoryStore;
 }

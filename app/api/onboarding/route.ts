@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/src/auth/session";
+import { withUser } from "@/src/auth/api";
 import {
   acknowledgeHealthDisclaimer,
   completeOnboarding,
@@ -8,8 +8,7 @@ import {
   onboardingIsComplete
 } from "@/src/services/onboardingService";
 
-export async function GET() {
-  const user = await requireUser();
+export const GET = withUser(async (user) => {
   const state = await getOnboardingState(user.id);
 
   return NextResponse.json({
@@ -17,10 +16,9 @@ export async function GET() {
     healthDisclaimerAcknowledged: healthDisclaimerAcknowledged(state),
     steps: state.steps
   });
-}
+});
 
-export async function POST(request: Request) {
-  const user = await requireUser();
+export const POST = withUser(async (user, request: Request) => {
   const body = (await request.json().catch(() => ({}))) as { acknowledgeDisclaimer?: boolean };
 
   await completeOnboarding(user.id);
@@ -36,4 +34,4 @@ export async function POST(request: Request) {
     healthDisclaimerAcknowledged: healthDisclaimerAcknowledged(state),
     steps: state.steps
   });
-}
+});

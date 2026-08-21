@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { resendVerificationRequestSchema } from "@hbm/contracts";
 import { normalizeEmail, resendVerification } from "@/src/auth/registration";
 import { captureError } from "@/src/observability/logger";
-import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/src/security/rateLimit";
+import { consumeRateLimitAsync, rateLimitHeaders, requestClientKey } from "@/src/security/rateLimit";
 
 export async function POST(request: Request) {
-  const ipLimit = consumeRateLimit({
+  const ipLimit = await consumeRateLimitAsync({
     key: `resend-verification-ip:${requestClientKey(request)}`,
     limit: 10,
     windowMs: 60 * 60_000,
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   }
 
   const email = normalizeEmail(parsed.data.email);
-  const addressLimit = consumeRateLimit({
+  const addressLimit = await consumeRateLimitAsync({
     key: `resend-verification-email:${email}`,
     limit: 3,
     windowMs: 60 * 60_000,

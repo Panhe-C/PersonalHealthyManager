@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/src/auth/session", () => ({
-  requireUser: vi.fn(async () => ({ id: "user-1", email: "owner@example.test" }))
+  getCurrentUser: vi.fn(async () => ({ id: "user-1", email: "owner@example.test" }))
 }));
 
 vi.mock("@/src/services/onboardingService", () => ({
@@ -16,6 +16,7 @@ vi.mock("@/src/services/onboardingService", () => ({
 
 import { POST as onboardingPost, GET as onboardingGet } from "@/app/api/onboarding/route";
 import { POST as ackPost } from "@/app/api/onboarding/acknowledge-disclaimer/route";
+import { getCurrentUser } from "@/src/auth/session";
 import { completeOnboarding, acknowledgeHealthDisclaimer, getOnboardingState } from "@/src/services/onboardingService";
 
 const baseState = {
@@ -26,6 +27,16 @@ const baseState = {
 
 describe("GET /api/onboarding", () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it("returns 401 when unauthenticated", async () => {
+    vi.mocked(getCurrentUser).mockResolvedValueOnce(null);
+
+    const response = await onboardingGet();
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
+    expect(getOnboardingState).not.toHaveBeenCalled();
+  });
 
   it("returns the step flags and the two acknowledgment booleans", async () => {
     vi.mocked(getOnboardingState).mockResolvedValueOnce({
@@ -46,6 +57,18 @@ describe("GET /api/onboarding", () => {
 
 describe("POST /api/onboarding", () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it("returns 401 when unauthenticated", async () => {
+    vi.mocked(getCurrentUser).mockResolvedValueOnce(null);
+
+    const response = await onboardingPost(
+      new Request("http://localhost/api/onboarding", { method: "POST" })
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
+    expect(completeOnboarding).not.toHaveBeenCalled();
+  });
 
   it("completes onboarding and acknowledges the disclaimer when asked to", async () => {
     vi.mocked(getOnboardingState).mockResolvedValueOnce({
@@ -100,6 +123,18 @@ describe("POST /api/onboarding", () => {
 
 describe("POST /api/onboarding/acknowledge-disclaimer", () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it("returns 401 when unauthenticated", async () => {
+    vi.mocked(getCurrentUser).mockResolvedValueOnce(null);
+
+    const response = await ackPost(
+      new Request("http://localhost/api/onboarding/acknowledge-disclaimer", { method: "POST" })
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
+    expect(acknowledgeHealthDisclaimer).not.toHaveBeenCalled();
+  });
 
   it("records the acknowledgment", async () => {
     const response = await ackPost(

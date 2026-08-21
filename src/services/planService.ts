@@ -7,6 +7,7 @@ import type {
 } from "@/src/domain/models";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/src/db/client";
+import { captureError } from "@/src/observability/logger";
 import { createCalendarDraftsFromTasks, reconcileCalendarDrafts } from "@/src/planning/calendarDrafts";
 import { generateWeeklyPlan } from "@/src/planning/engine";
 import { fetchMealMenusFromStdioMcp } from "@/src/providers/meal-menu-mcp";
@@ -81,12 +82,7 @@ export async function resolveMealMenusForPlan(userId: string, weekStart: Date): 
   try {
     return await fetchMealMenusFromStdioMcp(connection, weekStart);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Meal menu request failed";
-    console.error("[meal-menu] plan generation could not read menus", {
-      userId,
-      weekStart: weekStart.toISOString(),
-      message
-    });
+    captureError("meal_menu_fetch_failed", error, { weekStart: weekStart.toISOString() });
     return [];
   }
 }

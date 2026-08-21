@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { verifyPassword } from "@/src/auth/password";
 import { createSession } from "@/src/auth/session";
 import { prisma } from "@/src/db/client";
-import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/src/security/rateLimit";
+import { consumeRateLimitAsync, rateLimitHeaders, requestClientKey } from "@/src/security/rateLimit";
 
 const INVALID_CREDENTIALS = "Invalid email or password";
 
@@ -12,7 +12,7 @@ function invalidCredentialsResponse(headers?: HeadersInit) {
 
 export async function POST(request: Request) {
   const clientKey = requestClientKey(request);
-  const ipLimit = consumeRateLimit({
+  const ipLimit = await consumeRateLimitAsync({
     key: `login-ip:${clientKey}`,
     limit: 20,
     windowMs: 15 * 60_000,
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
   const credentials = body as Record<string, unknown>;
   const email = typeof credentials.email === "string" ? credentials.email.trim().toLowerCase() : "";
   const password = typeof credentials.password === "string" ? credentials.password : "";
-  const accountLimit = consumeRateLimit({
+  const accountLimit = await consumeRateLimitAsync({
     key: `login-account:${email || "unknown"}`,
     limit: 5,
     windowMs: 15 * 60_000,

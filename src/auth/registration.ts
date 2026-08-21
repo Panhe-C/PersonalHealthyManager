@@ -71,8 +71,8 @@ export async function registerUser(input: {
       return;
     }
 
-    // Unverified accounts have never been usable, so letting a repeat signup
-    // reset the password avoids stranding someone who mistyped it initially.
+    // Legacy accounts predate email verification, so a repeat signup resetting
+    // the password avoids stranding someone who mistyped it initially.
     // Re-accepting terms here records the version the user actually saw.
     await prisma.user.update({
       where: { id: existing.id },

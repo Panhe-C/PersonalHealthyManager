@@ -3,10 +3,10 @@ import { forgotPasswordRequestSchema } from "@hbm/contracts";
 import { normalizeEmail } from "@/src/auth/registration";
 import { requestPasswordReset } from "@/src/auth/passwordReset";
 import { captureError } from "@/src/observability/logger";
-import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/src/security/rateLimit";
+import { consumeRateLimitAsync, rateLimitHeaders, requestClientKey } from "@/src/security/rateLimit";
 
 export async function POST(request: Request) {
-  const ipLimit = consumeRateLimit({
+  const ipLimit = await consumeRateLimitAsync({
     key: `forgot-password-ip:${requestClientKey(request)}`,
     limit: 10,
     windowMs: 60 * 60_000,
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   }
 
   const email = normalizeEmail(parsed.data.email);
-  const addressLimit = consumeRateLimit({
+  const addressLimit = await consumeRateLimitAsync({
     key: `forgot-password-email:${email}`,
     limit: 3,
     windowMs: 60 * 60_000,

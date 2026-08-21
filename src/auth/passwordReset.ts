@@ -21,18 +21,19 @@ function buildResetUrl(token: string): string {
 /**
  * Requests a reset link.
  *
- * Resolves the same way for an unknown address, an unverified account, and a
- * verified one, so this endpoint cannot be used to discover who is registered —
- * the same property registration and resend already have.
+ * Resolves the same way for a known and an unknown address, so this endpoint
+ * cannot be used to discover who is registered — the same property
+ * registration and resend already have.
  *
- * An unverified account gets no link: letting a reset set a working password
- * would turn this into a way past the verification step.
+ * Every existing account gets a link, including legacy ones whose
+ * emailVerifiedAt is null: that field no longer gates login, so withholding
+ * the reset would strand those users with no way back in.
  */
 export async function requestPasswordReset(rawEmail: string): Promise<void> {
   const email = normalizeEmail(rawEmail);
   const user = await prisma.user.findUnique({ where: { email } });
 
-  if (!user || !user.emailVerifiedAt) return;
+  if (!user) return;
 
   const token = randomBytes(32).toString("hex");
 

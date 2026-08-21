@@ -14,7 +14,7 @@
 - 将 `deploy/Caddyfile` 安装为 `/etc/caddy/Caddyfile`，运行
   `caddy validate --config /etc/caddy/Caddyfile` 后 reload。Caddy 为 `www` 域名
   终止 HTTPS，把根域名重定向到唯一 origin，并反代本机应用。
-- 在服务器 `.env` 中注入独立的高熵 `SESSION_SECRET`、
+- 在服务器 `.env` 中注入独立的高熵
   `SETTINGS_ENCRYPTION_KEY`。不要提交任何 secret。
 - 由实际运营者填写并复核 `HBM_OPERATOR_NAME`、`HBM_PRIVACY_EMAIL`、
   `HBM_POLICY_EFFECTIVE_DATE`、`HBM_DEPLOYMENT_REGION`。仓库不猜测法律主体。
@@ -60,6 +60,11 @@ HTTPS API、bundle ID、Apple Team ID 与移动端注册开关；`release:check`
 Connect 与真机能力必须在 Apple/Expo 外部系统单独验收。
 
 ## 部署与备份
+
+备份 timer（`deploy/systemd/healthy-body-manager-backup.timer`）按主机本地时区在
+03:15 触发，不使用 `OnCalendar` 时区后缀（需 systemd ≥ 247，旧发行版会解析失败）。
+部署前先确认主机时区为 Asia/Shanghai：`timedatectl`（必要时
+`timedatectl set-timezone Asia/Shanghai`）。
 
 ```bash
 docker compose --env-file .env -f compose.production.yml up -d --build app

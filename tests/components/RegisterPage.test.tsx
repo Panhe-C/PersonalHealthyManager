@@ -45,7 +45,7 @@ describe("RegisterPage", () => {
         body: JSON.stringify({ email: "new@example.com", password: "long-enough-password" })
       })
     );
-    expect(window.location.href).toBe("/plan");
+    expect(window.location.href).toBe("/");
     expect(screen.queryByText("Check your inbox")).not.toBeInTheDocument();
   });
 });

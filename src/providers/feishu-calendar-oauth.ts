@@ -76,14 +76,19 @@ export async function exchangeFeishuCode(params: {
     signal: AbortSignal.timeout(15_000)
   });
   const body = (await response.json()) as {
-    code?: number;
+    code?: number | string;
     access_token?: string;
     refresh_token?: string;
     expires_in?: number;
     msg?: string;
+    error?: string;
+    error_description?: string;
   };
-  if (!response.ok || body.code !== 0 || !body.access_token) {
-    throw new Error(body.msg || "Feishu OAuth token exchange failed");
+  // The v2 token endpoint omits `code` on success entirely; only treat it as a
+  // failure when the field is present and non-zero (some responses send "0").
+  const hasErrorCode = body.code !== undefined && String(body.code) !== "0";
+  if (!response.ok || hasErrorCode || !body.access_token) {
+    throw new Error(body.error_description || body.msg || body.error || "Feishu OAuth token exchange failed");
   }
   return {
     accessToken: body.access_token,

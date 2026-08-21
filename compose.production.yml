@@ -10,7 +10,6 @@ services:
       - "${HBM_BIND_ADDRESS:-127.0.0.1}:${HBM_PORT:-3000}:3000"
     environment:
       DATABASE_URL: file:/data/healthy-body.sqlite
-      SESSION_SECRET: ${SESSION_SECRET:?set a stable high-entropy SESSION_SECRET in the deployment environment}
       SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:?set SETTINGS_ENCRYPTION_KEY in the deployment environment}
       HBM_OWNER_EMAIL: ${HBM_OWNER_EMAIL:-}
       HBM_OWNER_TIMEZONE: ${HBM_OWNER_TIMEZONE:-Asia/Shanghai}

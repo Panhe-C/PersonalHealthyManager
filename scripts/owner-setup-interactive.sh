@@ -15,6 +15,12 @@ if [[ ! -r "$env_file" ]]; then
 fi
 
 owner_email="$(sed -n 's/^HBM_OWNER_EMAIL=//p' "$env_file" | tail -n 1)"
+# Strip surrounding quotes: .env.example writes values in double quotes and we
+# must not store the literal quote characters as part of the email.
+owner_email="${owner_email%\"}"
+owner_email="${owner_email#\"}"
+owner_email="${owner_email%\'}"
+owner_email="${owner_email#\'}"
 if [[ -z "$owner_email" ]]; then
   echo "HBM_OWNER_EMAIL is missing from $env_file" >&2
   exit 1

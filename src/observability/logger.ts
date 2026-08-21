@@ -12,8 +12,37 @@ type RequestContext = {
 
 const requestContext = new AsyncLocalStorage<RequestContext>();
 
-const SENSITIVE_KEY =
-  /^(password|passwordhash|currentpassword|newpassword|token|refreshtoken|accesstoken|authorization|apikey|encryptedapikey|secret|cookie|set-cookie|email|content|message|prompt|body|notes)$/i;
+// Keys are normalized (lowercase, separators removed) before matching so
+// snake_case OAuth fields like `access_token` / `client_secret` are covered
+// alongside camelCase. Comparison set stays fully anchored: exact match only.
+const SENSITIVE_KEYS = new Set([
+  "password",
+  "passwordhash",
+  "currentpassword",
+  "newpassword",
+  "token",
+  "accesstoken",
+  "refreshtoken",
+  "authorization",
+  "apikey",
+  "encryptedapikey",
+  "secret",
+  "clientsecret",
+  "cookie",
+  "setcookie",
+  "email",
+  "emails",
+  "content",
+  "message",
+  "messages",
+  "prompt",
+  "body",
+  "notes"
+]);
+
+function isSensitiveKey(key: string): boolean {
+  return SENSITIVE_KEYS.has(key.toLowerCase().replace(/[-_]/g, ""));
+}
 
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const BEARER_PATTERN = /Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi;
@@ -28,7 +57,7 @@ export function redact(value: unknown, keyHint = ""): unknown {
   if (value == null) return value;
 
   if (typeof value === "string") {
-    if (SENSITIVE_KEY.test(keyHint)) return "[redacted]";
+    if (isSensitiveKey(keyHint)) return "[redacted]";
     return value
       .replace(EMAIL_PATTERN, "[email]")
       .replace(BEARER_PATTERN, "Bearer [redacted]")
@@ -44,7 +73,7 @@ export function redact(value: unknown, keyHint = ""): unknown {
   if (typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-      out[key] = SENSITIVE_KEY.test(key) ? "[redacted]" : redact(entry, key);
+      out[key] = isSensitiveKey(key) ? "[redacted]" : redact(entry, key);
     }
     return out;
   }

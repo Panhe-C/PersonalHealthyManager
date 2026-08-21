@@ -3,7 +3,7 @@ import { registerRequestSchema } from "@hbm/contracts";
 import { normalizeEmail, registerUser } from "@/src/auth/registration";
 import { isRegistrationEnabled } from "@/src/auth/registrationPolicy";
 import { captureError } from "@/src/observability/logger";
-import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/src/security/rateLimit";
+import { consumeRateLimitAsync, rateLimitHeaders, requestClientKey } from "@/src/security/rateLimit";
 
 export async function POST(request: Request) {
   if (!isRegistrationEnabled()) {
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   }
 
   const clientKey = requestClientKey(request);
-  const ipLimit = consumeRateLimit({
+  const ipLimit = await consumeRateLimitAsync({
     key: `register-ip:${clientKey}`,
     limit: 10,
     windowMs: 60 * 60_000,
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   }
 
   const email = normalizeEmail(parsed.data.email);
-  const addressLimit = consumeRateLimit({
+  const addressLimit = await consumeRateLimitAsync({
     key: `register-email:${email}`,
     limit: 5,
     windowMs: 60 * 60_000,

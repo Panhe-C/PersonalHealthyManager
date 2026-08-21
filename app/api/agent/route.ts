@@ -6,7 +6,7 @@ import {
   handlePreparedAgentMessage,
   prepareAgentMessage
 } from "@/src/services/agentOrchestration";
-import { consumeRateLimit, rateLimitHeaders } from "@/src/security/rateLimit";
+import { consumeRateLimitAsync, rateLimitHeaders } from "@/src/security/rateLimit";
 import {
   AGENT_STREAM_MEDIA_TYPE,
   encodeAgentStreamEvent,
@@ -15,7 +15,7 @@ import {
 } from "@hbm/contracts";
 
 export const POST = withUser(async (user, request: Request) => {
-  const limit = consumeRateLimit({ key: `agent:${user.id}`, limit: 30, windowMs: 60_000 });
+  const limit = await consumeRateLimitAsync({ key: `agent:${user.id}`, limit: 30, windowMs: 60_000 });
   if (!limit.allowed) {
     return NextResponse.json(
       { error: "Too many agent requests", code: "rate_limited" },

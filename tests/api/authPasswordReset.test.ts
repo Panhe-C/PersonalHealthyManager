@@ -98,13 +98,14 @@ describe("requestPasswordReset", () => {
     expect(prisma.passwordResetToken.create).not.toHaveBeenCalled();
   });
 
-  it("refuses to reset an unverified account, which would bypass verification", async () => {
+  it("emails a reset link to a legacy account that never verified its email", async () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: "user-1", emailVerifiedAt: null } as never);
 
-    await requestPasswordReset("pending@example.com");
+    await requestPasswordReset("legacy@example.com");
 
-    expect(sendEmail).not.toHaveBeenCalled();
-    expect(prisma.passwordResetToken.create).not.toHaveBeenCalled();
+    expect(lastEmail()?.to).toBe("legacy@example.com");
+    expect(lastEmail()?.text).toContain("https://hbm.example.com/reset-password?token=");
+    expect(prisma.passwordResetToken.create).toHaveBeenCalled();
   });
 });
 

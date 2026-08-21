@@ -11,7 +11,6 @@ export default function AppLayout() {
   return (
     <OnboardingGate>
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: tokens.bg } }}>
-        <Stack.Screen name="onboarding" />
         <Stack.Screen name="(tabs)" />
       </Stack>
     </OnboardingGate>

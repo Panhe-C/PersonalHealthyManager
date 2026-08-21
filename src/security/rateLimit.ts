@@ -27,10 +27,9 @@ export function consumeRateLimit(options: RateLimitOptions): RateLimitResult {
   const store = getRateLimitStore();
   const bucketOrPromise = store.consume(options.key, options.limit, options.windowMs, now);
 
-  // The default memory store is synchronous; Redis is async. Callers today are
-  // sync API routes, so we only accept a Promise when the result is already
-  // settled (tests) and otherwise require the sync memory path. Async Redis
-  // call sites should use consumeRateLimitAsync.
+  // Synchronous variant for the in-memory store only (used by tests). Request
+  // handlers must call consumeRateLimitAsync so the async Redis store works;
+  // hitting a Promise here means a caller took the sync path against Redis.
   if (bucketOrPromise instanceof Promise) {
     throw new Error("Use consumeRateLimitAsync when the rate-limit store is asynchronous");
   }

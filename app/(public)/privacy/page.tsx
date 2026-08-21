@@ -1,6 +1,9 @@
 import { getPolicyMetadata } from "@/src/legal/policyMetadata";
 
 export const metadata = { title: "隐私说明 · Healthy Body Manager" };
+// The policy metadata comes from HBM_* env vars that only exist at runtime
+// (Docker builds run without them), so this page must render per request.
+export const dynamic = "force-dynamic";
 
 export default function PrivacyPage() {
   const meta = getPolicyMetadata();
