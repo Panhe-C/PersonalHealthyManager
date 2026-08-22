@@ -51,6 +51,28 @@ export function verificationEmail(params: { to: string; verifyUrl: string; expir
   };
 }
 
+export function passwordResetEmail(params: { to: string; resetUrl: string; expiresInMinutes: number }): EmailMessage {
+  const paragraphs = [
+    "Use the link below to choose a new Healthy Body Manager password.",
+    `This link expires in ${params.expiresInMinutes} minutes and can only be used once. Signing in again on your other devices will be required afterwards.`,
+    "If you did not ask for this, you can ignore this email. Your password has not changed."
+  ];
+
+  return {
+    to: params.to,
+    subject: "Reset your Healthy Body Manager password",
+    text: [
+      "Use the link below to choose a new Healthy Body Manager password.",
+      "",
+      params.resetUrl,
+      "",
+      `This link expires in ${params.expiresInMinutes} minutes and can only be used once.`,
+      "If you did not ask for this, you can ignore this email. Your password has not changed."
+    ].join("\n"),
+    html: layout("Reset your password", paragraphs, { label: "Choose a new password", url: params.resetUrl })
+  };
+}
+
 /**
  * Sent when someone tries to register an address that already has a verified
  * account. Registration responses are identical either way, so this email is

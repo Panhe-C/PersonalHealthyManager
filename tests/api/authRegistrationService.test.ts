@@ -30,13 +30,6 @@ function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-function issuedToken(): string {
-  const call = vi.mocked(prisma.emailVerificationToken.create).mock.calls[0]?.[0] as
-    | { data: { tokenHash: string } }
-    | undefined;
-  return call?.data.tokenHash ?? "";
-}
-
 function lastEmail() {
   const calls = vi.mocked(sendEmail).mock.calls;
   return calls[calls.length - 1]?.[0];
@@ -51,26 +44,46 @@ describe("registerUser", () => {
     vi.mocked(prisma.emailVerificationToken.deleteMany).mockResolvedValue({ count: 0 } as never);
   });
 
-  it("creates an unverified account and emails a verification link", async () => {
+  it("creates an immediately usable account without sending email", async () => {
     await registerUser({ email: "new@example.com", password: VALID_PASSWORD });
 
     const created = vi.mocked(prisma.user.create).mock.calls[0][0] as { data: Record<string, unknown> };
     expect(created.data.email).toBe("new@example.com");
     expect(created.data.passwordHash).not.toBe(VALID_PASSWORD);
-    expect(created.data).not.toHaveProperty("emailVerifiedAt");
-
-    const email = lastEmail();
-    expect(email?.to).toBe("new@example.com");
-    expect(email?.text).toContain("https://hbm.example.com/verify-email?token=");
+    expect(created.data.emailVerifiedAt).toBeInstanceOf(Date);
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(prisma.emailVerificationToken.create).not.toHaveBeenCalled();
   });
 
-  it("stores only a hash of the verification token", async () => {
+  it("stamps the terms acceptance time and version on a new account", async () => {
     await registerUser({ email: "new@example.com", password: VALID_PASSWORD });
 
-    const link = lastEmail()?.text.match(/token=([a-f0-9]+)/)?.[1] ?? "";
-    expect(link).not.toBe("");
-    expect(issuedToken()).toBe(hashToken(link));
-    expect(issuedToken()).not.toBe(link);
+    const created = vi.mocked(prisma.user.create).mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(created.data.termsAcceptedAt).toBeInstanceOf(Date);
+    expect(created.data.termsAcceptedVersion).toBe("2026-08-01");
+  });
+
+  it("makes an existing pending account immediately usable when it re-registers", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: "user-1", emailVerifiedAt: null } as never);
+    vi.mocked(prisma.user.update).mockResolvedValue({} as never);
+
+    await registerUser({ email: "pending@example.com", password: VALID_PASSWORD });
+
+    const updated = vi.mocked(prisma.user.update).mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(updated.data.emailVerifiedAt).toBeInstanceOf(Date);
+    expect(updated.data.termsAcceptedAt).toBeInstanceOf(Date);
+    expect(updated.data.termsAcceptedVersion).toBe("2026-08-01");
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(prisma.emailVerificationToken.create).not.toHaveBeenCalled();
+  });
+
+  it("does not touch terms acceptance for an already-verified account", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: "user-1", emailVerifiedAt: new Date() } as never);
+
+    await registerUser({ email: "taken@example.com", password: VALID_PASSWORD });
+
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.user.create).not.toHaveBeenCalled();
   });
 
   it("defaults the timezone but honours an explicit one", async () => {
@@ -88,7 +101,7 @@ describe("registerUser", () => {
     );
   });
 
-  it("notifies the owner instead of creating a duplicate when the account is verified", async () => {
+  it("does not send email or create a duplicate when the account already exists", async () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
       id: "user-1",
       emailVerifiedAt: new Date()
@@ -98,28 +111,9 @@ describe("registerUser", () => {
 
     expect(prisma.user.create).not.toHaveBeenCalled();
     expect(prisma.emailVerificationToken.create).not.toHaveBeenCalled();
-    expect(lastEmail()?.subject).toContain("already have");
+    expect(sendEmail).not.toHaveBeenCalled();
   });
 
-  it("re-sends verification and resets the password for an unverified account", async () => {
-    vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: "user-1", emailVerifiedAt: null } as never);
-    vi.mocked(prisma.user.update).mockResolvedValue({} as never);
-
-    await registerUser({ email: "pending@example.com", password: VALID_PASSWORD });
-
-    expect(prisma.user.create).not.toHaveBeenCalled();
-    expect(prisma.user.update).toHaveBeenCalled();
-    expect(prisma.emailVerificationToken.create).toHaveBeenCalled();
-    expect(lastEmail()?.subject).toContain("Verify");
-  });
-
-  it("invalidates outstanding tokens when a new one is issued", async () => {
-    await registerUser({ email: "new@example.com", password: VALID_PASSWORD });
-
-    expect(prisma.emailVerificationToken.deleteMany).toHaveBeenCalledWith({
-      where: { userId: "user-new", consumedAt: null }
-    });
-  });
 });
 
 describe("verifyEmail", () => {

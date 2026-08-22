@@ -1,8 +1,7 @@
 import type { AgentIntent } from "@/src/services/agent";
-import type { MealMenu } from "@/src/domain/models";
 import { prisma } from "@/src/db/client";
 import { syncCorosFromSettings } from "@/src/services/syncService";
-import { getMealMenusForDate } from "@/src/services/mealMenuService";
+import { loadMealMenusForDate, type MealMenuResult } from "@/src/services/mealMenuService";
 import {
   formatMemoryLines,
   loadActiveMemoriesForContext
@@ -213,16 +212,18 @@ async function loadPlanContext(userId: string) {
 }
 
 async function loadMenuContext(userId: string) {
-  const [plan, todaysMenus] = await Promise.all([
+  const [plan, todaysMenu] = await Promise.all([
     prisma.plan.findFirst({
       where: { userId, status: { not: "superseded" } },
       orderBy: { weekStart: "desc" },
       select: { nutritionTargetsJson: true, menuRecommendationsJson: true, summary: true }
     }),
-    getMealMenusForDate(userId, new Date()).catch(() => [] as MealMenu[])
+    loadMealMenusForDate(userId, new Date()).catch(
+      () => ({ status: "failed", menus: [], error: "unavailable" }) as MealMenuResult
+    )
   ]);
 
-  const menuLines = todaysMenus.flatMap((menu) =>
+  const menuLines = todaysMenu.menus.flatMap((menu) =>
     menu.items.map((item) => `${menu.meal}: ${item.name} (${item.calories} kcal, protein ${item.proteinGrams}g, tags ${item.tags.join("/") || "none"})`)
   );
 
@@ -232,10 +233,10 @@ async function loadMenuContext(userId: string) {
         ? `Plan summary: ${plan.summary}\nNutrition targets: ${plan.nutritionTargetsJson}\nMenu recommendations: ${plan.menuRecommendationsJson}`
         : "No nutrition plan generated."
     ]),
-    section(
-      "Today's menu",
-      todaysMenus.length > 0 ? menuLines : ["No live menu available for today; falling back to cached recommendations."]
-    )
+    // The menu section is omitted entirely when there is nothing to show, so the
+    // model advises against the nutrition targets instead of inventing dishes to
+    // fill an empty heading.
+    ...(menuLines.length > 0 ? [section("Today's menu", menuLines)] : [])
   ];
 }
 

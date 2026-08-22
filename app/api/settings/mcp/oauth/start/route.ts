@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { consumeOAuthHandoffToken } from "@/src/auth/oauthHandoff";
 import { getCurrentUser } from "@/src/auth/session";
-import { buildOAuthReturnUrl, createMcpOAuthAuthorizationUrl } from "@/src/settings/service";
+import { buildOAuthReturnUrl, createMcpOAuthAuthorizationUrl, resolvePublicOrigin } from "@/src/settings/service";
 import type { DataMcpConnectionId } from "@/src/settings/defaults";
 
 /**
@@ -11,6 +11,7 @@ import type { DataMcpConnectionId } from "@/src/settings/defaults";
  */
 export const GET = async (request: Request) => {
   const url = new URL(request.url);
+  const origin = resolvePublicOrigin(request.url);
   const handoff = url.searchParams.get("handoff");
   const returnTarget = handoff ? "app" : "web";
 
@@ -19,7 +20,7 @@ export const GET = async (request: Request) => {
 
     if (!user) {
       return NextResponse.redirect(
-        buildOAuthReturnUrl(returnTarget, url.origin, {
+        buildOAuthReturnUrl(returnTarget, origin, {
           auth: "failed",
           error: handoff ? "Authorization link expired, please try again from the app" : "Unauthorized"
         })
@@ -32,12 +33,12 @@ export const GET = async (request: Request) => {
       return NextResponse.json({ error: "MCP connection is required" }, { status: 400 });
     }
 
-    const authorizationUrl = await createMcpOAuthAuthorizationUrl(user.id, connection, url.origin, returnTarget);
+    const authorizationUrl = await createMcpOAuthAuthorizationUrl(user.id, connection, origin, returnTarget);
     return NextResponse.redirect(authorizationUrl);
   } catch (error) {
     const connection = url.searchParams.get("connection");
     return NextResponse.redirect(
-      buildOAuthReturnUrl(returnTarget, url.origin, {
+      buildOAuthReturnUrl(returnTarget, origin, {
         ...(connection ? { mcp: connection } : {}),
         auth: "failed",
         error: error instanceof Error ? error.message : "OAuth login could not be started"

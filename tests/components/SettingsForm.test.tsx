@@ -288,6 +288,26 @@ describe("SettingsForm", () => {
     expect(mealMenuScope.queryByLabelText("Notes for Meal Menu")).not.toBeInTheDocument();
   });
 
+  it("names the platform that issues a working key for the selected provider", () => {
+    render(
+      <SettingsForm
+        initialSettings={{
+          modelProvider: "openai",
+          modelName: "gpt-4o-mini",
+          modelBaseUrl: "https://api.openai.com/v1",
+          hasApiKey: false,
+          apiKeyHint: null,
+          dataMcpConnections: defaultDataMcpConnections
+        }}
+      />
+    );
+
+    expect(screen.getByLabelText("Where to get a key")).toHaveTextContent("platform.openai.com");
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Provider" }), { target: { value: "kimi" } });
+    expect(screen.getByLabelText("Where to get a key")).toHaveTextContent("Kimi Open Platform");
+  });
+
   it("saves Meal Menu as a local bytecanteen MCP command", async () => {
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,
@@ -319,8 +339,9 @@ describe("SettingsForm", () => {
     const mealMenuScope = within(mealMenuCard as HTMLElement);
 
     fireEvent.change(mealMenuScope.getByLabelText("Transport for Meal Menu"), { target: { value: "stdio" } });
-    expect(mealMenuScope.getByLabelText("Command for Meal Menu")).toHaveValue("npx");
-    expect(mealMenuScope.getByLabelText("Arguments for Meal Menu")).toHaveValue("-y @byted/mcp-bytecanteen@latest");
+    // The command is fixed by the server, so it is shown rather than edited.
+    expect(mealMenuScope.getByLabelText("Command for Meal Menu")).toHaveTextContent("npx -y @byted/mcp-bytecanteen@latest");
+    expect(mealMenuScope.queryByLabelText("Arguments for Meal Menu")).not.toBeInTheDocument();
 
     fireEvent.change(mealMenuScope.getByLabelText("LARK_SESSION for Meal Menu"), { target: { value: "session-cookie-123456" } });
     fireEvent.change(mealMenuScope.getByLabelText("Canteen for Meal Menu"), { target: { value: "北京融中心" } });

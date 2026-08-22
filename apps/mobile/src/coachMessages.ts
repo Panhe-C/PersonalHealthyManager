@@ -1,7 +1,7 @@
 import type { AgentAdjustment, AgentMessage } from "./api/schemas";
 
 function messageKey(message: AgentMessage) {
-  return `${message.role}:${message.content}`;
+  return `${message.role}:${message.content}:${message.attachments?.map((item) => item.id).join(",") ?? ""}`;
 }
 
 function isLocalMessage(message: AgentMessage) {
@@ -24,9 +24,10 @@ export function canSubmitCoachMessage(input: {
   conversationId?: string;
   sending: boolean;
   conversationMutationPending: boolean;
+  attachmentCount?: number;
 }) {
   return Boolean(
-    input.content.trim() &&
+    (input.content.trim() || (input.attachmentCount ?? 0) > 0) &&
     input.conversationId &&
     !input.sending &&
     !input.conversationMutationPending

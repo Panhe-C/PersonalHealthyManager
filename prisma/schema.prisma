@@ -13,11 +13,16 @@ model User {
   passwordHash    String
   timezone        String    @default("Asia/Shanghai")
   emailVerifiedAt DateTime?
+  onboardingCompletedAt      DateTime?
+  healthDisclaimerAcknowledgedAt DateTime?
+  termsAcceptedAt            DateTime?
+  termsAcceptedVersion       String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   sessions               Session[]
   emailVerifications     EmailVerificationToken[]
+  passwordResets         PasswordResetToken[]
   bodyProfile            BodyProfile?
   goals                  Goal[]
   activityRecords        ActivityRecord[]
@@ -51,6 +56,25 @@ model Session {
 }
 
 model EmailVerificationToken {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/**
+ * Same shape as EmailVerificationToken but a much shorter TTL: this one can
+ * change a password, so a link sitting in a forwarded inbox is worth more to an
+ * attacker than a verification link.
+ */
+model PasswordResetToken {
   id         String    @id @default(cuid())
   userId     String
   tokenHash  String    @unique

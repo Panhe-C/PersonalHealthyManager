@@ -70,7 +70,7 @@ export type MealMenuItem = {
 };
 
 export type MealMenu = {
-  source: "mock" | "bytecanteen";
+  source: "bytecanteen";
   date: Date;
   meal: "breakfast" | "lunch" | "dinner";
   items: MealMenuItem[];

@@ -4,6 +4,8 @@ import type { AgentContext } from "@/src/services/agentContext";
 import { actionIdList } from "@/src/services/agentActions/registry";
 import { readSseEvents } from "@/src/services/agentStreaming/sse";
 import { createVisibleTextFilter } from "@/src/services/agentStreaming/visibleText";
+import { anthropicUserContent, openAiUserContent } from "@/src/services/agentAttachments";
+import type { AgentAttachment } from "@hbm/contracts";
 
 export type AgentIntent = "recovery_check" | "calendar_confirmation" | "menu_advice" | "replan" | "training_analysis" | "general";
 
@@ -260,7 +262,8 @@ async function callAnthropicModel(
   message: string,
   history: AgentConversationMessage[],
   intent: AgentIntent,
-  context?: AgentContext
+  context?: AgentContext,
+  attachments: AgentAttachment[] = []
 ) {
   const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}/messages`, {
     method: "POST",
@@ -273,7 +276,7 @@ async function callAnthropicModel(
       model: config.modelName,
       max_tokens: DEFAULT_AGENT_MAX_TOKENS,
       system: systemPrompt(intent, context),
-      messages: [...compactHistory(history), { role: "user", content: message }]
+      messages: [...compactHistory(history), { role: "user", content: anthropicUserContent(message, attachments) }]
     })
   });
 
@@ -285,7 +288,8 @@ async function callOpenAiCompatibleModel(
   message: string,
   history: AgentConversationMessage[],
   intent: AgentIntent,
-  context?: AgentContext
+  context?: AgentContext,
+  attachments: AgentAttachment[] = []
 ) {
   const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}/chat/completions`, {
     method: "POST",
@@ -300,7 +304,7 @@ async function callOpenAiCompatibleModel(
       messages: [
         { role: "system", content: systemPrompt(intent, context) },
         ...compactHistory(history),
-        { role: "user", content: message }
+        { role: "user", content: openAiUserContent(message, attachments) }
       ]
     })
   });
@@ -313,10 +317,11 @@ async function callConfiguredModel(
   message: string,
   history: AgentConversationMessage[],
   intent: AgentIntent,
-  context?: AgentContext
+  context?: AgentContext,
+  attachments: AgentAttachment[] = []
 ) {
-  if (config.provider === "anthropic") return callAnthropicModel(config, message, history, intent, context);
-  return callOpenAiCompatibleModel(config, message, history, intent, context);
+  if (config.provider === "anthropic") return callAnthropicModel(config, message, history, intent, context, attachments);
+  return callOpenAiCompatibleModel(config, message, history, intent, context, attachments);
 }
 
 type ModelDeltaHandler = (text: string) => void | Promise<void>;
@@ -346,7 +351,8 @@ async function streamOpenAiCompatibleModel(
   intent: AgentIntent,
   context: AgentContext | undefined,
   onRawDelta: ModelDeltaHandler,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  attachments: AgentAttachment[] = []
 ) {
   const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}/chat/completions`, {
     method: "POST",
@@ -362,7 +368,7 @@ async function streamOpenAiCompatibleModel(
       messages: [
         { role: "system", content: systemPrompt(intent, context) },
         ...compactHistory(history),
-        { role: "user", content: message }
+        { role: "user", content: openAiUserContent(message, attachments) }
       ]
     }),
     signal
@@ -418,7 +424,8 @@ async function streamAnthropicModel(
   intent: AgentIntent,
   context: AgentContext | undefined,
   onRawDelta: ModelDeltaHandler,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  attachments: AgentAttachment[] = []
 ) {
   const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}/messages`, {
     method: "POST",
@@ -432,7 +439,7 @@ async function streamAnthropicModel(
       max_tokens: DEFAULT_AGENT_MAX_TOKENS,
       stream: true,
       system: systemPrompt(intent, context),
-      messages: [...compactHistory(history), { role: "user", content: message }]
+      messages: [...compactHistory(history), { role: "user", content: anthropicUserContent(message, attachments) }]
     }),
     signal
   });
@@ -537,13 +544,18 @@ export async function createAgentResponseForUser(
   userId: string,
   message: string,
   history: AgentConversationMessage[] = [],
-  context?: AgentContext
+  context?: AgentContext,
+  attachments: AgentAttachment[] = []
 ): Promise<AgentResponse> {
   const fallback = createAgentResponse(message, history);
   const config = await loadModelRuntimeConfig(userId);
   const intent = context?.intent ?? fallback.intent;
 
-  if (!config) return fallback;
+  if (!config) {
+    return attachments.length
+      ? { ...fallback, message: "附件已保存，但当前没有配置可分析附件的模型。请先在设置中配置支持图片或文件输入的模型。" }
+      : fallback;
+  }
 
   try {
     return {
@@ -551,7 +563,7 @@ export async function createAgentResponseForUser(
       source: "model",
       modelProvider: config.providerLabel,
       modelName: config.modelName,
-      message: await callConfiguredModel(config, message, history, intent, context)
+      message: await callConfiguredModel(config, message, history, intent, context, attachments)
     };
   } catch (error) {
     if (isIncompleteModelResponseError(error) && error.partialContent.trim()) {
@@ -581,15 +593,19 @@ export async function createStreamingAgentResponseForUser(
   history: AgentConversationMessage[],
   context: AgentContext | undefined,
   onDelta: ModelDeltaHandler,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  attachments: AgentAttachment[] = []
 ): Promise<AgentResponse> {
   const fallback = createAgentResponse(message, history);
   const config = await loadModelRuntimeConfig(userId);
   const intent = context?.intent ?? fallback.intent;
 
   if (!config) {
-    await onDelta(fallback.message);
-    return fallback;
+    const response = attachments.length
+      ? { ...fallback, message: "附件已保存，但当前没有配置可分析附件的模型。请先在设置中配置支持图片或文件输入的模型。" }
+      : fallback;
+    await onDelta(response.message);
+    return response;
   }
 
   const filter = createVisibleTextFilter();
@@ -605,9 +621,9 @@ export async function createStreamingAgentResponseForUser(
 
   try {
     if (config.provider === "anthropic") {
-      await streamAnthropicModel(config, message, history, intent, context, onRawDelta, signal);
+      await streamAnthropicModel(config, message, history, intent, context, onRawDelta, signal, attachments);
     } else {
-      await streamOpenAiCompatibleModel(config, message, history, intent, context, onRawDelta, signal);
+      await streamOpenAiCompatibleModel(config, message, history, intent, context, onRawDelta, signal, attachments);
     }
 
     const trailing = filter.finish();

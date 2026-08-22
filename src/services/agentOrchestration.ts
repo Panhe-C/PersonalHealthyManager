@@ -19,7 +19,9 @@ import { executeAgentAction, type ExecutedAdjustment } from "@/src/services/agen
 import { parseMemoryProposals, stripMemoryBlock } from "@/src/services/agentMemory/memories";
 import { applyMemories } from "@/src/services/agentMemory/memoryService";
 import { maybeRefreshSummary } from "@/src/services/agentMemory/summaryService";
+import { validateAgentAttachments } from "@/src/services/agentAttachments";
 import type { TimeWindow } from "@/src/domain/models";
+import type { AgentAttachment } from "@hbm/contracts";
 
 const EXPLICIT_MEMORY_PATTERN = /记住|记下|别忘了|记一下|帮我记|remember(?:\s+to)?/i;
 
@@ -37,6 +39,7 @@ export type PreparedAgentMessage = {
   conversation: AgentConversationSummary;
   history: AgentConversationMessage[];
   context: AgentContext;
+  attachments: AgentAttachment[];
 };
 
 export type AgentPreparation =
@@ -89,7 +92,11 @@ export async function prepareAgentMessage(
   body: unknown
 ): Promise<AgentPreparation> {
   const payload = (body ?? {}) as Record<string, unknown>;
-  const content = String(payload.message ?? "").trim();
+  const attachmentResult = validateAgentAttachments(payload.attachments);
+  if (!attachmentResult.ok) {
+    return { ok: false, result: { status: 400, body: { error: attachmentResult.error } } };
+  }
+  const content = String(payload.message ?? "").trim() || (attachmentResult.attachments.length ? "请分析这些附件。" : "");
   const conversationId = String(payload.conversationId ?? "").trim();
 
   if (!content) {
@@ -118,7 +125,15 @@ export async function prepareAgentMessage(
 
   return {
     ok: true,
-    value: { userId, content, conversationId, conversation, history, context }
+    value: {
+      userId,
+      content,
+      conversationId,
+      conversation,
+      history,
+      context,
+      attachments: attachmentResult.attachments
+    }
   };
 }
 
@@ -132,7 +147,8 @@ export async function finalizeAgentMessage(
     conversationId,
     conversation,
     history,
-    context: agentContext
+    context: agentContext,
+    attachments
   } = prepared;
 
   const parsed = parseActionProposals(response.message);
@@ -152,7 +168,13 @@ export async function finalizeAgentMessage(
   }
 
   await prisma.agentMessage.create({
-    data: { userId, conversationId, role: "user", content, metadataJson: "{}" }
+    data: {
+      userId,
+      conversationId,
+      role: "user",
+      content,
+      metadataJson: JSON.stringify({ attachments })
+    }
   });
   const assistantMessage = await prisma.agentMessage.create({
     data: {
@@ -274,12 +296,20 @@ export async function finalizeAgentMessage(
 export async function handlePreparedAgentMessage(
   prepared: PreparedAgentMessage
 ): Promise<AgentMessageResult> {
-  const response = await createAgentResponseForUser(
-    prepared.userId,
-    prepared.content,
-    prepared.history,
-    prepared.context
-  );
+  const response = prepared.attachments.length
+    ? await createAgentResponseForUser(
+        prepared.userId,
+        prepared.content,
+        prepared.history,
+        prepared.context,
+        prepared.attachments
+      )
+    : await createAgentResponseForUser(
+        prepared.userId,
+        prepared.content,
+        prepared.history,
+        prepared.context
+      );
   return finalizeAgentMessage(prepared, response);
 }
 

@@ -1,5 +1,6 @@
 import { Redirect, Stack } from "expo-router";
 import { useAuth } from "../../src/auth/AuthContext";
+import { OnboardingGate } from "../../src/auth/OnboardingGate";
 import { useTheme } from "../../src/theme/tokens";
 
 export default function AppLayout() {
@@ -8,8 +9,10 @@ export default function AppLayout() {
   if (status !== "authed") return <Redirect href="/(auth)/login" />;
 
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: tokens.bg } }}>
-      <Stack.Screen name="(tabs)" />
-    </Stack>
+    <OnboardingGate>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: tokens.bg } }}>
+        <Stack.Screen name="(tabs)" />
+      </Stack>
+    </OnboardingGate>
   );
 }

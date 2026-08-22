@@ -6,7 +6,7 @@ import {
   handlePreparedAgentMessage,
   prepareAgentMessage
 } from "@/src/services/agentOrchestration";
-import { consumeRateLimit, rateLimitHeaders } from "@/src/security/rateLimit";
+import { consumeRateLimitAsync, rateLimitHeaders } from "@/src/security/rateLimit";
 import {
   AGENT_STREAM_MEDIA_TYPE,
   encodeAgentStreamEvent,
@@ -15,7 +15,7 @@ import {
 } from "@hbm/contracts";
 
 export const POST = withUser(async (user, request: Request) => {
-  const limit = consumeRateLimit({ key: `agent:${user.id}`, limit: 30, windowMs: 60_000 });
+  const limit = await consumeRateLimitAsync({ key: `agent:${user.id}`, limit: 30, windowMs: 60_000 });
   if (!limit.allowed) {
     return NextResponse.json(
       { error: "Too many agent requests", code: "rate_limited" },
@@ -59,14 +59,25 @@ export const POST = withUser(async (user, request: Request) => {
 
       try {
         enqueue({ type: "start", requestId: crypto.randomUUID() });
-        const modelResponse = await createStreamingAgentResponseForUser(
-          user.id,
-          prepared.value.content,
-          prepared.value.history,
-          prepared.value.context,
-          (text) => enqueue({ type: "delta", text }),
-          abortController.signal
-        );
+        const onDelta = (text: string) => enqueue({ type: "delta", text } as AgentStreamEvent);
+        const modelResponse = prepared.value.attachments.length
+          ? await createStreamingAgentResponseForUser(
+              user.id,
+              prepared.value.content,
+              prepared.value.history,
+              prepared.value.context,
+              onDelta,
+              abortController.signal,
+              prepared.value.attachments
+            )
+          : await createStreamingAgentResponseForUser(
+              user.id,
+              prepared.value.content,
+              prepared.value.history,
+              prepared.value.context,
+              onDelta,
+              abortController.signal
+            );
         abortController.signal.throwIfAborted();
         const result = await finalizeAgentMessage(prepared.value, modelResponse);
         enqueue({

@@ -1,4 +1,5 @@
 import type {
+  MealMenu,
   NormalizedActivityRecord,
   NormalizedRecoveryRecord,
   NormalizedSleepRecord,
@@ -6,14 +7,14 @@ import type {
 } from "@/src/domain/models";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/src/db/client";
+import { captureError } from "@/src/observability/logger";
 import { createCalendarDraftsFromTasks, reconcileCalendarDrafts } from "@/src/planning/calendarDrafts";
 import { generateWeeklyPlan } from "@/src/planning/engine";
-import { getMockMealMenu } from "@/src/providers/meal-menu";
 import { fetchMealMenusFromStdioMcp } from "@/src/providers/meal-menu-mcp";
 import { findCalendarSnapshotForWeek } from "@/src/services/planQueryService";
 import { loadDataMcpConnection } from "@/src/settings/service";
 
-export type PlanPreconditionCode = "body_profile_missing" | "calendar_snapshot_missing";
+export type PlanPreconditionCode = "body_profile_missing";
 
 /**
  * A missing prerequisite is the user's next action, not a server fault, so it
@@ -69,18 +70,21 @@ export async function supersedePreviousPlansAndReadExternalEvents(
   return previousExternalEvents;
 }
 
-export async function resolveMealMenusForPlan(userId: string, weekStart: Date) {
+/**
+ * An account without a meal menu connection plans without menus. The nutrition
+ * guidance the engine derives from the goal and the training intensity does not
+ * depend on them; only the per-dish recommendations do.
+ */
+export async function resolveMealMenusForPlan(userId: string, weekStart: Date): Promise<MealMenu[]> {
   const connection = await loadDataMcpConnection(userId, "meal_menu");
-  if (connection?.enabled && connection.transport === "stdio") {
-    try {
-      const menus = await fetchMealMenusFromStdioMcp(connection, weekStart);
-      if (menus.length > 0) return menus;
-    } catch {
-      return getMockMealMenu(weekStart);
-    }
-  }
+  if (!connection?.enabled || connection.transport !== "stdio") return [];
 
-  return getMockMealMenu(weekStart);
+  try {
+    return await fetchMealMenusFromStdioMcp(connection, weekStart);
+  } catch (error) {
+    captureError("meal_menu_fetch_failed", error, { weekStart: weekStart.toISOString() });
+    return [];
+  }
 }
 
 export async function generatePlanForUser(userId: string, weekStart: Date) {
@@ -98,13 +102,6 @@ export async function generatePlanForUser(userId: string, weekStart: Date) {
     throw new PlanPreconditionError(
       "生成计划前需要先填写身高和体重。请到「我的 › 个人资料」补充。",
       "body_profile_missing"
-    );
-  }
-
-  if (!calendar) {
-    throw new PlanPreconditionError(
-      "生成计划前需要先同步日历，计划要避开你的忙碌时间。请到「我的 › 自动同步」同步日历。",
-      "calendar_snapshot_missing"
     );
   }
 
@@ -162,14 +159,16 @@ export async function generatePlanForUser(userId: string, weekStart: Date) {
     activities: normalizedActivities,
     sleepRecords: normalizedSleep,
     recoveryRecords: normalizedRecovery,
-    calendar: {
-      source: "feishu",
-      rangeStart: calendar.rangeStart,
-      rangeEnd: calendar.rangeEnd,
-      busyWindows: parseJson<TimeWindow[]>(calendar.busyWindowsJson),
-      freeWindows: parseJson<TimeWindow[]>(calendar.freeWindowsJson),
-      importantEvents: parseJson<TimeWindow[]>(calendar.importantEventsJson)
-    },
+    calendar: calendar
+      ? {
+          source: "feishu",
+          rangeStart: calendar.rangeStart,
+          rangeEnd: calendar.rangeEnd,
+          busyWindows: parseJson<TimeWindow[]>(calendar.busyWindowsJson),
+          freeWindows: parseJson<TimeWindow[]>(calendar.freeWindowsJson),
+          importantEvents: parseJson<TimeWindow[]>(calendar.importantEventsJson)
+        }
+      : undefined,
     mealMenus
   });
   return prisma.$transaction(async (tx) => {

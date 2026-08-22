@@ -149,6 +149,45 @@ describe("agent response shell", () => {
     expect(payload.messages[0].content).toContain("COROS MCP endpoint is not configured");
   });
 
+  it("sends image attachments as multimodal content to OpenAI-compatible providers", async () => {
+    vi.mocked(loadModelRuntimeConfig).mockResolvedValue(deepSeekConfig);
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: "这是一份训练餐。" } }] })
+    } as never);
+    const dataUrl = `data:image/png;base64,${Buffer.from("image").toString("base64")}`;
+
+    await createAgentResponseForUser("user-1", "分析这张图", [], undefined, [{
+      id: "image-1",
+      name: "meal.png",
+      mimeType: "image/png",
+      size: 5,
+      dataUrl
+    }]);
+
+    const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body));
+    expect(payload.messages.at(-1)).toEqual({
+      role: "user",
+      content: [
+        { type: "text", text: "分析这张图" },
+        { type: "image_url", image_url: { url: dataUrl, detail: "auto" } }
+      ]
+    });
+  });
+
+  it("does not pretend to analyze attachments without a configured model", async () => {
+    vi.mocked(loadModelRuntimeConfig).mockResolvedValue(null);
+    const response = await createAgentResponseForUser("user-1", "分析", [], undefined, [{
+      id: "file-1",
+      name: "notes.txt",
+      mimeType: "text/plain",
+      size: 5,
+      dataUrl: `data:text/plain;base64,${Buffer.from("hello").toString("base64")}`
+    }]);
+
+    expect(response.message).toContain("没有配置可分析附件的模型");
+  });
+
   it("adds intent-specific instructions to configured model prompts", async () => {
     vi.mocked(loadModelRuntimeConfig).mockResolvedValue({
       provider: "deepseek",

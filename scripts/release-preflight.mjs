@@ -1,21 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { releaseChecks } from "./release-preflight-config.mjs";
-
-const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const privacyPolicy = readFileSync(path.join(projectRoot, "docs/privacy-policy.md"), "utf8");
-const checks = releaseChecks(process.env, privacyPolicy);
-
-for (const check of checks) {
-  console.log(`${check.ok ? "PASS" : "FAIL"}  ${check.message}`);
-}
-
-const failed = checks.filter((check) => !check.ok);
-if (failed.length > 0) {
-  console.error(`Release preflight failed: ${failed.length} item(s) need attention.`);
-  process.exitCode = 1;
-} else {
-  console.log("Release configuration preflight passed.");
-}
+// Backwards-compatible aggregate gate. Prefer release:web or release:mobile
+// when only one deployable is being released.
+await import("./release-web.mjs");
+await import("./release-mobile.mjs");

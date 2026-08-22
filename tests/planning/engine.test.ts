@@ -34,6 +34,22 @@ describe("planning engine", () => {
     expect(plan.tasks[0].scheduledStart).toBe("2026-06-02T10:00:00.000Z");
   });
 
+  it("generates an unscheduled plan when no calendar is available", () => {
+    const plan = generateWeeklyPlan({
+      weekStart: new Date("2026-06-01T00:00:00+08:00"),
+      profile: { trainingExperience: "intermediate", injuries: [] },
+      goals: [{ title: "Fat loss", type: "primary", priority: 8 }],
+      activities: [],
+      sleepRecords: [sleep()],
+      recoveryRecords: [recovery()],
+      mealMenus: []
+    });
+
+    expect(plan.tasks).toHaveLength(3);
+    expect(plan.tasks.every((task) => task.scheduledStart === undefined)).toBe(true);
+    expect(plan.explanation).toContain("Calendar availability was not used");
+  });
+
   it("uses the highest-priority event goal for the endurance session", () => {
     const plan = generateWeeklyPlan({
       weekStart: new Date("2026-06-01T00:00:00+08:00"),

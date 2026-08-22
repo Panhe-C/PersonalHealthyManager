@@ -67,13 +67,21 @@ export default function AccountSecurityScreen() {
   return (
     <Screen contentContainerStyle={{ paddingTop: spacing.lg }}>
       <InsetGroup header="修改密码" footer="修改密码后，Web 和其他设备都需要重新登录。">
-        <TextField label="当前密码" value={currentPassword} onChange={setCurrentPassword} secure placeholder="••••••••" />
+        <TextField
+          label="当前密码"
+          value={currentPassword}
+          onChange={setCurrentPassword}
+          secure
+          placeholder="••••••••"
+          autoComplete="password"
+        />
         <TextField
           label="新密码"
           value={newPassword}
           onChange={setNewPassword}
           secure
           placeholder="••••••••"
+          autoComplete="new-password"
           hint={`至少 ${MIN_PASSWORD_LENGTH} 个字符`}
           error={errors.newPassword}
         />
@@ -83,6 +91,7 @@ export default function AccountSecurityScreen() {
           onChange={setConfirmPassword}
           secure
           placeholder="••••••••"
+          autoComplete="new-password"
           error={errors.confirmPassword}
         />
         <Button

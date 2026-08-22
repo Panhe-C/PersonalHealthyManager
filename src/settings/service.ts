@@ -442,8 +442,13 @@ function normalizeConnection(input: DataMcpConnection, existing?: DataMcpConnect
     capabilityName: stringValue(input.capabilityName),
     transport,
     endpoint,
-    command: stringValue(input.command ?? base.command),
-    args: stringValue(input.args ?? base.args),
+    // Pinned to the connection's own defaults rather than read from `input`.
+    // These two strings are handed to `spawn` on the server, so accepting them
+    // from a client would let any account run an arbitrary program here. The
+    // per-user part of a stdio connection is the session and the canteen, not
+    // which program serves it.
+    command: stringValue(base.command),
+    args: stringValue(base.args),
     canteenName: stringValue(input.canteenName),
     ...encryptedLarkSessionPatch(input, existing),
     auth: normalizeAuth(input.auth, existing?.auth),
@@ -601,6 +606,16 @@ export async function saveUserSettings(userId: string, input: SettingsSaveInput)
     dataMcpConnectionsJson: JSON.stringify(connections)
   };
 
+  // A newly entered key is checked against the provider before it is stored, so
+  // a key issued by the wrong platform fails on the field the user just filled
+  // in rather than surfacing much later as a coach reply that never arrives.
+  // Only an outright rejection blocks the save: a provider that cannot be
+  // reached right now is not evidence that the key is wrong.
+  if (trimmedApiKey) {
+    const probe = await probeModel(data);
+    if (probe.outcome === "rejected") throw new Error(probe.message);
+  }
+
   await prisma.userSettings.upsert({
     where: { userId },
     create: { userId, ...data },
@@ -664,8 +679,85 @@ async function withLatency(run: () => Promise<Omit<SettingsTestResult, "latencyM
   return { ...result, latencyMs: Date.now() - start };
 }
 
-async function testModel(record: SettingsRecord | null): Promise<SettingsTestResult> {
+/**
+ * Outcomes are split by who is at fault, because the callers act differently.
+ * `rejected` means the provider answered and refused the credential, which is
+ * the one case worth blocking a save on. `unreachable` covers a network fault or
+ * a provider-side error, where the key may well be fine and refusing to store
+ * it would strand the user.
+ */
+type ModelProbe =
+  | { outcome: "ok"; message: string }
+  | { outcome: "not_configured"; message: string }
+  | { outcome: "rejected"; message: string }
+  | { outcome: "unreachable"; message: string };
+
+async function probeModel(record: SettingsRecord | null): Promise<ModelProbe> {
   const view = toSettingsView(record);
+
+  if (!record?.encryptedApiKey || !record.apiKeyIv || !record.apiKeyTag) {
+    return { outcome: "not_configured", message: "API key is not configured." };
+  }
+
+  try {
+    const apiKey = decryptApiKey({
+      encryptedApiKey: record.encryptedApiKey,
+      apiKeyIv: record.apiKeyIv,
+      apiKeyTag: record.apiKeyTag
+    });
+    const baseUrl = getProviderBaseUrl(view.modelProvider, view.modelBaseUrl);
+    const providerLabel = getProviderLabel(view.modelProvider);
+
+    if (!baseUrl) {
+      return { outcome: "not_configured", message: `${providerLabel} provider needs a base URL.` };
+    }
+
+    const isAnthropic = view.modelProvider === "anthropic";
+    // MiniMax uses a different endpoint path
+    const endpoint = isAnthropic
+      ? "/messages"
+      : view.modelProvider === "minimax"
+        ? "/text/chatcompletion_v2"
+        : "/chat/completions";
+
+    const response = await fetch(`${baseUrl}${endpoint}`, {
+      method: "POST",
+      headers: isAnthropic
+        ? {
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01"
+          }
+        : {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json"
+          },
+      body: JSON.stringify({
+        model: view.modelName,
+        max_tokens: 1,
+        messages: [{ role: "user", content: "ping" }]
+      })
+    });
+
+    if (response.ok) {
+      return {
+        outcome: "ok",
+        message: `${isAnthropic ? "Anthropic" : providerLabel} model ${view.modelName} responded.`
+      };
+    }
+
+    const message = statusMessage(response.status, view.modelProvider);
+    // 401 and 403 are the provider naming the credential; everything else could
+    // be a transient fault on their side or a wrong model name.
+    return response.status === 401 || response.status === 403
+      ? { outcome: "rejected", message }
+      : { outcome: "unreachable", message };
+  } catch (error) {
+    return { outcome: "unreachable", message: error instanceof Error ? error.message : "Model test failed." };
+  }
+}
+
+async function testModel(record: SettingsRecord | null): Promise<SettingsTestResult> {
   const label = "Model runtime";
 
   if (!record?.encryptedApiKey || !record.apiKeyIv || !record.apiKeyTag) {
@@ -673,64 +765,9 @@ async function testModel(record: SettingsRecord | null): Promise<SettingsTestRes
   }
 
   return withLatency(async () => {
-    try {
-      const apiKey = decryptApiKey({
-        encryptedApiKey: record.encryptedApiKey as string,
-        apiKeyIv: record.apiKeyIv as string,
-        apiKeyTag: record.apiKeyTag as string
-      });
-      const baseUrl = getProviderBaseUrl(view.modelProvider, view.modelBaseUrl);
-      const providerLabel = getProviderLabel(view.modelProvider);
-
-      if (!baseUrl) {
-        return { id: "model", label, status: "not_configured", message: `${providerLabel} provider needs a base URL.` };
-      }
-
-      if (view.modelProvider === "anthropic") {
-        const response = await fetch(`${baseUrl}/messages`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01"
-          },
-          body: JSON.stringify({
-            model: view.modelName,
-            max_tokens: 1,
-            messages: [{ role: "user", content: "ping" }]
-          })
-        });
-        return response.ok
-          ? { id: "model", label, status: "connected", message: `Anthropic model ${view.modelName} responded.` }
-          : { id: "model", label, status: "failed", message: statusMessage(response.status, view.modelProvider) };
-      }
-
-      // MiniMax uses a different endpoint path
-      const endpoint = view.modelProvider === "minimax" ? "/text/chatcompletion_v2" : "/chat/completions";
-
-      const response = await fetch(`${baseUrl}${endpoint}`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: view.modelName,
-          max_tokens: 1,
-          messages: [{ role: "user", content: "ping" }]
-        })
-      });
-      return response.ok
-        ? { id: "model", label, status: "connected", message: `${providerLabel} model ${view.modelName} responded.` }
-        : { id: "model", label, status: "failed", message: statusMessage(response.status, view.modelProvider) };
-    } catch (error) {
-      return {
-        id: "model",
-        label,
-        status: "failed",
-        message: error instanceof Error ? error.message : "Model test failed."
-      };
-    }
+    const probe = await probeModel(record);
+    const status = probe.outcome === "ok" ? "connected" : probe.outcome === "not_configured" ? "not_configured" : "failed";
+    return { id: "model", label, status, message: probe.message };
   });
 }
 
@@ -1231,6 +1268,18 @@ export async function handleMcpOAuthCallback(
  * identify the user instead of the session.
  */
 const APP_OAUTH_RETURN_URL = process.env.HBM_APP_OAUTH_RETURN_URL || "hbm://mcp-oauth";
+
+/**
+ * Origin for URLs that must be openable by a real browser (OAuth handoff/start/redirect URIs).
+ * The production server derives `request.url` from its own listen address (HOSTNAME=0.0.0.0 in the
+ * Docker image), not the Host header, so request origins are unusable there. Configuration wins;
+ * the request origin is only a fallback for local development.
+ */
+export function resolvePublicOrigin(requestUrl: string): string {
+  const configured = process.env.HBM_APP_BASE_URL?.trim().replace(/\/+$/, "");
+  if (configured) return new URL(configured).origin;
+  return new URL(requestUrl).origin;
+}
 
 /**
  * Where the browser is sent once the OAuth dance ends. A native flow returns to

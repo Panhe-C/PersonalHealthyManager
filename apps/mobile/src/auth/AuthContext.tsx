@@ -9,11 +9,14 @@ interface AuthContextValue {
   status: Status;
   signIn: (email: string, password: string) => Promise<void>;
   /**
-   * Creates the account and returns without a session: the server withholds
-   * tokens until the email address is verified.
+   * Creates the account and stores the new authenticated session.
    */
   signUp: (email: string, password: string) => Promise<void>;
-  resendVerification: (email: string) => Promise<void>;
+  /**
+   * Resolves for unknown addresses too, so callers must not report back whether
+   * an account exists.
+   */
+  requestPasswordReset: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -44,10 +47,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStatus("authed");
       },
       signUp: async (email, password) => {
-        await api.auth.register(email, password, Intl.DateTimeFormat().resolvedOptions().timeZone);
+        await api.auth.register(email, password, Intl.DateTimeFormat().resolvedOptions().timeZone, true);
+        setStatus("authed");
       },
-      resendVerification: async (email) => {
-        await api.auth.resendVerification(email);
+      requestPasswordReset: async (email) => {
+        await api.auth.forgotPassword(email);
       },
       signOut: async () => {
         const refreshToken = getRefreshToken();

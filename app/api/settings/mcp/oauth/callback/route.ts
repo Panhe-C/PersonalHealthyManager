@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buildOAuthReturnUrl, handleMcpOAuthCallback, resolveMcpOAuthState } from "@/src/settings/service";
+import { buildOAuthReturnUrl, handleMcpOAuthCallback, resolveMcpOAuthState, resolvePublicOrigin } from "@/src/settings/service";
 
 /**
  * COROS requires the OAuth redirect_uri to use the loopback IP (127.0.0.1), not `localhost`, so the
@@ -10,11 +10,12 @@ import { buildOAuthReturnUrl, handleMcpOAuthCallback, resolveMcpOAuthState } fro
  */
 export const GET = async (request: Request) => {
   const url = new URL(request.url);
+  const origin = resolvePublicOrigin(request.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
 
   const resolved = state ? await resolveMcpOAuthState(state) : null;
-  const returnOrigin = resolved?.returnOrigin || url.origin;
+  const returnOrigin = resolved?.returnOrigin || origin;
   const returnTarget = resolved?.returnTarget ?? "web";
 
   if (!code || !state || !resolved) {
@@ -27,7 +28,7 @@ export const GET = async (request: Request) => {
   }
 
   try {
-    const connection = await handleMcpOAuthCallback(resolved.userId, { code, state, origin: url.origin });
+    const connection = await handleMcpOAuthCallback(resolved.userId, { code, state, origin });
     return NextResponse.redirect(
       buildOAuthReturnUrl(returnTarget, returnOrigin, { mcp: connection, auth: "connected" })
     );

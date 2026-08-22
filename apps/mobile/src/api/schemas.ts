@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { agentAttachmentSchema } from "@hbm/contracts";
 
 export const checklistItemSchema = z.object({
   id: z.string(),
@@ -60,6 +61,8 @@ export const todayOverviewSchema = z.object({
   latestSleep: z.object({}).passthrough().nullable(),
   todayTasks: z.array(trainingTaskSchema),
   mealMenus: z.array(mealMenuSchema),
+  /** Optional so an older server response still parses. */
+  mealMenuStatus: z.enum(["ok", "not_configured", "failed"]).optional(),
   activePlanId: z.string().nullable()
 });
 
@@ -194,6 +197,7 @@ export const agentMessageSchema = z.object({
   id: z.string(),
   role: z.string(),
   content: z.string(),
+  attachments: z.array(agentAttachmentSchema).optional(),
   adjustments: z.array(agentAdjustmentSchema).optional()
 }).passthrough();
 

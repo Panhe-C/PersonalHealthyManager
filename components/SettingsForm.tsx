@@ -4,6 +4,7 @@ import React, { useMemo, useState, type FormEvent } from "react";
 import { FlaskConical, Save } from "lucide-react";
 import {
   corosMcpRegionOptions,
+  getProviderCredentialSource,
   modelProviders,
   providerNeedsManualModel,
   type DataMcpAuthConfig,
@@ -50,6 +51,7 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
   const [loginPromptMessage, setLoginPromptMessage] = useState("");
   const [loginPromptError, setLoginPromptError] = useState("");
   const needsManualModel = providerNeedsManualModel(modelProvider);
+  const credentialSource = getProviderCredentialSource(modelProvider);
 
   function updateConnection(id: DataMcpConnection["id"], updates: Partial<DataMcpConnection>) {
     setConnections((items) => items.map((item) => (item.id === id ? { ...item, ...updates } : item)));
@@ -74,15 +76,11 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
   }
 
   function updateConnectionTransport(connection: DataMcpConnection, transport: DataMcpTransport) {
+    // The stdio command and arguments are fixed by the server, so only the auth
+    // shape changes here: a local command authenticates with LARK_SESSION.
     updateConnection(connection.id, {
       transport,
-      ...(connection.id === "meal_menu" && transport === "stdio"
-        ? {
-            command: connection.command || "npx",
-            args: connection.args || "-y @byted/mcp-bytecanteen@latest",
-            auth: { type: "none" as const }
-          }
-        : {})
+      ...(connection.id === "meal_menu" && transport === "stdio" ? { auth: { type: "none" as const } } : {})
     });
   }
 
@@ -105,6 +103,11 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
     if (typeof window === "undefined") return "";
 
     const params = new URLSearchParams(window.location.search);
+    const feishu = params.get("feishu");
+    if (feishu === "connected") return "飞书日历已连接。";
+    if (feishu === "failed") return "飞书日历授权失败，请重试。";
+    if (feishu === "missing_code") return "飞书日历授权缺少回调参数。";
+
     const auth = params.get("auth");
     const mcp = params.get("mcp");
     const connection = initialSettings.dataMcpConnections.find((item) => item.id === mcp);
@@ -392,6 +395,28 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
               <a className="button" href={`/api/settings/mcp/oauth/start?connection=${connection.id}`}>
                 Login {connection.label}
               </a>
+              {connection.id === "calendar" ? (
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  onClick={async () => {
+                    setError("");
+                    try {
+                      const response = await fetch("/api/settings/feishu/oauth/start", { method: "POST" });
+                      const body = await response.json().catch(() => null);
+                      if (!response.ok || !body?.authorizeUrl) {
+                        setError(body?.error ?? "无法启动飞书日历授权");
+                        return;
+                      }
+                      window.location.assign(body.authorizeUrl);
+                    } catch {
+                      setError("无法启动飞书日历授权");
+                    }
+                  }}
+                >
+                  连接飞书日历（按用户 OAuth）
+                </button>
+              ) : null}
               {auth.expiresAt ? <span className="status">Expires {new Date(auth.expiresAt).toLocaleString()}</span> : null}
             </div>
           </div>
@@ -463,22 +488,12 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
 
         {transport === "stdio" ? (
           <>
-            <label className="field">
+            <div className="field">
               Command
-              <input
-                aria-label={`Command for ${connection.label}`}
-                value={connection.command ?? "npx"}
-                onChange={(event) => updateConnection(connection.id, { command: event.target.value })}
-              />
-            </label>
-            <label className="field">
-              Arguments
-              <input
-                aria-label={`Arguments for ${connection.label}`}
-                value={connection.args ?? "-y @byted/mcp-bytecanteen@latest"}
-                onChange={(event) => updateConnection(connection.id, { args: event.target.value })}
-              />
-            </label>
+              <span className="status" aria-label={`Command for ${connection.label}`}>
+                {`${connection.command ?? "npx"} ${connection.args ?? ""}`.trim()}
+              </span>
+            </div>
             <label className="field">
               LARK_SESSION
               <input
@@ -590,6 +605,15 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
               placeholder={hasApiKey ? "Leave blank to keep existing key" : "Enter API key"}
             />
           </label>
+          {/* Outside the label so it stays out of the field's accessible name.
+              Shown before the attempt rather than only after a 401: every
+              provider here has a neighbouring product whose keys look
+              identical but come from a separate account system. */}
+          {credentialSource ? (
+            <p className="page-subtitle field-span" aria-label="Where to get a key">
+              {credentialSource}
+            </p>
+          ) : null}
         </div>
 
         <div className="settings-status-line settings-action-row">

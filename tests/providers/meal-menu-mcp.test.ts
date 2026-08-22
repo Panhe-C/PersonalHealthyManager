@@ -2,7 +2,7 @@
 import { PassThrough } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import type { DataMcpConnection } from "@/src/settings/defaults";
-import { fetchMealMenusFromStdioMcp } from "@/src/providers/meal-menu-mcp";
+import { buildChildEnv, fetchMealMenusFromStdioMcp } from "@/src/providers/meal-menu-mcp";
 
 const spawnMock = vi.hoisted(() => vi.fn());
 
@@ -143,5 +143,19 @@ describe("meal menu MCP provider", () => {
       }
     ]);
     expect(child.kill).toHaveBeenCalled();
+  });
+
+  it("keeps server secrets out of the child process environment", () => {
+    process.env.SESSION_SECRET = "session-secret-value";
+    process.env.SETTINGS_ENCRYPTION_KEY = "settings-encryption-key-value";
+    process.env.DATABASE_URL = "file:./should-not-leak.db";
+
+    const env = buildChildEnv({ LARK_SESSION: "session-cookie-123456" });
+
+    expect(env.LARK_SESSION).toBe("session-cookie-123456");
+    expect(env.SESSION_SECRET).toBeUndefined();
+    expect(env.SETTINGS_ENCRYPTION_KEY).toBeUndefined();
+    expect(env.DATABASE_URL).toBeUndefined();
+    expect(env.PATH).toBe(process.env.PATH);
   });
 });

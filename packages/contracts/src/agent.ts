@@ -1,8 +1,23 @@
 import { z } from "zod";
 
+export const AGENT_ATTACHMENT_MAX_COUNT = 4;
+export const AGENT_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
+export const AGENT_ATTACHMENTS_MAX_TOTAL_BYTES = 10 * 1024 * 1024;
+
+export const agentAttachmentSchema = z.object({
+  id: z.string().min(1).max(100),
+  name: z.string().min(1).max(255),
+  mimeType: z.string().min(1).max(100),
+  size: z.number().int().nonnegative().max(AGENT_ATTACHMENT_MAX_BYTES),
+  dataUrl: z.string().min(1)
+});
+
 export const agentMessageRequestSchema = z.object({
-  message: z.string().min(1),
-  conversationId: z.string().min(1)
+  message: z.string(),
+  conversationId: z.string().min(1),
+  attachments: z.array(agentAttachmentSchema).max(AGENT_ATTACHMENT_MAX_COUNT).optional()
+}).refine((value) => value.message.trim().length > 0 || Boolean(value.attachments?.length), {
+  message: "A message or attachment is required"
 });
 
 export const appliedMemorySchema = z.object({
@@ -38,3 +53,4 @@ export const agentMessageResponseSchema = z.object({
 export const conversationListResponseSchema = z.array(conversationSchema);
 
 export type AgentMessageRequest = z.infer<typeof agentMessageRequestSchema>;
+export type AgentAttachment = z.infer<typeof agentAttachmentSchema>;

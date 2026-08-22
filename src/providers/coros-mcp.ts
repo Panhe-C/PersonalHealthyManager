@@ -1,4 +1,5 @@
 import type { DataMcpConnection } from "@/src/settings/defaults";
+import { logger } from "@/src/observability/logger";
 import { buildDataMcpAuthHeaders } from "@/src/settings/service";
 
 type JsonRpcId = string | number;
@@ -536,12 +537,15 @@ export async function fetchCorosRemoteMcpSnapshot(
   }
 
   if (errors.length > 0) {
-    const imported = [];
-    if (snapshot.activities.length > 0) imported.push(`${snapshot.activities.length} activities`);
-    if (snapshot.sleep.length > 0) imported.push(`${snapshot.sleep.length} sleep records`);
-    if (snapshot.recovery.length > 0) imported.push(`${snapshot.recovery.length} recovery records`);
-    if (snapshot.profile.length > 0) imported.push(`${snapshot.profile.length} profile records`);
-    console.warn(`COROS MCP partial sync: imported ${imported.join(", ")}. Errors: ${errors.join("; ")}`);
+    logger.warn("coros_mcp_partial_sync", {
+      imported: {
+        activities: snapshot.activities.length,
+        sleep: snapshot.sleep.length,
+        recovery: snapshot.recovery.length,
+        profile: snapshot.profile.length
+      },
+      errorCount: errors.length
+    });
   }
 
   return snapshot;

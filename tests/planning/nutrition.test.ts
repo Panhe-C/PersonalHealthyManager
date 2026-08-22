@@ -13,4 +13,18 @@ describe("nutrition planning", () => {
     expect(result.recommended[0].name).toBe("Chicken rice bowl");
     expect(result.caution[0].name).toBe("Fried noodles");
   });
+
+  it("still produces targets and guidance without any menus", () => {
+    const result = recommendMenuChoices({
+      menus: [],
+      trainingIntensity: "hard",
+      primaryGoal: "Fat loss"
+    });
+
+    expect(result.calorieTarget).toBe("moderate deficit");
+    expect(result.proteinTargetGrams).toBe(120);
+    expect(result.carbohydrateGuidance).toBe("prioritize carbohydrates before and after training");
+    expect(result.recommended).toEqual([]);
+    expect(result.caution).toEqual([]);
+  });
 });

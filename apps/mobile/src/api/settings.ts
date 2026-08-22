@@ -60,19 +60,61 @@ export function providerNeedsManualModel(provider: MobileSettings["modelProvider
  * it returns after a save overwrites these values.
  */
 export const modelProviderOptions = [
-  { value: "openai", label: "OpenAI", model: "gpt-5.6-terra", baseUrl: "https://api.openai.com/v1" },
-  { value: "anthropic", label: "Anthropic", model: "claude-opus-5", baseUrl: "https://api.anthropic.com/v1" },
-  { value: "deepseek", label: "DeepSeek", model: "deepseek-v4-flash", baseUrl: "https://api.deepseek.com" },
-  { value: "minimax", label: "MiniMax", model: "MiniMax-M3", baseUrl: "https://api.minimax.io/v1" },
-  { value: "kimi", label: "Kimi", model: "kimi-k3", baseUrl: "https://api.moonshot.ai/v1" },
-  { value: "glm", label: "GLM", model: "glm-5.2", baseUrl: "https://open.bigmodel.cn/api/paas/v4" },
-  { value: "custom", label: "自定义", model: "", baseUrl: "" }
+  {
+    value: "openai",
+    label: "OpenAI",
+    model: "gpt-5.6-terra",
+    baseUrl: "https://api.openai.com/v1",
+    credentialSource: "在 platform.openai.com 创建密钥。"
+  },
+  {
+    value: "anthropic",
+    label: "Anthropic",
+    model: "claude-opus-5",
+    baseUrl: "https://api.anthropic.com/v1",
+    credentialSource: "在 console.anthropic.com 创建密钥；Claude.ai 订阅不包含 API 访问。"
+  },
+  {
+    value: "deepseek",
+    label: "DeepSeek",
+    model: "deepseek-v4-flash",
+    baseUrl: "https://api.deepseek.com",
+    credentialSource: "在 platform.deepseek.com 创建密钥。"
+  },
+  {
+    value: "minimax",
+    label: "MiniMax",
+    model: "MiniMax-M3",
+    baseUrl: "https://api.minimax.io/v1",
+    credentialSource: "在 platform.minimax.io 创建密钥；国内站 minimaxi.com 是另一套账号。"
+  },
+  {
+    value: "kimi",
+    label: "Kimi",
+    model: "kimi-k3",
+    baseUrl: "https://api.moonshot.ai/v1",
+    credentialSource: "在 Kimi 开放平台创建密钥（platform.kimi.ai，国内为 platform.moonshot.cn）；Kimi Code 编程会员的 sk-kim 密钥属于另一套系统，这里一定会被拒绝。"
+  },
+  {
+    value: "glm",
+    label: "GLM",
+    model: "glm-5.2",
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    credentialSource: "在 open.bigmodel.cn 创建密钥；国际站 z.ai 是另一套账号。"
+  },
+  { value: "custom", label: "自定义", model: "", baseUrl: "", credentialSource: "" }
 ] as const satisfies readonly {
   value: MobileSettings["modelProvider"];
   label: string;
   model: string;
   baseUrl: string;
+  credentialSource: string;
 }[];
+
+/** Where a working key for this provider comes from. */
+export function providerCredentialSource(provider: MobileSettings["modelProvider"]): string {
+  return modelProviderOptions.find((option) => option.value === provider)?.credentialSource ?? "";
+}
 
 export function providerModelDefaults(provider: MobileSettings["modelProvider"]): {
   model: string;
@@ -104,17 +146,17 @@ export function prepareCorosConnection(corosRegion: CorosRegion) {
   return api.post<{ ok: true }>("/settings/mcp/coros/prep", { corosRegion });
 }
 
-const oauthHandoffSchema = z.object({ url: z.string(), expiresInMs: z.number() });
+const oauthAuthorizationSchema = z.object({ url: z.string() });
 
 /**
- * Returns a browser-openable start URL carrying a single-use handoff token. The
- * app's Bearer token cannot travel with a browser navigation, so the server
- * issues this instead.
+ * Uses the app's authenticated API request to prepare OAuth state and returns
+ * the provider URL. The browser therefore opens COROS directly and never needs
+ * to visit an HBM handoff page first.
  */
-export function createOAuthHandoffUrl(connection: "coros" | "calendar" | "meal_menu") {
-  return api.post<z.infer<typeof oauthHandoffSchema>>(
-    `/settings/mcp/oauth/handoff?connection=${connection}`,
+export function createOAuthAuthorizationUrl(connection: "coros" | "calendar" | "meal_menu") {
+  return api.post<z.infer<typeof oauthAuthorizationSchema>>(
+    `/settings/mcp/oauth/authorize?connection=${connection}`,
     {},
-    oauthHandoffSchema
+    oauthAuthorizationSchema
   );
 }

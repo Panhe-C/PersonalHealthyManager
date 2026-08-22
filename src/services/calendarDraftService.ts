@@ -1,5 +1,9 @@
 import { prisma } from "@/src/db/client";
-import { writeCalendarDraft, type CalendarWriteDraft, type CalendarWriteResult } from "@/src/providers/calendar-writeback";
+import type { CalendarWriteDraft, CalendarWriteResult } from "@/src/providers/calendar-writeback";
+import {
+  loadUserFeishuCalendarTokens,
+  writeCalendarDraftForUser
+} from "@/src/services/feishuCalendarOAuthService";
 
 export async function listCalendarDrafts(userId: string) {
   return prisma.calendarEventDraft.findMany({
@@ -8,11 +12,38 @@ export async function listCalendarDrafts(userId: string) {
   });
 }
 
+/**
+ * Write-back prefers per-user Feishu OAuth tokens when present. The legacy
+ * lark-cli path still targets the single calendar named by HBM_LARK_CALENDAR_ID
+ * under the deployer's login, so without OAuth exactly one named account may
+ * use it — and a deployment that has not named one may not use it at all.
+ */
+export async function assertCalendarWriteAllowed(userId: string): Promise<void> {
+  const oauthTokens = await loadUserFeishuCalendarTokens(userId);
+  if (oauthTokens) return;
+
+  const allowedEmail = process.env.HBM_LARK_CALENDAR_ACCOUNT_EMAIL?.trim().toLowerCase();
+
+  if (!allowedEmail) {
+    throw new Error(
+      "Calendar write-back is disabled. Connect Feishu calendar via OAuth, or set HBM_LARK_CALENDAR_ACCOUNT_EMAIL for the single account allowed to use the server lark-cli login."
+    );
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  if (user?.email.trim().toLowerCase() !== allowedEmail) {
+    throw new Error("Calendar write-back is not available for this account. Connect Feishu calendar via OAuth.");
+  }
+}
+
 export async function confirmCalendarDrafts(
   userId: string,
   draftIds: string[],
-  writer: (draft: CalendarWriteDraft) => Promise<CalendarWriteResult> = writeCalendarDraft
+  writer?: (draft: CalendarWriteDraft) => Promise<CalendarWriteResult>
 ) {
+  await assertCalendarWriteAllowed(userId);
+  const effectiveWriter = writer ?? ((draft: CalendarWriteDraft) => writeCalendarDraftForUser(userId, draft));
+
   const uniqueIds = [...new Set(draftIds)];
   const drafts = await prisma.calendarEventDraft.findMany({
     where: { id: { in: uniqueIds }, userId }
@@ -36,7 +67,7 @@ export async function confirmCalendarDrafts(
     if (claimed.count !== 1) throw new Error("Draft is no longer actionable");
 
     try {
-      const result = await writer(draft);
+      const result = await effectiveWriter(draft);
       await prisma.calendarEventDraft.updateMany({
         where: { id: draft.id, userId, status: "writing" },
         data: { status: "confirmed", externalEventId: result.externalEventId, failureReason: null }

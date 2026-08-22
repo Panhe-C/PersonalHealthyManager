@@ -3,17 +3,25 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        DEBIAN_MIRROR: ${HBM_DEBIAN_MIRROR:-}
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${HBM_PORT:-3000}:3000"
+      - "${HBM_BIND_ADDRESS:-127.0.0.1}:${HBM_PORT:-3000}:3000"
     environment:
       DATABASE_URL: file:/data/healthy-body.sqlite
       SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:?set SETTINGS_ENCRYPTION_KEY in the deployment environment}
       HBM_OWNER_EMAIL: ${HBM_OWNER_EMAIL:-}
       HBM_OWNER_TIMEZONE: ${HBM_OWNER_TIMEZONE:-Asia/Shanghai}
-      HBM_APP_BASE_URL: ${HBM_APP_BASE_URL:?set HBM_APP_BASE_URL to the public origin so verification links resolve}
-      HBM_EMAIL_TRANSPORT: ${HBM_EMAIL_TRANSPORT:-smtp}
-      HBM_EMAIL_FROM: ${HBM_EMAIL_FROM:?set HBM_EMAIL_FROM to the sender address for verification emails}
+      HBM_APP_BASE_URL: ${HBM_APP_BASE_URL:-https://www.cbhdev.xyz}
+      HBM_PUBLIC_BASE_URL: ${HBM_PUBLIC_BASE_URL:-https://www.cbhdev.xyz}
+      HBM_OPERATOR_NAME: ${HBM_OPERATOR_NAME:-}
+      HBM_PRIVACY_EMAIL: ${HBM_PRIVACY_EMAIL:-}
+      HBM_POLICY_EFFECTIVE_DATE: ${HBM_POLICY_EFFECTIVE_DATE:-}
+      HBM_DEPLOYMENT_REGION: ${HBM_DEPLOYMENT_REGION:-}
+      HBM_REGISTRATION_ENABLED: ${HBM_REGISTRATION_ENABLED:-false}
+      HBM_EMAIL_TRANSPORT: ${HBM_EMAIL_TRANSPORT:-console}
+      HBM_EMAIL_FROM: ${HBM_EMAIL_FROM:-}
       HBM_SMTP_HOST: ${HBM_SMTP_HOST:-}
       HBM_SMTP_PORT: ${HBM_SMTP_PORT:-587}
       HBM_SMTP_SECURE: ${HBM_SMTP_SECURE:-false}
@@ -21,7 +29,7 @@ services:
       HBM_SMTP_PASSWORD: ${HBM_SMTP_PASSWORD:-}
       HBM_APP_OAUTH_RETURN_URL: ${HBM_APP_OAUTH_RETURN_URL:-hbm://mcp-oauth}
     volumes:
-      - hbm-data:/data
+      - ${HBM_DATA_HOST_DIR:-/srv/healthy-body-manager/data}:/data
 
   owner-setup:
     profiles: ["tools"]
@@ -29,12 +37,27 @@ services:
       context: .
       dockerfile: Dockerfile
       target: tools
+      args:
+        DEBIAN_MIRROR: ${HBM_DEBIAN_MIRROR:-}
     environment:
       DATABASE_URL: file:/data/healthy-body.sqlite
       SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:?set SETTINGS_ENCRYPTION_KEY in the deployment environment}
       HBM_OWNER_TIMEZONE: ${HBM_OWNER_TIMEZONE:-Asia/Shanghai}
     volumes:
-      - hbm-data:/data
+      - ${HBM_DATA_HOST_DIR:-/srv/healthy-body-manager/data}:/data
 
-volumes:
-  hbm-data:
+  backup:
+    profiles: ["maintenance"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        DEBIAN_MIRROR: ${HBM_DEBIAN_MIRROR:-}
+    user: "1001:1001"
+    environment:
+      DATABASE_URL: file:/data/healthy-body.sqlite
+      HBM_BACKUP_RETENTION_DAYS: ${HBM_BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ${HBM_DATA_HOST_DIR:-/srv/healthy-body-manager/data}:/data:ro
+      - ${HBM_BACKUP_HOST_DIR:-./backups}:/backups
+    entrypoint: ["./scripts/docker-backup.sh"]

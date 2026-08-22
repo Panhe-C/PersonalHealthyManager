@@ -1,4 +1,6 @@
 import { prisma } from "@/src/db/client";
+import { attachmentsFromMetadata } from "@/src/services/agentAttachments";
+import type { AgentAttachment } from "@hbm/contracts";
 
 export type AgentConversationSummary = {
   id: string;
@@ -10,6 +12,7 @@ export type AgentConversationMessage = {
   id: string;
   role: string;
   content: string;
+  attachments?: AgentAttachment[];
 };
 
 export type AgentConversationDetail = AgentConversationSummary & {
@@ -63,13 +66,19 @@ export async function getAgentConversationForUser(
       messages: {
         orderBy: { createdAt: "desc" },
         take: 100,
-        select: { id: true, role: true, content: true }
+        select: { id: true, role: true, content: true, metadataJson: true }
       }
     }
   });
 
   if (!conversation) return null;
-  return { ...serializeSummary(conversation), messages: [...conversation.messages].reverse() };
+  return {
+    ...serializeSummary(conversation),
+    messages: [...conversation.messages].reverse().map(({ metadataJson, ...message }) => {
+      const attachments = attachmentsFromMetadata(metadataJson);
+      return attachments.length ? { ...message, attachments } : message;
+    })
+  };
 }
 
 export async function getAgentConversationSummaryForUser(

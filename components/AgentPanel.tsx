@@ -2,13 +2,18 @@
 
 import React from "react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { MessageSquare, Plus, Send, Trash2 } from "lucide-react";
+import { FileText, MessageSquare, Paperclip, Plus, Send, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ActionButton } from "@/components/ActionButton";
 import { AgentMemoryPanel } from "@/components/AgentMemoryPanel";
+import { HealthDisclaimer } from "@/components/HealthDisclaimer";
 import {
   AGENT_STREAM_MEDIA_TYPE,
   createAgentStreamParser,
+  AGENT_ATTACHMENT_MAX_BYTES,
+  AGENT_ATTACHMENT_MAX_COUNT,
+  AGENT_ATTACHMENTS_MAX_TOTAL_BYTES,
+  type AgentAttachment,
   type AgentStreamEvent
 } from "@hbm/contracts";
 
@@ -20,6 +25,7 @@ type ChatMessage = {
   content: string;
   adjustments?: AdjustmentRef[];
   streamComplete?: boolean;
+  attachments?: AgentAttachment[];
 };
 
 type AgentConversationSummary = {
@@ -39,6 +45,36 @@ const fallbackSuggestions = [
   "帮我把本周训练写入飞书日历",
   "今天午餐这些菜怎么选？"
 ];
+
+const attachmentAccept = "image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv,application/json,.md,.csv,.json";
+
+function normalizedMimeType(file: File) {
+  if (file.type) return file.type;
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  if (extension === "md") return "text/markdown";
+  if (extension === "csv") return "text/csv";
+  if (extension === "json") return "application/json";
+  return "text/plain";
+}
+
+function readAttachment(file: File): Promise<AgentAttachment> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error(`无法读取 ${file.name}`));
+    reader.onload = () => {
+      const mimeType = normalizedMimeType(file);
+      const encoded = String(reader.result).split(",", 2)[1] ?? "";
+      resolve({
+        id: crypto.randomUUID(),
+        name: file.name,
+        mimeType,
+        size: file.size,
+        dataUrl: `data:${mimeType};base64,${encoded}`
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 const suggestionGroups = {
   truncated: ["重新生成这次完整分析", "拉取最新 COROS 数据后再分析", "总结最需要调整的三件事"],
@@ -298,6 +334,7 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
   const [deletingConversationId, setDeletingConversationId] = useState("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
+  const [attachments, setAttachments] = useState<AgentAttachment[]>([]);
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const suggestions = useMemo(() => buildSuggestions(messages), [messages]);
   const selectedConversation = conversations.find((conversation) => conversation.id === selectedConversationId);
@@ -345,6 +382,7 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
     if (response.ok) {
       setSelectedConversationId(body.id);
       setMessages(body.messages);
+      setAttachments([]);
       setConversations((items) =>
         items.map((item) => (item.id === body.id ? { id: body.id, title: body.title, updatedAt: body.updatedAt } : item))
       );
@@ -371,6 +409,7 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
       setSelectedConversationId(body.id);
       setMessages(body.messages);
       setMessage("");
+      setAttachments([]);
     } else {
       setError(body.error ?? "Conversation could not be created.");
     }
@@ -407,18 +446,19 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
     await createConversation();
   }
 
-  async function sendMessage(text: string) {
+  async function sendMessage(text: string, selectedAttachments: AgentAttachment[] = []) {
     const content = text.trim();
-    if (!content || sending || !selectedConversationId) return;
+    if ((!content && selectedAttachments.length === 0) || sending || !selectedConversationId) return;
 
     setSending(true);
     setError("");
     setMessage("");
+    setAttachments([]);
     const optimisticId = `local-${Date.now()}`;
     const assistantId = `${optimisticId}-assistant`;
     setMessages((items) => [
       ...items,
-      { id: optimisticId, role: "user", content },
+      { id: optimisticId, role: "user", content: content || "请分析这些附件。", attachments: selectedAttachments },
       { id: assistantId, role: "assistant", content: "" }
     ]);
 
@@ -429,7 +469,11 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
           "Content-Type": "application/json",
           Accept: AGENT_STREAM_MEDIA_TYPE
         },
-        body: JSON.stringify({ conversationId: selectedConversationId, message: content })
+        body: JSON.stringify({
+          conversationId: selectedConversationId,
+          message: content,
+          ...(selectedAttachments.length ? { attachments: selectedAttachments } : {})
+        })
       });
 
       if (!response.ok) {
@@ -492,7 +536,31 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
 
   async function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await sendMessage(message);
+    await sendMessage(message, attachments);
+  }
+
+  async function addAttachments(files: FileList | null) {
+    if (!files?.length) return;
+    setError("");
+    const incoming = Array.from(files);
+    if (attachments.length + incoming.length > AGENT_ATTACHMENT_MAX_COUNT) {
+      setError(`最多添加 ${AGENT_ATTACHMENT_MAX_COUNT} 个附件。`);
+      return;
+    }
+    if (incoming.some((file) => file.size > AGENT_ATTACHMENT_MAX_BYTES)) {
+      setError("单个附件不能超过 5 MB。");
+      return;
+    }
+    if (attachments.reduce((sum, item) => sum + item.size, 0) + incoming.reduce((sum, item) => sum + item.size, 0) > AGENT_ATTACHMENTS_MAX_TOTAL_BYTES) {
+      setError("附件总大小不能超过 10 MB。");
+      return;
+    }
+    try {
+      const nextAttachments = await Promise.all(incoming.map(readAttachment));
+      setAttachments((items) => [...items, ...nextAttachments]);
+    } catch (attachmentError) {
+      setError(attachmentError instanceof Error ? attachmentError.message : "附件读取失败。");
+    }
   }
 
   return (
@@ -594,7 +662,20 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
                         (sending && item.id.startsWith("local-"))
                       }
                     />
-                  ) : item.content}
+                  ) : (
+                    <>
+                      {item.attachments?.length ? (
+                        <div className="agent-message-attachments">
+                          {item.attachments.map((attachment) => attachment.mimeType.startsWith("image/") ? (
+                            <img className="agent-message-image" src={attachment.dataUrl} alt={attachment.name} key={attachment.id} />
+                          ) : (
+                            <span className="agent-message-file" key={attachment.id}><FileText size={15} />{attachment.name}</span>
+                          ))}
+                        </div>
+                      ) : null}
+                      {item.content ? <span>{item.content}</span> : null}
+                    </>
+                  )}
                   {item.role === "assistant" && item.adjustments?.length
                     ? item.adjustments.map((adjustment) => (
                         <div className="agent-adjustment-row" key={adjustment.id}>
@@ -614,6 +695,9 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
                         </div>
                       ))
                     : null}
+                  {item.role === "assistant" && item.content ? (
+                    <HealthDisclaimer />
+                  ) : null}
                 </div>
               </div>
             ))
@@ -635,6 +719,23 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
         </div>
 
         <form className="agent-composer agent-composer-dock" aria-label="Message composer" onSubmit={send}>
+          {attachments.length ? (
+            <div className="agent-composer-attachments" aria-label="Selected attachments">
+              {attachments.map((attachment) => (
+                <span className="agent-composer-attachment" key={attachment.id}>
+                  {attachment.mimeType.startsWith("image/") ? <img src={attachment.dataUrl} alt="" /> : <FileText size={15} />}
+                  <span>{attachment.name}</span>
+                  <button type="button" aria-label={`移除 ${attachment.name}`} onClick={() => setAttachments((items) => items.filter((item) => item.id !== attachment.id))}>
+                    <X size={14} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null}
+          <label className="agent-attach-button" aria-label="添加图片或文件" title="添加图片或文件">
+            <Paperclip aria-hidden="true" size={18} />
+            <input type="file" accept={attachmentAccept} multiple onChange={(event) => { void addAttachments(event.target.files); event.target.value = ""; }} />
+          </label>
           <label className="field agent-composer-field">
             <span className="sr-only">Message</span>
             <input
@@ -643,7 +744,7 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
               placeholder="Ask about training, recovery, calendar, or meals"
             />
           </label>
-          <ActionButton type="submit" disabled={sending || !message.trim() || !selectedConversationId}>
+          <ActionButton type="submit" disabled={sending || (!message.trim() && attachments.length === 0) || !selectedConversationId}>
             <Send aria-hidden="true" size={16} /> {sending ? "Sending..." : "Send"}
           </ActionButton>
         </form>

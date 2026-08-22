@@ -1,4 +1,5 @@
 import { prisma } from "@/src/db/client";
+import { logger } from "@/src/observability/logger";
 import { normalizeFeishuCalendarSnapshot } from "@/src/providers/calendar";
 import { normalizeCorosActivity, normalizeCorosRecovery, normalizeCorosSleep } from "@/src/providers/coros";
 import { fetchCorosRemoteMcpSnapshot } from "@/src/providers/coros-mcp";
@@ -75,7 +76,7 @@ function normalizeAll<T>(items: unknown[] | undefined, normalize: (item: never) 
       normalized.push(normalize(item as never));
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      console.warn(`Skipping invalid COROS ${kind} record: ${reason} Raw: ${JSON.stringify(item).slice(0, 300)}`);
+      logger.warn("coros_record_skipped", { kind, reason });
     }
   }
   return normalized;

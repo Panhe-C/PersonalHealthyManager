@@ -61,15 +61,15 @@ describe("plan generation API", () => {
 
   it("reports a missing prerequisite as 409 with a message the client can show", async () => {
     vi.mocked(generatePlanForUser).mockRejectedValue(
-      new PlanPreconditionError("生成计划前需要先同步日历。", "calendar_snapshot_missing")
+      new PlanPreconditionError("生成计划前需要先填写身体资料。", "body_profile_missing")
     );
 
     const response = await POST(generateRequest(validWeekStart));
 
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toEqual({
-      error: "生成计划前需要先同步日历。",
-      code: "calendar_snapshot_missing"
+      error: "生成计划前需要先填写身体资料。",
+      code: "body_profile_missing"
     });
   });
 

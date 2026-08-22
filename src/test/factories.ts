@@ -45,7 +45,7 @@ export function calendarSnapshot(overrides: Partial<NormalizedCalendarSnapshot> 
 export function mealMenus(): MealMenu[] {
   return [
     {
-      source: "mock",
+      source: "bytecanteen",
       date: new Date("2026-06-02T00:00:00+08:00"),
       meal: "lunch",
       items: [

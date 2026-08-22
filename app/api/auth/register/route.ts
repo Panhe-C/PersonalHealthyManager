@@ -1,11 +1,20 @@
 import { NextResponse } from "next/server";
 import { registerRequestSchema } from "@hbm/contracts";
 import { normalizeEmail, registerUser } from "@/src/auth/registration";
-import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/src/security/rateLimit";
+import { isRegistrationEnabled } from "@/src/auth/registrationPolicy";
+import { captureError } from "@/src/observability/logger";
+import { consumeRateLimitAsync, rateLimitHeaders, requestClientKey } from "@/src/security/rateLimit";
 
 export async function POST(request: Request) {
+  if (!isRegistrationEnabled()) {
+    return NextResponse.json(
+      { error: "Self-service registration is not available", code: "registration_disabled" },
+      { status: 403 },
+    );
+  }
+
   const clientKey = requestClientKey(request);
-  const ipLimit = consumeRateLimit({
+  const ipLimit = await consumeRateLimitAsync({
     key: `register-ip:${clientKey}`,
     limit: 10,
     windowMs: 60 * 60_000,
@@ -21,7 +30,7 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json(
       {
-        error: "A valid email and a password of 12 to 128 characters are required",
+        error: "A valid email, a password of 12 to 128 characters, and acceptance of the terms are required",
         code: "invalid_registration",
       },
       { status: 400, headers: rateLimitHeaders(ipLimit) },
@@ -29,7 +38,7 @@ export async function POST(request: Request) {
   }
 
   const email = normalizeEmail(parsed.data.email);
-  const addressLimit = consumeRateLimit({
+  const addressLimit = await consumeRateLimitAsync({
     key: `register-email:${email}`,
     limit: 5,
     windowMs: 60 * 60_000,
@@ -44,17 +53,17 @@ export async function POST(request: Request) {
   try {
     await registerUser({ email, password: parsed.data.password, timezone: parsed.data.timezone });
   } catch (error) {
-    console.error("Registration failed", error);
+    captureError("registration_failed", error);
     return NextResponse.json(
-      { error: "Could not send the verification email. Try again later.", code: "verification_send_failed" },
-      { status: 502, headers: rateLimitHeaders(addressLimit) },
+      { error: "Could not create the account. Try again later.", code: "registration_failed" },
+      { status: 500, headers: rateLimitHeaders(addressLimit) },
     );
   }
 
   // Identical response whether or not the address was already registered, so
   // this endpoint cannot be used to discover which emails have accounts.
   return NextResponse.json(
-    { ok: true, status: "verification_sent", email },
+    { ok: true, status: "registered", email },
     { headers: rateLimitHeaders(addressLimit) },
   );
 }

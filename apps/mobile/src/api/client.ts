@@ -68,6 +68,9 @@ export function getV1ApiUrl(path: string) {
   return path.startsWith("http") ? path : `${V1}${path}`;
 }
 
+/** Origin of the deployed web app — used for linking to public pages like /privacy. */
+export const WEB_ORIGIN = API_BASE_URL;
+
 export async function getValidAccessToken(forceRefresh = false) {
   return forceRefresh ? refreshAccessToken() : getAccessToken();
 }
@@ -152,17 +155,33 @@ export const api = {
         `${API_BASE_URL}/api/auth/login`,
         { method: "POST", body: { email, password }, skipAuthRefresh: true }
       ),
-    register: (email: string, password: string, timezone?: string) =>
-      request<{ ok: true; status: "verification_sent"; email: string }>(`${API_BASE_URL}/api/auth/register`, {
+    register: async (email: string, password: string, timezone?: string, acceptTerms = false) => {
+      await request<{ ok: true; status: "registered"; email: string }>(`${API_BASE_URL}/api/auth/register`, {
         method: "POST",
-        body: { email, password, ...(timezone ? { timezone } : {}) },
+        body: { email, password, ...(timezone ? { timezone } : {}), acceptTerms },
+        skipAuthRefresh: true
+      });
+      const result = await request<{ ok: true; accessToken: string; refreshToken: string; accessExpiresAt: string; refreshExpiresAt: string }>(
+        `${API_BASE_URL}/api/auth/login`,
+        { method: "POST", body: { email, password }, skipAuthRefresh: true }
+      );
+      const tokens = {
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        accessExpiresAt: result.accessExpiresAt,
+        refreshExpiresAt: result.refreshExpiresAt
+      };
+      await setTokens(tokens);
+      return tokens;
+    },
+    // Resolves the same way for unknown addresses, so the caller must not treat
+    // success as proof that an account exists.
+    forgotPassword: (email: string) =>
+      request<{ ok: true; status: "reset_sent"; email: string }>(`${API_BASE_URL}/api/auth/forgot-password`, {
+        method: "POST",
+        body: { email },
         skipAuthRefresh: true
       }),
-    resendVerification: (email: string) =>
-      request<{ ok: true; status: "verification_sent"; email: string }>(
-        `${API_BASE_URL}/api/auth/resend-verification`,
-        { method: "POST", body: { email }, skipAuthRefresh: true }
-      ),
     logout: (refreshToken?: string) =>
       request<{ ok: true }>(`${API_BASE_URL}/api/auth/logout`, { method: "POST", body: refreshToken ? { refreshToken } : {} })
   }

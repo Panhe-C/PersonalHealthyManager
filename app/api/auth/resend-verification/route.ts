@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { resendVerificationRequestSchema } from "@hbm/contracts";
 import { normalizeEmail, resendVerification } from "@/src/auth/registration";
-import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/src/security/rateLimit";
+import { captureError } from "@/src/observability/logger";
+import { consumeRateLimitAsync, rateLimitHeaders, requestClientKey } from "@/src/security/rateLimit";
 
 export async function POST(request: Request) {
-  const ipLimit = consumeRateLimit({
+  const ipLimit = await consumeRateLimitAsync({
     key: `resend-verification-ip:${requestClientKey(request)}`,
     limit: 10,
     windowMs: 60 * 60_000,
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
   }
 
   const email = normalizeEmail(parsed.data.email);
-  const addressLimit = consumeRateLimit({
+  const addressLimit = await consumeRateLimitAsync({
     key: `resend-verification-email:${email}`,
     limit: 3,
     windowMs: 60 * 60_000,
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
   try {
     await resendVerification(email);
   } catch (error) {
-    console.error("Resending the verification email failed", error);
+    captureError("resend_verification_failed", error);
     return NextResponse.json(
       { error: "Could not send the verification email. Try again later.", code: "verification_send_failed" },
       { status: 502, headers: rateLimitHeaders(addressLimit) },

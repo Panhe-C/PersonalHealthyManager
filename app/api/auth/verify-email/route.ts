@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyEmailRequestSchema } from "@hbm/contracts";
 import { verifyEmail } from "@/src/auth/registration";
-import { consumeRateLimit, rateLimitHeaders, requestClientKey } from "@/src/security/rateLimit";
+import { consumeRateLimitAsync, rateLimitHeaders, requestClientKey } from "@/src/security/rateLimit";
 
 const FAILURES = {
   invalid: { error: "This verification link is not valid.", code: "invalid_token", status: 400 },
@@ -9,7 +9,7 @@ const FAILURES = {
 } as const;
 
 export async function POST(request: Request) {
-  const ipLimit = consumeRateLimit({
+  const ipLimit = await consumeRateLimitAsync({
     key: `verify-email-ip:${requestClientKey(request)}`,
     limit: 30,
     windowMs: 15 * 60_000,
