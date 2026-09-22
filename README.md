@@ -19,6 +19,8 @@ Healthy Body Manager is a personal training, recovery, schedule, and nutrition p
 
 完整产品说明见 [docs/product-overview.md](./docs/product-overview.md)。
 
+当前功能范围、完成状态与待办见 [产品功能树](./docs/product-feature-tree.md)。
+
 ## First Version
 
 - Direct self-service registration, email/password login, password reset, and user-scoped data.
