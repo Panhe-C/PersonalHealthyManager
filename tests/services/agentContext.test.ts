@@ -36,15 +36,25 @@ describe("agent context", () => {
     vi.mocked(prisma.agentConversation.findMany).mockResolvedValue([]);
   });
 
-  it("detects explicit fresh-data phrases", () => {
+  it("refreshes COROS for explicit source lookups and recent sleep data requests", () => {
     expect(shouldRefreshCoros("同步一下最新 COROS 数据")).toBe(true);
     expect(shouldRefreshCoros("pull latest recovery")).toBe(true);
+    expect(shouldRefreshCoros("看下我昨晚的睡眠数据")).toBe(true);
+    expect(shouldRefreshCoros("从 coros 的 mcp 查一下看看")).toBe(true);
     expect(shouldRefreshCoros("我昨晚没睡好，今天还适合跑吗？")).toBe(false);
   });
 
   it("loads recovery context without live sync by default", async () => {
     vi.mocked(prisma.sleepRecord.findMany).mockResolvedValue([
-      { date: new Date("2026-06-20T00:00:00+08:00"), durationMinutes: 390, qualityScore: 72 }
+      {
+        date: new Date("2026-06-20T00:00:00+08:00"),
+        durationMinutes: 390,
+        qualityScore: 72,
+        deepSleepMinutes: 78,
+        lightSleepMinutes: 214,
+        remSleepMinutes: 82,
+        awakeMinutes: 16
+      }
     ] as never);
     vi.mocked(prisma.recoveryRecord.findMany).mockResolvedValue([
       { date: new Date("2026-06-20T00:00:00+08:00"), recoveryPercent: 64, hrvMs: 45, restingHeartRateBpm: 58 }
@@ -56,6 +66,10 @@ describe("agent context", () => {
     expect(context.freshSync).toEqual({ attempted: false, succeeded: false });
     expect(context.sections.map((section) => section.title)).toContain("Recent sleep");
     expect(context.sections.map((section) => section.title)).toContain("Recent recovery");
+    expect(context.sections).toContainEqual({
+      title: "Recent sleep",
+      content: "2026-06-20: 390 min, score 72, deep 78 min, light 214 min, REM 82 min, awake 16 min."
+    });
   });
 
   it("runs COROS sync only when latest data is requested", async () => {
@@ -76,6 +90,23 @@ describe("agent context", () => {
       attempted: true,
       succeeded: false,
       error: "COROS MCP endpoint is not configured."
+    });
+  });
+
+  it("turns a COROS 401 into an actionable reconnect state", async () => {
+    vi.mocked(syncCorosFromSettings).mockRejectedValue(new Error("COROS MCP returned HTTP 401"));
+
+    const context = await buildAgentContext(
+      "user-1",
+      "recovery_check",
+      "看下我昨晚的睡眠数据"
+    );
+
+    expect(context.freshSync).toEqual({
+      attempted: true,
+      succeeded: false,
+      authRequired: true,
+      error: "COROS authorization expired (HTTP 401). Reconnect COROS in Settings."
     });
   });
 

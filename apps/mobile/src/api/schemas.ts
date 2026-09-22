@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { agentAttachmentSchema } from "@hbm/contracts";
 
 export const checklistItemSchema = z.object({
   id: z.string(),
@@ -28,6 +29,22 @@ export const trainingTaskSchema = z.object({
   updatedAt: z.string()
 });
 
+export const mealMenuItemSchema = z.object({
+  name: z.string(),
+  calories: z.number(),
+  proteinGrams: z.number(),
+  carbohydrateGrams: z.number(),
+  fatGrams: z.number(),
+  tags: z.array(z.string())
+});
+
+export const mealMenuSchema = z.object({
+  source: z.string(),
+  date: z.string(),
+  meal: z.string(),
+  items: z.array(mealMenuItemSchema)
+});
+
 export const todayOverviewSchema = z.object({
   date: z.string(),
   primaryGoal: z
@@ -43,6 +60,9 @@ export const todayOverviewSchema = z.object({
   latestRecovery: z.object({}).passthrough().nullable(),
   latestSleep: z.object({}).passthrough().nullable(),
   todayTasks: z.array(trainingTaskSchema),
+  mealMenus: z.array(mealMenuSchema),
+  /** Optional so an older server response still parses. */
+  mealMenuStatus: z.enum(["ok", "not_configured", "failed"]).optional(),
   activePlanId: z.string().nullable()
 });
 
@@ -131,6 +151,10 @@ export const sleepRecordSchema = z.object({
   sleepEnd: z.string().nullable(),
   durationMinutes: z.number().int(),
   qualityScore: z.number().int().nullable(),
+  deepSleepMinutes: z.number().int().nullable().optional(),
+  lightSleepMinutes: z.number().int().nullable().optional(),
+  remSleepMinutes: z.number().int().nullable().optional(),
+  awakeMinutes: z.number().int().nullable().optional(),
   metadataJson: z.string(),
   createdAt: z.string()
 });
@@ -173,6 +197,7 @@ export const agentMessageSchema = z.object({
   id: z.string(),
   role: z.string(),
   content: z.string(),
+  attachments: z.array(agentAttachmentSchema).optional(),
   adjustments: z.array(agentAdjustmentSchema).optional()
 }).passthrough();
 
@@ -216,6 +241,7 @@ export type CompletedTrainingTask = z.infer<typeof completedTrainingTaskSchema>;
 export type Conversation = z.infer<typeof conversationSchema>;
 export type ConversationDetail = z.infer<typeof conversationDetailSchema>;
 export type Goal = z.infer<typeof goalSchema>;
+export type MealMenu = z.infer<typeof mealMenuSchema>;
 export type Memory = z.infer<typeof memorySchema>;
 export type RecoveryRecord = z.infer<typeof recoveryRecordSchema>;
 export type SleepRecord = z.infer<typeof sleepRecordSchema>;

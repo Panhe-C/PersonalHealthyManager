@@ -1,0 +1,19 @@
+graph TD
+  G["Goal 目标"]
+  P["Plan 周计划<br/>weekStart / weekEnd"]
+  PA["PlanAdjustment<br/>调整历史 可撤销"]
+  TT["TrainingTask 训练任务<br/>date / targetJson"]
+  TCI["TrainingChecklistItem<br/>清单项"]
+  TC["TrainingCompletion<br/>完成记录"]
+  AR["ActivityRecord<br/>COROS 实际运动"]
+  CED["CalendarEventDraft<br/>待确认日历事件"]
+  LARK["飞书日历<br/>确认后经 lark-cli 写出"]
+
+  G -.->|"goalId 可空 NoAction"| TT
+  P -->|"planId+userId 级联"| TT
+  P -->|"planId+userId 级联"| PA
+  TT -->|"taskId 级联"| TCI
+  TT -->|"taskId 唯一 级联"| TC
+  AR -.->|"linkedActivityId 可空<br/>计划对比实际"| TC
+  TT -.->|"trainingTaskId 唯一"| CED
+  CED ==>|"用户确认后<br/>唯一出站写操作"| LARK

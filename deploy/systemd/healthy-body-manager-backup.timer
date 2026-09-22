@@ -1,0 +1,14 @@
+[Unit]
+Description=Run HealthyBodyManager SQLite backup daily
+
+[Timer]
+# No timezone suffix: OnCalendar timezones require systemd >= 247, while older
+# hosts (e.g. Alibaba Cloud Linux 3 ships systemd 239) fail to parse the unit.
+# The host timezone must be Asia/Shanghai (see docs/production-deployment.md).
+OnCalendar=*-*-* 03:15:00
+Persistent=true
+RandomizedDelaySec=10m
+Unit=healthy-body-manager-backup.service
+
+[Install]
+WantedBy=timers.target

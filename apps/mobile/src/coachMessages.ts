@@ -1,7 +1,7 @@
-import type { AgentMessage } from "./api/schemas";
+import type { AgentAdjustment, AgentMessage } from "./api/schemas";
 
 function messageKey(message: AgentMessage) {
-  return `${message.role}:${message.content}`;
+  return `${message.role}:${message.content}:${message.attachments?.map((item) => item.id).join(",") ?? ""}`;
 }
 
 function isLocalMessage(message: AgentMessage) {
@@ -19,15 +19,35 @@ export function getRecentMessagesForChat(messages: AgentMessage[], limit = 8) {
   return messages.slice(-limit);
 }
 
-export function formatCoachMessage(content: string) {
-  return content
-    .replace(/\*\*/g, "")
-    .replace(/^#{1,6}\s+/gm, "")
-    .replace(/^\s*\|?[-:\s|]+\|?\s*$/gm, "")
-    .replace(/^\s*\|\s?/gm, "")
-    .replace(/\s?\|\s*$/gm, "")
-    .replace(/\s*\|\s*/g, " · ")
-    .replace(/^\s*-\s+/gm, "• ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+export function canSubmitCoachMessage(input: {
+  content: string;
+  conversationId?: string;
+  sending: boolean;
+  conversationMutationPending: boolean;
+  attachmentCount?: number;
+}) {
+  return Boolean(
+    (input.content.trim() || (input.attachmentCount ?? 0) > 0) &&
+    input.conversationId &&
+    !input.sending &&
+    !input.conversationMutationPending
+  );
+}
+
+export function appendAssistantDelta(messages: AgentMessage[], messageId: string, text: string) {
+  return messages.map((message) =>
+    message.id === messageId ? { ...message, content: `${message.content}${text}` } : message
+  );
+}
+
+export function finalizeAssistantMessage(
+  messages: AgentMessage[],
+  messageId: string,
+  final: { message: string; adjustments: AgentAdjustment[] }
+) {
+  return messages.map((message) =>
+    message.id === messageId
+      ? { ...message, content: final.message, adjustments: final.adjustments }
+      : message
+  );
 }

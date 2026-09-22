@@ -6,7 +6,8 @@ import type { CorosMcpRegion } from "@/src/settings/defaults";
 export const POST = withUser(async (user, request: Request) => {
   try {
     const body = (await request.json()) as { endpoint?: unknown; corosRegion?: unknown };
-    const endpoint = typeof body.endpoint === "string" ? body.endpoint : "";
+    // Optional: clients that pick a region get the official URL derived for them.
+    const endpoint = typeof body.endpoint === "string" ? body.endpoint : undefined;
     const corosRegion =
       typeof body.corosRegion === "string" && body.corosRegion ? (body.corosRegion as CorosMcpRegion) : undefined;
 

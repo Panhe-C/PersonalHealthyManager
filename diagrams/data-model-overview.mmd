@@ -1,0 +1,53 @@
+graph LR
+  U["User 账号<br/>email / passwordHash<br/>emailVerifiedAt"]
+
+  subgraph AUTH["认证与配置"]
+    S["Session<br/>tokenHash SHA-256<br/>refresh / access"]
+    EV["EmailVerificationToken<br/>tokenHash SHA-256"]
+    US["UserSettings<br/>API Key AES-256-GCM"]
+  end
+
+  subgraph BODY["身体与目标"]
+    BP["BodyProfile<br/>1对1 身高体重体脂"]
+    G["Goal<br/>metricsJson"]
+  end
+
+  subgraph HEALTH["健康数据 COROS 同步"]
+    AR["ActivityRecord<br/>运动"]
+    SR["SleepRecord<br/>睡眠"]
+    RR["RecoveryRecord<br/>恢复"]
+  end
+
+  subgraph SCHED["日程与饮食"]
+    CS["CalendarSnapshot<br/>飞书日历快照"]
+    CED["CalendarEventDraft<br/>待确认事件"]
+    MM["MealMenu<br/>菜单"]
+  end
+
+  subgraph PLAN["训练计划"]
+    P["Plan 周计划"]
+    TT["TrainingTask 训练任务"]
+    TCI["TrainingChecklistItem"]
+    TC["TrainingCompletion"]
+    PA["PlanAdjustment"]
+  end
+
+  subgraph AGENT["Agent 对话"]
+    AC["AgentConversation"]
+    AM["AgentMessage"]
+    AMEM["AgentMemory"]
+  end
+
+  subgraph OPS["推送与自动化"]
+    PT["PushToken"]
+    AS["AutomationState"]
+    ND["NotificationDelivery"]
+  end
+
+  U -->|userId 级联删除| AUTH
+  U -->|userId 级联删除| BODY
+  U -->|userId 级联删除| HEALTH
+  U -->|userId 级联删除| SCHED
+  U -->|userId 级联删除| PLAN
+  U -->|userId 级联删除| AGENT
+  U -->|userId 级联删除| OPS

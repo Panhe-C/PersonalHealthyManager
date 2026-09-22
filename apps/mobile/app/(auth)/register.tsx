@@ -1,0 +1,163 @@
+import { useState } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
+import { router } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
+import { Check } from "lucide-react-native";
+import { useAuth } from "../../src/auth/AuthContext";
+import { WEB_ORIGIN } from "../../src/api/client";
+import { Button } from "../../src/components/Button";
+import { InsetGroup } from "../../src/components/InsetGroup";
+import { Screen } from "../../src/components/Screen";
+import { Text } from "../../src/components/Text";
+import { TextField } from "../../src/components/TextField";
+import { REGISTRATION_ENABLED } from "../../src/config/registration";
+import { spacing, useTheme } from "../../src/theme/tokens";
+
+const MIN_PASSWORD_LENGTH = 12;
+
+export default function RegisterScreen() {
+  const { signUp } = useAuth();
+  const { tokens } = useTheme();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+
+  if (!REGISTRATION_ENABLED) {
+    return (
+      <Screen>
+        <View style={styles.header}>
+          <Text size="title1" weight="strong" style={styles.pageTitle}>暂未开放注册</Text>
+          <Text size="subheadline" color={tokens.labelSecondary}>
+            当前服务为邀请制，请使用已经配置的账号登录。
+          </Text>
+        </View>
+        <View style={styles.actions}>
+          <Button title="返回登录" onPress={() => router.replace("/(auth)/login")} />
+        </View>
+      </Screen>
+    );
+  }
+
+  async function submit() {
+    const normalized = email.trim().toLowerCase();
+    setError(null);
+
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(`密码至少需要 ${MIN_PASSWORD_LENGTH} 个字符`);
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("两次输入的密码不一致");
+      return;
+    }
+
+    if (!acceptTerms) {
+      setError("请先阅读并同意隐私说明与服务条款");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await signUp(normalized, password);
+      router.replace("/(app)/(tabs)/today");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "注册失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Screen>
+      <View style={styles.header}>
+        <Text size="title1" weight="strong" style={styles.pageTitle}>注册</Text>
+        <Text size="subheadline" color={tokens.labelSecondary}>注册后即可开始使用</Text>
+      </View>
+
+      <InsetGroup>
+        <TextField
+          label="邮箱"
+          value={email}
+          onChange={setEmail}
+          placeholder="you@example.com"
+          keyboardType="email-address"
+          autoComplete="email"
+        />
+        <TextField
+          label="密码"
+          value={password}
+          onChange={setPassword}
+          placeholder="••••••••"
+          secure
+          autoComplete="new-password"
+          hint={`至少 ${MIN_PASSWORD_LENGTH} 个字符`}
+        />
+        <TextField
+          label="确认密码"
+          value={confirmPassword}
+          onChange={setConfirmPassword}
+          placeholder="••••••••"
+          secure
+          autoComplete="new-password"
+        />
+      </InsetGroup>
+
+      {error && <Text style={{ color: tokens.red, paddingHorizontal: spacing.lg }}>{error}</Text>}
+
+      <Pressable
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: acceptTerms }}
+        onPress={() => setAcceptTerms((value) => !value)}
+        style={({ pressed }) => [styles.termsRow, pressed ? { backgroundColor: tokens.fill } : null]}
+      >
+        <View
+          style={[
+            styles.termsBox,
+            acceptTerms
+              ? { backgroundColor: tokens.tint, borderColor: tokens.tint }
+              : { borderColor: tokens.separator }
+          ]}
+        >
+          {acceptTerms ? <Check color={tokens.controlLabel} size={14} strokeWidth={3} /> : null}
+        </View>
+        <Text size="footnote" style={styles.termsLabel}>
+          我已阅读并同意
+          <Text
+            size="footnote"
+            style={{ color: tokens.tint }}
+            onPress={() => WebBrowser.openBrowserAsync(`${WEB_ORIGIN}/privacy`)}
+          >
+            隐私说明
+          </Text>
+          与
+          <Text
+            size="footnote"
+            style={{ color: tokens.tint }}
+            onPress={() => WebBrowser.openBrowserAsync(`${WEB_ORIGIN}/terms`)}
+          >
+            服务条款
+          </Text>
+        </Text>
+      </Pressable>
+
+      <View style={styles.actions}>
+        <Button title={busy ? "注册中…" : "注册"} onPress={submit} disabled={busy || !acceptTerms} />
+        <Button title="已有账号？去登录" variant="plain" onPress={() => router.replace("/(auth)/login")} />
+      </View>
+    </Screen>
+  );
+}
+
+const styles = StyleSheet.create({
+  actions: { gap: spacing.md },
+  header: { gap: spacing.xs, paddingHorizontal: spacing.lg, paddingTop: spacing.xxl },
+  pageTitle: { fontSize: 30, letterSpacing: -0.5, lineHeight: 36, marginTop: 2 },
+  termsRow: { alignItems: "flex-start", flexDirection: "row", gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
+  termsBox: { alignItems: "center", borderRadius: 6, borderWidth: 1.5, height: 20, justifyContent: "center", marginTop: 2, width: 20 },
+  termsLabel: { flex: 1, lineHeight: 18 }
+});

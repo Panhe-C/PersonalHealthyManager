@@ -2,10 +2,20 @@
 
 import React from "react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Send, Trash2 } from "lucide-react";
+import { FileText, MessageSquare, Paperclip, Plus, Send, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ActionButton } from "@/components/ActionButton";
 import { AgentMemoryPanel } from "@/components/AgentMemoryPanel";
+import { HealthDisclaimer } from "@/components/HealthDisclaimer";
+import {
+  AGENT_STREAM_MEDIA_TYPE,
+  createAgentStreamParser,
+  AGENT_ATTACHMENT_MAX_BYTES,
+  AGENT_ATTACHMENT_MAX_COUNT,
+  AGENT_ATTACHMENTS_MAX_TOTAL_BYTES,
+  type AgentAttachment,
+  type AgentStreamEvent
+} from "@hbm/contracts";
 
 type AdjustmentRef = { id: string; label: string; undoneAt: string | null };
 
@@ -14,6 +24,8 @@ type ChatMessage = {
   role: string;
   content: string;
   adjustments?: AdjustmentRef[];
+  streamComplete?: boolean;
+  attachments?: AgentAttachment[];
 };
 
 type AgentConversationSummary = {
@@ -33,6 +45,36 @@ const fallbackSuggestions = [
   "帮我把本周训练写入飞书日历",
   "今天午餐这些菜怎么选？"
 ];
+
+const attachmentAccept = "image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv,application/json,.md,.csv,.json";
+
+function normalizedMimeType(file: File) {
+  if (file.type) return file.type;
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  if (extension === "md") return "text/markdown";
+  if (extension === "csv") return "text/csv";
+  if (extension === "json") return "application/json";
+  return "text/plain";
+}
+
+function readAttachment(file: File): Promise<AgentAttachment> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error(`无法读取 ${file.name}`));
+    reader.onload = () => {
+      const mimeType = normalizedMimeType(file);
+      const encoded = String(reader.result).split(",", 2)[1] ?? "";
+      resolve({
+        id: crypto.randomUUID(),
+        name: file.name,
+        mimeType,
+        size: file.size,
+        dataUrl: `data:${mimeType};base64,${encoded}`
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 const suggestionGroups = {
   truncated: ["重新生成这次完整分析", "拉取最新 COROS 数据后再分析", "总结最需要调整的三件事"],
@@ -142,8 +184,8 @@ function isLikelyTruncatedAssistantContent(content: string) {
   return /以下是|分析|这一周|本周|建议|概览/.test(plain);
 }
 
-function RichMessageContent({ content }: { content: string }) {
-  if (isLikelyTruncatedAssistantContent(content)) {
+function RichMessageContent({ content, streaming = false }: { content: string; streaming?: boolean }) {
+  if (!streaming && isLikelyTruncatedAssistantContent(content)) {
     return (
       <div className="rich-message-content">
         <p className="rich-truncated">这条回复生成时被截断了，请重新发送问题以获取完整分析。</p>
@@ -292,8 +334,11 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
   const [deletingConversationId, setDeletingConversationId] = useState("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
+  const [attachments, setAttachments] = useState<AgentAttachment[]>([]);
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const suggestions = useMemo(() => buildSuggestions(messages), [messages]);
+  const selectedConversation = conversations.find((conversation) => conversation.id === selectedConversationId);
+  const lastMessageContent = messages.at(-1)?.content;
 
   async function undoAdjustment(messageId: string, adjustmentId: string) {
     const response = await fetch(`/api/agent/adjustments/${adjustmentId}/undo`, { method: "POST" });
@@ -327,7 +372,7 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
     } else {
       messagesElement.scrollTop = messagesElement.scrollHeight;
     }
-  }, [messages.length]);
+  }, [messages.length, lastMessageContent]);
 
   async function loadConversation(conversationId: string) {
     setLoadingConversation(true);
@@ -337,6 +382,7 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
     if (response.ok) {
       setSelectedConversationId(body.id);
       setMessages(body.messages);
+      setAttachments([]);
       setConversations((items) =>
         items.map((item) => (item.id === body.id ? { id: body.id, title: body.title, updatedAt: body.updatedAt } : item))
       );
@@ -363,6 +409,7 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
       setSelectedConversationId(body.id);
       setMessages(body.messages);
       setMessage("");
+      setAttachments([]);
     } else {
       setError(body.error ?? "Conversation could not be created.");
     }
@@ -399,52 +446,138 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
     await createConversation();
   }
 
-  async function sendMessage(text: string) {
+  async function sendMessage(text: string, selectedAttachments: AgentAttachment[] = []) {
     const content = text.trim();
-    if (!content || sending || !selectedConversationId) return;
+    if ((!content && selectedAttachments.length === 0) || sending || !selectedConversationId) return;
 
     setSending(true);
     setError("");
     setMessage("");
+    setAttachments([]);
     const optimisticId = `local-${Date.now()}`;
-    setMessages((items) => [...items, { id: optimisticId, role: "user", content }]);
-    const response = await fetch("/api/agent", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ conversationId: selectedConversationId, message: content })
-    });
-    const body = await response.json();
+    const assistantId = `${optimisticId}-assistant`;
+    setMessages((items) => [
+      ...items,
+      { id: optimisticId, role: "user", content: content || "请分析这些附件。", attachments: selectedAttachments },
+      { id: assistantId, role: "assistant", content: "" }
+    ]);
 
-    if (response.ok) {
-      setMessages((items) => [
-        ...items,
-        {
-          id: `${optimisticId}-assistant`,
-          role: "assistant",
-          content: body.message,
-          adjustments: Array.isArray(body.adjustments) ? body.adjustments : undefined
-        }
-      ]);
-      if (body.conversation) {
-        setConversations((items) => [body.conversation, ...items.filter((item) => item.id !== body.conversation.id)]);
+    try {
+      const response = await fetch("/api/agent", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: AGENT_STREAM_MEDIA_TYPE
+        },
+        body: JSON.stringify({
+          conversationId: selectedConversationId,
+          message: content,
+          ...(selectedAttachments.length ? { attachments: selectedAttachments } : {})
+        })
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error ?? "Message could not be sent.");
       }
-    } else {
-      setError(body.error ?? "Message could not be sent.");
+      if (!response.body) throw new Error("Agent response did not include a stream.");
+
+      const parser = createAgentStreamParser();
+      const reader = response.body.getReader();
+      const handleEvent = (event: AgentStreamEvent) => {
+        if (event.type === "delta") {
+          setMessages((items) => items.map((item) =>
+            item.id === assistantId
+              ? { ...item, content: `${item.content}${event.text}` }
+              : item
+          ));
+        }
+        if (event.type === "final") {
+          setMessages((items) => items.map((item) =>
+            item.id === assistantId
+              ? {
+                  ...item,
+                  content: event.message,
+                  adjustments: event.adjustments,
+                  streamComplete: true
+                }
+              : item
+          ));
+          setConversations((items) => [
+            event.conversation,
+            ...items.filter((item) => item.id !== event.conversation.id)
+          ]);
+        }
+        if (event.type === "error") throw new Error(event.error);
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parser.push(value).forEach(handleEvent);
+      }
+      parser.finish().forEach(handleEvent);
+    } catch (error) {
+      setMessages((items) => {
+        const assistant = items.find((item) => item.id === assistantId);
+        return assistant?.content ? items : items.filter((item) => item.id !== assistantId);
+      });
+      const message = error instanceof Error ? error.message : "Message could not be sent.";
+      setError(
+        message.includes("ended before a terminal event") ||
+        message.includes("did not include a stream")
+          ? "回复中断，请重试。"
+          : message
+      );
+    } finally {
+      setSending(false);
     }
-    setSending(false);
   }
 
   async function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await sendMessage(message);
+    await sendMessage(message, attachments);
+  }
+
+  async function addAttachments(files: FileList | null) {
+    if (!files?.length) return;
+    setError("");
+    const incoming = Array.from(files);
+    if (attachments.length + incoming.length > AGENT_ATTACHMENT_MAX_COUNT) {
+      setError(`最多添加 ${AGENT_ATTACHMENT_MAX_COUNT} 个附件。`);
+      return;
+    }
+    if (incoming.some((file) => file.size > AGENT_ATTACHMENT_MAX_BYTES)) {
+      setError("单个附件不能超过 5 MB。");
+      return;
+    }
+    if (attachments.reduce((sum, item) => sum + item.size, 0) + incoming.reduce((sum, item) => sum + item.size, 0) > AGENT_ATTACHMENTS_MAX_TOTAL_BYTES) {
+      setError("附件总大小不能超过 10 MB。");
+      return;
+    }
+    try {
+      const nextAttachments = await Promise.all(incoming.map(readAttachment));
+      setAttachments((items) => [...items, ...nextAttachments]);
+    } catch (attachmentError) {
+      setError(attachmentError instanceof Error ? attachmentError.message : "附件读取失败。");
+    }
   }
 
   return (
-    <section className="agent-workspace">
+    <section className="agent-workspace agent-chat-shell">
       <aside className="agent-conversation-rail" aria-label="Agent conversations">
-        <button className="agent-new-chat" type="button" onClick={createConversation} disabled={loadingConversation}>
-          New chat
-        </button>
+        <div className="agent-rail-top">
+          <div className="agent-rail-brand">
+            <span className="agent-rail-brand-mark" aria-hidden="true">
+              <MessageSquare size={17} />
+            </span>
+            <span>Healthy Body Agent</span>
+          </div>
+          <button className="agent-new-chat" type="button" onClick={createConversation} disabled={loadingConversation}>
+            <Plus aria-hidden="true" size={16} />
+            <span>New chat</span>
+          </button>
+        </div>
         <div className="agent-conversation-list">
           {conversations.map((conversation) => (
             <div
@@ -492,7 +625,17 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
         <AgentMemoryPanel />
       </aside>
 
-      <section className="surface agent-panel">
+      <section className="agent-panel">
+        <header className="agent-chat-header">
+          <div>
+            <span className="agent-chat-eyebrow">Active chat</span>
+            <h1>{selectedConversation?.title ?? "New conversation"}</h1>
+          </div>
+          <div className="agent-chat-status" aria-label="Agent status">
+            <span aria-hidden="true" />
+            Ready
+          </div>
+        </header>
         {error ? <div className="message message-error">{error}</div> : null}
         <div className="agent-messages agent-messages-scroll" aria-label="Conversation messages" aria-live="polite" ref={messagesRef}>
           {messages.length === 0 ? (
@@ -511,7 +654,28 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
                   {item.role === "user" ? "You" : "AI"}
                 </span>
                 <div className={item.role === "user" ? "chat-bubble chat-bubble-user" : "chat-bubble chat-bubble-assistant"}>
-                  {item.role === "assistant" ? <RichMessageContent content={item.content} /> : item.content}
+                  {item.role === "assistant" ? (
+                    <RichMessageContent
+                      content={item.content}
+                      streaming={
+                        item.streamComplete ||
+                        (sending && item.id.startsWith("local-"))
+                      }
+                    />
+                  ) : (
+                    <>
+                      {item.attachments?.length ? (
+                        <div className="agent-message-attachments">
+                          {item.attachments.map((attachment) => attachment.mimeType.startsWith("image/") ? (
+                            <img className="agent-message-image" src={attachment.dataUrl} alt={attachment.name} key={attachment.id} />
+                          ) : (
+                            <span className="agent-message-file" key={attachment.id}><FileText size={15} />{attachment.name}</span>
+                          ))}
+                        </div>
+                      ) : null}
+                      {item.content ? <span>{item.content}</span> : null}
+                    </>
+                  )}
                   {item.role === "assistant" && item.adjustments?.length
                     ? item.adjustments.map((adjustment) => (
                         <div className="agent-adjustment-row" key={adjustment.id}>
@@ -531,6 +695,9 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
                         </div>
                       ))
                     : null}
+                  {item.role === "assistant" && item.content ? (
+                    <HealthDisclaimer />
+                  ) : null}
                 </div>
               </div>
             ))
@@ -552,6 +719,23 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
         </div>
 
         <form className="agent-composer agent-composer-dock" aria-label="Message composer" onSubmit={send}>
+          {attachments.length ? (
+            <div className="agent-composer-attachments" aria-label="Selected attachments">
+              {attachments.map((attachment) => (
+                <span className="agent-composer-attachment" key={attachment.id}>
+                  {attachment.mimeType.startsWith("image/") ? <img src={attachment.dataUrl} alt="" /> : <FileText size={15} />}
+                  <span>{attachment.name}</span>
+                  <button type="button" aria-label={`移除 ${attachment.name}`} onClick={() => setAttachments((items) => items.filter((item) => item.id !== attachment.id))}>
+                    <X size={14} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null}
+          <label className="agent-attach-button" aria-label="添加图片或文件" title="添加图片或文件">
+            <Paperclip aria-hidden="true" size={18} />
+            <input type="file" accept={attachmentAccept} multiple onChange={(event) => { void addAttachments(event.target.files); event.target.value = ""; }} />
+          </label>
           <label className="field agent-composer-field">
             <span className="sr-only">Message</span>
             <input
@@ -560,7 +744,7 @@ export function AgentPanel({ initialConversations, initialConversationId, initia
               placeholder="Ask about training, recovery, calendar, or meals"
             />
           </label>
-          <ActionButton type="submit" disabled={sending || !message.trim() || !selectedConversationId}>
+          <ActionButton type="submit" disabled={sending || (!message.trim() && attachments.length === 0) || !selectedConversationId}>
             <Send aria-hidden="true" size={16} /> {sending ? "Sending..." : "Send"}
           </ActionButton>
         </form>

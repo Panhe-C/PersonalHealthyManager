@@ -1,10 +1,16 @@
 import { prisma } from "@/src/db/client";
-import { createAgentResponse, createAgentResponseForUser } from "@/src/services/agent";
-import { buildAgentContext } from "@/src/services/agentContext";
+import {
+  createAgentResponse,
+  createAgentResponseForUser,
+  type AgentConversationMessage,
+  type AgentResponse
+} from "@/src/services/agent";
+import { buildAgentContext, type AgentContext } from "@/src/services/agentContext";
 import {
   getAgentConversationSummaryForUser,
   titleFromFirstMessage,
-  touchAgentConversationAfterMessage
+  touchAgentConversationAfterMessage,
+  type AgentConversationSummary
 } from "@/src/services/agentConversations";
 import { parseActionProposals } from "@/src/services/agentActions/proposals";
 import { agentActionRegistry } from "@/src/services/agentActions/registry";
@@ -13,14 +19,32 @@ import { executeAgentAction, type ExecutedAdjustment } from "@/src/services/agen
 import { parseMemoryProposals, stripMemoryBlock } from "@/src/services/agentMemory/memories";
 import { applyMemories } from "@/src/services/agentMemory/memoryService";
 import { maybeRefreshSummary } from "@/src/services/agentMemory/summaryService";
+import { validateAgentAttachments } from "@/src/services/agentAttachments";
 import type { TimeWindow } from "@/src/domain/models";
+import type { AgentAttachment } from "@hbm/contracts";
 
 const EXPLICIT_MEMORY_PATTERN = /记住|记下|别忘了|记一下|帮我记|remember(?:\s+to)?/i;
+
+const TRUNCATION_NOTE = "回复因长度限制被截断，如需完整内容请再问一次。";
 
 export interface AgentMessageResult {
   status: number;
   body: unknown;
 }
+
+export type PreparedAgentMessage = {
+  userId: string;
+  content: string;
+  conversationId: string;
+  conversation: AgentConversationSummary;
+  history: AgentConversationMessage[];
+  context: AgentContext;
+  attachments: AgentAttachment[];
+};
+
+export type AgentPreparation =
+  | { ok: true; value: PreparedAgentMessage }
+  | { ok: false; result: AgentMessageResult };
 
 async function loadGuardSignals(userId: string, actionId: string, args: Record<string, unknown>): Promise<GuardSignals | null> {
   if (actionId !== "adjust_task_intensity" && actionId !== "reschedule_task") return null;
@@ -63,55 +87,94 @@ async function loadGuardSignals(userId: string, actionId: string, args: Record<s
   };
 }
 
-/**
- * Orchestrates a single agent turn: load conversation + history, ask the model,
- * parse proposed actions/memories, execute reversible actions under the safety
- * guard, apply memories, persist messages, refresh the rolling summary, and
- * touch the conversation. Extracted from `app/api/agent/route.ts` so both
- * `/api/agent` and `/api/v1/agent` can share it without duplicating logic.
- */
-export async function handleAgentMessage(
+export async function prepareAgentMessage(
   userId: string,
   body: unknown
-): Promise<AgentMessageResult> {
+): Promise<AgentPreparation> {
   const payload = (body ?? {}) as Record<string, unknown>;
-  const content = String(payload.message ?? "").trim();
+  const attachmentResult = validateAgentAttachments(payload.attachments);
+  if (!attachmentResult.ok) {
+    return { ok: false, result: { status: 400, body: { error: attachmentResult.error } } };
+  }
+  const content = String(payload.message ?? "").trim() || (attachmentResult.attachments.length ? "请分析这些附件。" : "");
   const conversationId = String(payload.conversationId ?? "").trim();
 
   if (!content) {
-    return { status: 400, body: { error: "Message is required" } };
+    return { ok: false, result: { status: 400, body: { error: "Message is required" } } };
   }
   if (!conversationId) {
-    return { status: 400, body: { error: "Conversation is required" } };
+    return { ok: false, result: { status: 400, body: { error: "Conversation is required" } } };
   }
 
   const conversation = await getAgentConversationSummaryForUser(userId, conversationId);
   if (!conversation) {
-    return { status: 404, body: { error: "Conversation not found" } };
+    return { ok: false, result: { status: 404, body: { error: "Conversation not found" } } };
   }
 
-  const history = await prisma.agentMessage.findMany({
+  const historyRows = await prisma.agentMessage.findMany({
     where: { userId, conversationId },
     orderBy: { createdAt: "desc" },
     take: 8
   });
-  const routed = createAgentResponse(content);
-  const agentContext = await buildAgentContext(userId, routed.intent, content, conversationId);
-  const response = await createAgentResponseForUser(
+  const history = historyRows.reverse().map((message) => ({
+    role: message.role,
+    content: message.content
+  }));
+  const routed = createAgentResponse(content, history);
+  const context = await buildAgentContext(userId, routed.intent, content, conversationId);
+
+  return {
+    ok: true,
+    value: {
+      userId,
+      content,
+      conversationId,
+      conversation,
+      history,
+      context,
+      attachments: attachmentResult.attachments
+    }
+  };
+}
+
+export async function finalizeAgentMessage(
+  prepared: PreparedAgentMessage,
+  response: AgentResponse
+): Promise<AgentMessageResult> {
+  const {
     userId,
     content,
-    history.reverse().map((message) => ({ role: message.role, content: message.content })),
-    agentContext
-  );
+    conversationId,
+    conversation,
+    history,
+    context: agentContext,
+    attachments
+  } = prepared;
 
   const parsed = parseActionProposals(response.message);
   const memoryParsed = parseMemoryProposals(response.message);
   const explanation = stripMemoryBlock(parsed.explanation || response.message);
   const executed: ExecutedAdjustment[] = [];
   const notes: string[] = [];
+  const allowSideEffects = !response.truncated;
+  if (response.truncated) {
+    notes.push(TRUNCATION_NOTE);
+  }
+  if (
+    agentContext.freshSync.authRequired &&
+    !/重新(?:连接|授权)\s*COROS|reconnect COROS/i.test(explanation)
+  ) {
+    notes.push("COROS 授权已过期，请到设置中重新连接 COROS 后再试。");
+  }
 
   await prisma.agentMessage.create({
-    data: { userId, conversationId, role: "user", content, metadataJson: "{}" }
+    data: {
+      userId,
+      conversationId,
+      role: "user",
+      content,
+      metadataJson: JSON.stringify({ attachments })
+    }
   });
   const assistantMessage = await prisma.agentMessage.create({
     data: {
@@ -125,6 +188,7 @@ export async function handleAgentMessage(
         modelProvider: response.modelProvider,
         modelName: response.modelName,
         error: response.error,
+        truncated: response.truncated === true,
         freshSync: agentContext.freshSync,
         contextSections: agentContext.sections.map((section) => section.title),
         proposedActions: parsed.actions.map((action) => action.id),
@@ -134,38 +198,40 @@ export async function handleAgentMessage(
     }
   });
 
-  for (const action of parsed.actions) {
-    const definition = agentActionRegistry[action.id];
-    if (!definition || definition.reversibility === "readonly") continue;
-    if (definition.reversibility === "external_irreversible") continue;
+  if (allowSideEffects) {
+    for (const action of parsed.actions) {
+      const definition = agentActionRegistry[action.id];
+      if (!definition || definition.reversibility === "readonly") continue;
+      if (definition.reversibility === "external_irreversible") continue;
 
-    const signals = await loadGuardSignals(userId, action.id, action.args);
-    const guarded = signals
-      ? guardAction(action, signals)
-      : { accepted: true, args: action.args };
+      const signals = await loadGuardSignals(userId, action.id, action.args);
+      const guarded = signals
+        ? guardAction(action, signals)
+        : { accepted: true, args: action.args };
 
-    if (!guarded.accepted) {
-      notes.push(`已尝试 ${action.id} 但被安全规则拦下：${guarded.fallbackReason ?? ""}`);
-      continue;
-    }
+      if (!guarded.accepted) {
+        notes.push(`已尝试 ${action.id} 但被安全规则拦下：${guarded.fallbackReason ?? ""}`);
+        continue;
+      }
 
-    try {
-      const adjustment = await executeAgentAction(
-        userId,
-        { id: action.id, args: guarded.args },
-        assistantMessage.id
-      );
-      executed.push(adjustment);
-      if (guarded.fallbackReason) notes.push(guarded.fallbackReason);
-    } catch (error) {
-      notes.push(`${action.id} 执行失败：${error instanceof Error ? error.message : "未知错误"}`);
+      try {
+        const adjustment = await executeAgentAction(
+          userId,
+          { id: action.id, args: guarded.args },
+          assistantMessage.id
+        );
+        executed.push(adjustment);
+        if (guarded.fallbackReason) notes.push(guarded.fallbackReason);
+      } catch (error) {
+        notes.push(`${action.id} 执行失败：${error instanceof Error ? error.message : "未知错误"}`);
+      }
     }
   }
 
   const memorySource = EXPLICIT_MEMORY_PATTERN.test(content) ? "explicit" : "auto";
   let appliedMemories: Awaited<ReturnType<typeof applyMemories>>["applied"] = [];
   let memoryWarnings: string[] = [];
-  if (memoryParsed.memories.length > 0) {
+  if (allowSideEffects && memoryParsed.memories.length > 0) {
     try {
       const outcome = await applyMemories(userId, memoryParsed.memories, {
         messageId: assistantMessage.id,
@@ -195,6 +261,7 @@ export async function handleAgentMessage(
         modelProvider: response.modelProvider,
         modelName: response.modelName,
         error: response.error,
+        truncated: response.truncated === true,
         freshSync: agentContext.freshSync,
         contextSections: agentContext.sections.map((section) => section.title),
         proposedActions: parsed.actions.map((action) => action.id),
@@ -224,4 +291,37 @@ export async function handleAgentMessage(
       appliedMemories
     }
   };
+}
+
+export async function handlePreparedAgentMessage(
+  prepared: PreparedAgentMessage
+): Promise<AgentMessageResult> {
+  const response = prepared.attachments.length
+    ? await createAgentResponseForUser(
+        prepared.userId,
+        prepared.content,
+        prepared.history,
+        prepared.context,
+        prepared.attachments
+      )
+    : await createAgentResponseForUser(
+        prepared.userId,
+        prepared.content,
+        prepared.history,
+        prepared.context
+      );
+  return finalizeAgentMessage(prepared, response);
+}
+
+/**
+ * Orchestrates a complete non-streaming Agent turn. The streaming route reuses
+ * the same prepare and finalize stages around its provider stream.
+ */
+export async function handleAgentMessage(
+  userId: string,
+  body: unknown
+): Promise<AgentMessageResult> {
+  const prepared = await prepareAgentMessage(userId, body);
+  if (!prepared.ok) return prepared.result;
+  return handlePreparedAgentMessage(prepared.value);
 }

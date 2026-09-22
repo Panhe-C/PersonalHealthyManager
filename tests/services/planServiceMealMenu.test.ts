@@ -57,7 +57,7 @@ describe("plan service meal menu source", () => {
     expect(menus).toBe(mcpMenus);
   });
 
-  it("falls back to mock menus when Meal Menu MCP is not configured", async () => {
+  it("plans without menus when Meal Menu MCP is not configured", async () => {
     vi.mocked(loadDataMcpConnection).mockResolvedValue({
       ...defaultDataMcpConnections[2],
       transport: "http"
@@ -66,6 +66,19 @@ describe("plan service meal menu source", () => {
     const menus = await resolveMealMenusForPlan("user-1", new Date("2026-06-02T00:00:00+08:00"));
 
     expect(fetchMealMenusFromStdioMcp).not.toHaveBeenCalled();
-    expect(menus[0].source).toBe("mock");
+    expect(menus).toEqual([]);
+  });
+
+  it("plans without menus when a configured connection fails", async () => {
+    vi.mocked(loadDataMcpConnection).mockResolvedValue({
+      ...defaultDataMcpConnections[2],
+      transport: "stdio" as const,
+      larkSession: "session-cookie-123456"
+    });
+    vi.mocked(fetchMealMenusFromStdioMcp).mockRejectedValue(new Error("MCP down"));
+
+    const menus = await resolveMealMenusForPlan("user-1", new Date("2026-06-02T00:00:00+08:00"));
+
+    expect(menus).toEqual([]);
   });
 });

@@ -127,6 +127,42 @@ class StdioMcpClient {
   }
 }
 
+/**
+ * The only variables the MCP child process inherits. An explicit allowlist
+ * rather than `process.env` keeps `SESSION_SECRET`, `SETTINGS_ENCRYPTION_KEY`,
+ * and `DATABASE_URL` out of a process whose package is resolved at run time:
+ * leaking the first two is enough to forge any session and decrypt every stored
+ * provider key. The entries kept here are what `npx` needs to resolve and fetch
+ * the package on a corporate network.
+ */
+const inheritedEnvKeys = [
+  "PATH",
+  "HOME",
+  "TMPDIR",
+  "LANG",
+  "LC_ALL",
+  "NODE_EXTRA_CA_CERTS",
+  "NPM_CONFIG_REGISTRY",
+  "npm_config_registry",
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "NO_PROXY",
+  "http_proxy",
+  "https_proxy",
+  "no_proxy"
+] as const;
+
+export function buildChildEnv(secrets: Record<string, string>): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { NODE_ENV: process.env.NODE_ENV };
+
+  for (const key of inheritedEnvKeys) {
+    const value = process.env[key];
+    if (typeof value === "string") env[key] = value;
+  }
+
+  return { ...env, ...secrets };
+}
+
 function dateInput(date: Date) {
   return date.toISOString().slice(0, 10);
 }
@@ -232,7 +268,7 @@ export async function fetchMealMenusFromStdioMcp(connection: DataMcpConnection, 
 
   const command = connection.command || "npx";
   const child = spawn(command, splitArgs(connection.args), {
-    env: { ...process.env, ...env },
+    env: buildChildEnv(env),
     stdio: "pipe"
   });
   const client = new StdioMcpClient(child);

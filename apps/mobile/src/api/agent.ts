@@ -14,6 +14,7 @@ import {
   type ConversationDetail,
   type Memory
 } from "./schemas";
+import type { AgentAttachment } from "@hbm/contracts";
 
 export type MemoryDraft = {
   kind: string;
@@ -37,8 +38,8 @@ export function deleteAgentConversation(conversationId: string) {
   return api.delete<{ deleted: true }>(`/agent/conversations/${conversationId}`, deleteConversationResponseSchema);
 }
 
-export function sendAgentMessage(conversationId: string, message: string) {
-  return api.post<AgentResponse>("/agent", { conversationId, message }, agentResponseSchema);
+export function sendAgentMessage(conversationId: string, message: string, attachments: AgentAttachment[] = []) {
+  return api.post<AgentResponse>("/agent", { conversationId, message, ...(attachments.length ? { attachments } : {}) }, agentResponseSchema);
 }
 
 export function undoAgentAdjustment(adjustmentId: string) {

@@ -1,0 +1,15 @@
+[Unit]
+Description=Upload the latest HealthyBodyManager SQLite backup to OSS
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/etc/hbm-oss.env
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/hbm-oss.env
+ExecStart=/usr/local/sbin/healthy-body-manager-oss-upload
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/srv/healthy-body-manager/backups

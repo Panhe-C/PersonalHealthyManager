@@ -26,17 +26,21 @@ export type NormalizedActivityRecord = {
 };
 
 export type NormalizedSleepRecord = {
-  source: "coros";
+  source: "coros" | "healthkit";
   date: Date;
   sleepStart?: Date;
   sleepEnd?: Date;
   durationMinutes: number;
   qualityScore?: number;
+  deepSleepMinutes?: number;
+  lightSleepMinutes?: number;
+  remSleepMinutes?: number;
+  awakeMinutes?: number;
   metadata: Record<string, unknown>;
 };
 
 export type NormalizedRecoveryRecord = {
-  source: "coros";
+  source: "coros" | "healthkit";
   date: Date;
   recoveryPercent?: number;
   hrvMs?: number;
@@ -66,7 +70,7 @@ export type MealMenuItem = {
 };
 
 export type MealMenu = {
-  source: "mock" | "bytecanteen";
+  source: "bytecanteen";
   date: Date;
   meal: "breakfast" | "lunch" | "dinner";
   items: MealMenuItem[];

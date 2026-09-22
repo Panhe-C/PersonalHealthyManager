@@ -1,8 +1,12 @@
 import Constants from "expo-constants";
 import { z } from "zod";
 import { getAccessToken, getRefreshToken, setTokens, resetTokens } from "../auth/tokenStore";
+import { resolveApiBaseUrl } from "../config/apiBaseUrl";
 
-const API_BASE_URL = (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ?? "http://localhost:3000";
+const API_BASE_URL = resolveApiBaseUrl(
+  process.env.EXPO_PUBLIC_API_BASE_URL,
+  Constants.expoConfig?.extra?.apiBaseUrl as string | undefined
+);
 const V1 = `${API_BASE_URL}/api/v1`;
 
 export class ApiError extends Error {
@@ -60,6 +64,22 @@ async function refreshAccessToken(): Promise<string | null> {
   return refreshInFlight;
 }
 
+export function getV1ApiUrl(path: string) {
+  return path.startsWith("http") ? path : `${V1}${path}`;
+}
+
+/** Origin of the deployed web app — used for linking to public pages like /privacy. */
+export const WEB_ORIGIN = API_BASE_URL;
+
+export async function getValidAccessToken(forceRefresh = false) {
+  return forceRefresh ? refreshAccessToken() : getAccessToken();
+}
+
+export async function handleUnauthorized() {
+  await resetTokens();
+  onUnauthorized?.();
+}
+
 export interface RequestOptions {
   method?: "GET" | "POST" | "PATCH" | "DELETE";
   body?: unknown;
@@ -72,7 +92,7 @@ export interface RequestOptions {
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const url = path.startsWith("http") ? path : `${V1}${path}`;
+  const url = getV1ApiUrl(path);
   const accessToken = await getAccessToken();
 
   const headers: Record<string, string> = {
@@ -92,8 +112,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     if (newToken) {
       return request<T>(path, { ...options, _retried: true });
     }
-    await resetTokens();
-    onUnauthorized?.();
+    await handleUnauthorized();
     throw new ApiError("Unauthorized", 401, "unauthorized");
   }
 
@@ -105,8 +124,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       // ignore
     }
     if (response.status === 401 && !options.skipAuthRefresh) {
-      await resetTokens();
-      onUnauthorized?.();
+      await handleUnauthorized();
     }
     throw new ApiError(body.error ?? `Request failed with ${response.status}`, response.status, body.code);
   }
@@ -128,6 +146,7 @@ export const api = {
   post: <T>(path: string, body?: unknown, schema?: z.ZodTypeAny) => request<T>(path, { method: "POST", body, schema }),
   patch: <T>(path: string, body?: unknown, schema?: z.ZodTypeAny) => request<T>(path, { method: "PATCH", body, schema }),
   delete: <T>(path: string, schema?: z.ZodTypeAny) => request<T>(path, { method: "DELETE", schema }),
+  deleteWithBody: <T>(path: string, body: unknown, schema?: z.ZodTypeAny) => request<T>(path, { method: "DELETE", body, schema }),
   // Auth calls hit /api/auth (not /api/v1/auth) — same handlers, but the login
   // flow needs to be reachable before a token exists.
   auth: {
@@ -136,6 +155,33 @@ export const api = {
         `${API_BASE_URL}/api/auth/login`,
         { method: "POST", body: { email, password }, skipAuthRefresh: true }
       ),
+    register: async (email: string, password: string, timezone?: string, acceptTerms = false) => {
+      await request<{ ok: true; status: "registered"; email: string }>(`${API_BASE_URL}/api/auth/register`, {
+        method: "POST",
+        body: { email, password, ...(timezone ? { timezone } : {}), acceptTerms },
+        skipAuthRefresh: true
+      });
+      const result = await request<{ ok: true; accessToken: string; refreshToken: string; accessExpiresAt: string; refreshExpiresAt: string }>(
+        `${API_BASE_URL}/api/auth/login`,
+        { method: "POST", body: { email, password }, skipAuthRefresh: true }
+      );
+      const tokens = {
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        accessExpiresAt: result.accessExpiresAt,
+        refreshExpiresAt: result.refreshExpiresAt
+      };
+      await setTokens(tokens);
+      return tokens;
+    },
+    // Resolves the same way for unknown addresses, so the caller must not treat
+    // success as proof that an account exists.
+    forgotPassword: (email: string) =>
+      request<{ ok: true; status: "reset_sent"; email: string }>(`${API_BASE_URL}/api/auth/forgot-password`, {
+        method: "POST",
+        body: { email },
+        skipAuthRefresh: true
+      }),
     logout: (refreshToken?: string) =>
       request<{ ok: true }>(`${API_BASE_URL}/api/auth/logout`, { method: "POST", body: refreshToken ? { refreshToken } : {} })
   }

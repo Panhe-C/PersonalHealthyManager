@@ -1,16 +1,40 @@
 import { StyleSheet, Text as RNText, type TextProps } from "react-native";
-import { typography, useTheme } from "../theme/tokens";
+import { textStyles, useTheme } from "../theme/tokens";
 
-export function Text({ style, size = "md", weight = "regular", ...props }: TextProps & { size?: keyof typeof typography; weight?: "regular" | "medium" | "strong" }) {
+const weights = {
+  regular: "400",
+  medium: "500",
+  semibold: "600",
+  strong: "700",
+  bold: "700"
+} as const;
+
+// UIKit preferred text styles are regular by default except headline.
+// Callers opt into stronger emphasis explicitly.
+const semiboldSizes = new Set(["headline"]);
+
+export function Text({
+  style,
+  size = "body",
+  weight,
+  color,
+  tabularNums = false,
+  ...props
+}: TextProps & {
+  size?: keyof typeof textStyles;
+  weight?: keyof typeof weights;
+  color?: string;
+  tabularNums?: boolean;
+}) {
   const { tokens } = useTheme();
+  const fallbackWeight = semiboldSizes.has(size) ? "semibold" : "regular";
+
   return (
     <RNText
       style={[
-        styles.base,
-        { color: tokens.ink, fontSize: typography[size], lineHeight: Math.round(typography[size] * 1.28) },
-        weight === "medium" && styles.medium,
-        weight === "strong" && styles.strong,
-        (size === "display" || size === "hero" || size === "metric") && styles.editorial,
+        textStyles[size],
+        { color: color ?? tokens.label, fontWeight: weights[weight ?? fallbackWeight] },
+        tabularNums && styles.tabular,
         style
       ]}
       {...props}
@@ -19,8 +43,5 @@ export function Text({ style, size = "md", weight = "regular", ...props }: TextP
 }
 
 const styles = StyleSheet.create({
-  base: {},
-  editorial: { fontFamily: "Georgia" },
-  medium: { fontWeight: "500" },
-  strong: { fontWeight: "700" }
+  tabular: { fontVariant: ["tabular-nums"] }
 });

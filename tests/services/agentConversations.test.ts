@@ -69,6 +69,35 @@ describe("agent conversation service", () => {
     });
   });
 
+  it("loads the latest message window and returns it in chronological order", async () => {
+    vi.mocked(prisma.agentConversation.findFirst).mockResolvedValue({
+      id: "conv-1",
+      title: "Recovery",
+      updatedAt: new Date("2026-06-21T09:30:00+08:00"),
+      messages: [
+        { id: "msg-new", role: "assistant", content: "最新回复" },
+        { id: "msg-old", role: "user", content: "最新问题" }
+      ]
+    } as never);
+
+    await expect(getAgentConversationForUser("user-1", "conv-1")).resolves.toMatchObject({
+      messages: [
+        { id: "msg-old", role: "user", content: "最新问题" },
+        { id: "msg-new", role: "assistant", content: "最新回复" }
+      ]
+    });
+    expect(prisma.agentConversation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          messages: expect.objectContaining({
+            orderBy: { createdAt: "desc" },
+            take: 100
+          })
+        })
+      })
+    );
+  });
+
   it("deletes one conversation only when it belongs to the user", async () => {
     vi.mocked(prisma.agentConversation.findFirst).mockResolvedValue({
       id: "conv-1",

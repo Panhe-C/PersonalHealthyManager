@@ -4,7 +4,9 @@ import React, { useMemo, useState, type FormEvent } from "react";
 import { FlaskConical, Save } from "lucide-react";
 import {
   corosMcpRegionOptions,
+  getProviderCredentialSource,
   modelProviders,
+  providerNeedsManualModel,
   type DataMcpAuthConfig,
   type DataMcpConnection,
   type DataMcpTransport,
@@ -48,6 +50,8 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
   const [loginPromptConnectionId, setLoginPromptConnectionId] = useState<DataMcpConnection["id"] | null>(null);
   const [loginPromptMessage, setLoginPromptMessage] = useState("");
   const [loginPromptError, setLoginPromptError] = useState("");
+  const needsManualModel = providerNeedsManualModel(modelProvider);
+  const credentialSource = getProviderCredentialSource(modelProvider);
 
   function updateConnection(id: DataMcpConnection["id"], updates: Partial<DataMcpConnection>) {
     setConnections((items) => items.map((item) => (item.id === id ? { ...item, ...updates } : item)));
@@ -72,15 +76,11 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
   }
 
   function updateConnectionTransport(connection: DataMcpConnection, transport: DataMcpTransport) {
+    // The stdio command and arguments are fixed by the server, so only the auth
+    // shape changes here: a local command authenticates with LARK_SESSION.
     updateConnection(connection.id, {
       transport,
-      ...(connection.id === "meal_menu" && transport === "stdio"
-        ? {
-            command: connection.command || "npx",
-            args: connection.args || "-y @byted/mcp-bytecanteen@latest",
-            auth: { type: "none" as const }
-          }
-        : {})
+      ...(connection.id === "meal_menu" && transport === "stdio" ? { auth: { type: "none" as const } } : {})
     });
   }
 
@@ -103,6 +103,11 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
     if (typeof window === "undefined") return "";
 
     const params = new URLSearchParams(window.location.search);
+    const feishu = params.get("feishu");
+    if (feishu === "connected") return "飞书日历已连接。";
+    if (feishu === "failed") return "飞书日历授权失败，请重试。";
+    if (feishu === "missing_code") return "飞书日历授权缺少回调参数。";
+
     const auth = params.get("auth");
     const mcp = params.get("mcp");
     const connection = initialSettings.dataMcpConnections.find((item) => item.id === mcp);
@@ -115,11 +120,36 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
   function buildSettingsDraft() {
     return {
       modelProvider,
-      modelName,
-      modelBaseUrl,
+      ...(needsManualModel ? { modelName, modelBaseUrl } : {}),
       apiKey,
       dataMcpConnections: connections
     };
+  }
+
+  function applySavedSettings(settings: SettingsView) {
+    setModelProvider(settings.modelProvider);
+    setModelName(settings.modelName);
+    setModelBaseUrl(settings.modelBaseUrl);
+    setConnections(settings.dataMcpConnections);
+    setHasApiKey(settings.hasApiKey);
+    setApiKeyHint(settings.apiKeyHint);
+    setApiKey("");
+  }
+
+  async function persistSettingsDraft() {
+    const response = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildSettingsDraft())
+    });
+    const body = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(body.error ?? "Settings could not be saved");
+    }
+
+    applySavedSettings(body);
+    return body as SettingsView;
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -128,34 +158,14 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
     setError("");
     setMessage("");
 
-    const response = await fetch("/api/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        modelProvider,
-        modelName,
-        modelBaseUrl,
-        apiKey,
-        dataMcpConnections: connections
-      })
-    });
-    const body = await response.json();
-
-    if (!response.ok) {
-      setError(body.error ?? "Settings could not be saved");
+    try {
+      await persistSettingsDraft();
+      setMessage("Settings saved");
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Settings could not be saved");
+    } finally {
       setSaving(false);
-      return;
     }
-
-    setModelProvider(body.modelProvider);
-    setModelName(body.modelName);
-    setModelBaseUrl(body.modelBaseUrl);
-    setConnections(body.dataMcpConnections);
-    setHasApiKey(body.hasApiKey);
-    setApiKeyHint(body.apiKeyHint);
-    setApiKey("");
-    setMessage("Settings saved");
-    setSaving(false);
   }
 
   async function runTest(target: string) {
@@ -163,6 +173,9 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
     setError("");
     setMessage("");
     setTestResults([]);
+    setLoginPromptConnectionId(null);
+    setLoginPromptMessage("");
+    setLoginPromptError("");
 
     try {
       const response = await fetch("/api/settings/test", {
@@ -177,11 +190,13 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
         return;
       }
 
-      setTestResults(body.results ?? []);
-
-      const authRequiredResult = (body.results ?? []).find((result: TestResult) => result.status === "auth_required");
+      const results = (body.results ?? []) as TestResult[];
+      setTestResults(results);
+      const authRequiredResult = results.find((result) => result.status === "auth_required");
       if (authRequiredResult) {
-        setLoginPromptConnectionId(authRequiredResult.id as DataMcpConnection["id"]);
+        const connection = connections.find((item) => item.id === authRequiredResult.id);
+        if (!connection) return;
+        setLoginPromptConnectionId(connection.id);
         setLoginPromptMessage(authRequiredResult.message);
         setLoginPromptError("");
       }
@@ -190,6 +205,37 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
     } finally {
       setTestingTarget(null);
     }
+  }
+
+  function closeLoginPrompt() {
+    setLoginPromptConnectionId(null);
+    setLoginPromptMessage("");
+    setLoginPromptError("");
+  }
+
+  async function startLogin() {
+    if (!loginPromptConnection) return;
+
+    if (loginPromptConnection.auth?.type === "oauth2") {
+      setSaving(true);
+      setLoginPromptError("");
+      try {
+        await persistSettingsDraft();
+        window.location.assign(`/api/settings/mcp/oauth/start?connection=${loginPromptConnection.id}`);
+      } catch (loginError) {
+        setLoginPromptError(loginError instanceof Error ? loginError.message : "Settings could not be saved");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
+    if (loginPromptConnection.loginUrl) {
+      window.open(loginPromptConnection.loginUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    setLoginPromptError("No login URL configured. Configure OAuth2 or a login URL first.");
   }
 
   function authHint(auth: DataMcpAuthConfig | undefined) {
@@ -207,6 +253,15 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
 
     return (
       <div className="connection-auth">
+        <label className="field">
+          Login URL
+          <input
+            aria-label={`Login URL for ${connection.label}`}
+            value={connection.loginUrl ?? ""}
+            onChange={(event) => updateConnection(connection.id, { loginUrl: event.target.value })}
+            placeholder="https://provider.example/login"
+          />
+        </label>
         <label className="field">
           Auth type
           <select
@@ -340,6 +395,28 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
               <a className="button" href={`/api/settings/mcp/oauth/start?connection=${connection.id}`}>
                 Login {connection.label}
               </a>
+              {connection.id === "calendar" ? (
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  onClick={async () => {
+                    setError("");
+                    try {
+                      const response = await fetch("/api/settings/feishu/oauth/start", { method: "POST" });
+                      const body = await response.json().catch(() => null);
+                      if (!response.ok || !body?.authorizeUrl) {
+                        setError(body?.error ?? "无法启动飞书日历授权");
+                        return;
+                      }
+                      window.location.assign(body.authorizeUrl);
+                    } catch {
+                      setError("无法启动飞书日历授权");
+                    }
+                  }}
+                >
+                  连接飞书日历（按用户 OAuth）
+                </button>
+              ) : null}
               {auth.expiresAt ? <span className="status">Expires {new Date(auth.expiresAt).toLocaleString()}</span> : null}
             </div>
           </div>
@@ -377,28 +454,6 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
     window.location.assign("/api/settings/mcp/oauth/start?connection=coros");
   }
 
-  function closeLoginPrompt() {
-    setLoginPromptConnectionId(null);
-    setLoginPromptMessage("");
-    setLoginPromptError("");
-  }
-
-  function startLogin() {
-    if (!loginPromptConnection) return;
-
-    if (loginPromptConnection.auth?.type === "oauth2") {
-      window.location.assign(`/api/settings/mcp/oauth/start?connection=${loginPromptConnection.id}`);
-      return;
-    }
-
-    if (loginPromptConnection.loginUrl) {
-      window.open(loginPromptConnection.loginUrl, "_blank", "noopener,noreferrer");
-      return;
-    }
-
-    setLoginPromptError("No login URL configured. Configure OAuth2 or a login URL first.");
-  }
-
   function renderCorosConnectionAssistant(connection: DataMcpConnection) {
     if (connection.id !== "coros") return null;
 
@@ -433,22 +488,12 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
 
         {transport === "stdio" ? (
           <>
-            <label className="field">
+            <div className="field">
               Command
-              <input
-                aria-label={`Command for ${connection.label}`}
-                value={connection.command ?? "npx"}
-                onChange={(event) => updateConnection(connection.id, { command: event.target.value })}
-              />
-            </label>
-            <label className="field">
-              Arguments
-              <input
-                aria-label={`Arguments for ${connection.label}`}
-                value={connection.args ?? "-y @byted/mcp-bytecanteen@latest"}
-                onChange={(event) => updateConnection(connection.id, { args: event.target.value })}
-              />
-            </label>
+              <span className="status" aria-label={`Command for ${connection.label}`}>
+                {`${connection.command ?? "npx"} ${connection.args ?? ""}`.trim()}
+              </span>
+            </div>
             <label className="field">
               LARK_SESSION
               <input
@@ -494,7 +539,7 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
         <div className="panel-heading">
           <div>
             <h2>Model runtime</h2>
-            <p className="page-subtitle">Provider, model, base URL, and encrypted API key storage.</p>
+            <p className="page-subtitle">Pick a provider and paste an API key; the model and base URL come with it.</p>
           </div>
           <button className="button" type="button" onClick={() => runTest("all")} disabled={testingTarget !== null}>
             <FlaskConical aria-hidden="true" size={16} />
@@ -517,25 +562,38 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
               ))}
             </select>
           </label>
-          <label className="field">
-            Model
-            <input
-              name="modelName"
-              value={modelName}
-              onChange={(event) => setModelName(event.target.value)}
-              placeholder="gpt-4o-mini"
-              required
-            />
-          </label>
-          <label className="field field-span">
-            Base URL
-            <input
-              name="modelBaseUrl"
-              value={modelBaseUrl}
-              onChange={(event) => setModelBaseUrl(event.target.value)}
-              placeholder="https://api.openai.com/v1"
-            />
-          </label>
+          {needsManualModel ? (
+            <>
+              <label className="field">
+                Model
+                <input
+                  name="modelName"
+                  value={modelName}
+                  onChange={(event) => setModelName(event.target.value)}
+                  placeholder="my-model"
+                  required
+                />
+              </label>
+              <label className="field field-span">
+                Base URL
+                <input
+                  name="modelBaseUrl"
+                  value={modelBaseUrl}
+                  onChange={(event) => setModelBaseUrl(event.target.value)}
+                  placeholder="https://api.example.com/v1"
+                  required
+                />
+              </label>
+            </>
+          ) : (
+            <div className="field">
+              Model
+              <p className="settings-derived-value" data-testid="derived-model">
+                {modelName}
+                <span>{modelBaseUrl}</span>
+              </p>
+            </div>
+          )}
           <label className="field field-span">
             API key
             <input
@@ -547,6 +605,15 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
               placeholder={hasApiKey ? "Leave blank to keep existing key" : "Enter API key"}
             />
           </label>
+          {/* Outside the label so it stays out of the field's accessible name.
+              Shown before the attempt rather than only after a 401: every
+              provider here has a neighbouring product whose keys look
+              identical but come from a separate account system. */}
+          {credentialSource ? (
+            <p className="page-subtitle field-span" aria-label="Where to get a key">
+              {credentialSource}
+            </p>
+          ) : null}
         </div>
 
         <div className="settings-status-line settings-action-row">
@@ -575,7 +642,7 @@ export function SettingsForm({ initialSettings }: { initialSettings: SettingsVie
               <div className={resultClass(result.status)} key={result.id}>
                 <strong>{result.label}</strong>
                 <span>{statusLabel[result.status]}</span>
-                <p>{result.message}</p>
+                <p>{result.status === "auth_required" ? "Open the login prompt to continue." : result.message}</p>
                 {result.latencyMs != null ? <small>{result.latencyMs} ms</small> : null}
               </div>
             ))}

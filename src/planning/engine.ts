@@ -139,7 +139,7 @@ export function generateWeeklyPlan(input: {
   activities: NormalizedActivityRecord[];
   sleepRecords: NormalizedSleepRecord[];
   recoveryRecords: NormalizedRecoveryRecord[];
-  calendar: NormalizedCalendarSnapshot;
+  calendar?: NormalizedCalendarSnapshot;
   mealMenus: MealMenu[];
 }): GeneratedWeeklyPlan {
   const latestSleep = latestByDate(input.sleepRecords, (record) => record.date);
@@ -198,12 +198,13 @@ export function generateWeeklyPlan(input: {
   ];
 
   const weekEnd = new Date(input.weekStart.getTime() + 7 * DAY_MS);
-  const tasks = scheduleTasks(
-    capTaskVolume([task, ...followUpTasks], volumeCap(input.profile, input.activities)),
-    input.calendar,
-    input.weekStart,
-    weekEnd
+  const volumeCappedTasks = capTaskVolume(
+    [task, ...followUpTasks],
+    volumeCap(input.profile, input.activities)
   );
+  const tasks = input.calendar
+    ? scheduleTasks(volumeCappedTasks, input.calendar, input.weekStart, weekEnd)
+    : volumeCappedTasks;
   const nutritionTargets = recommendMenuChoices({
     menus: input.mealMenus,
     trainingIntensity: intensity,
@@ -225,6 +226,8 @@ export function generateWeeklyPlan(input: {
     explanation:
       reasons.length > 0
         ? `Plan reduced intensity because ${reasons.join(", ")}.`
-        : "Plan uses the best available calendar window and current goal priority."
+        : input.calendar
+          ? "Plan uses the best available calendar window and current goal priority."
+          : "Plan uses current goal priority. Calendar availability was not used."
   };
 }

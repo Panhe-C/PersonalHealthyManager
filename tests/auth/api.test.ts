@@ -27,6 +27,7 @@ describe("authenticated API wrapper", () => {
       email: "demo@example.com",
       passwordHash: "hash",
       timezone: "Asia/Shanghai",
+      emailVerifiedAt: new Date(),
       createdAt: new Date(),
       updatedAt: new Date()
     };

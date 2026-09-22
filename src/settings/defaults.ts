@@ -5,6 +5,7 @@ export type DataMcpConnectionId = "coros" | "calendar" | "meal_menu";
 export type DataMcpAuthType = "none" | "bearer" | "api_key" | "basic" | "oauth2";
 export type DataMcpTransport = "http" | "stdio";
 export type CorosMcpRegion = "china" | "us" | "eu";
+export type OAuthReturnTarget = "web" | "app";
 
 export type DataMcpAuthConfig = {
   type: DataMcpAuthType;
@@ -56,6 +57,12 @@ export type DataMcpAuthConfig = {
   oauthReturnOrigin?: string;
   /** Redirect URI used when the OAuth client was dynamically registered (must match each authorize/token redirect_uri) */
   oauthRegisteredRedirectUri?: string;
+  /**
+   * Which client started the flow; server-only. The web flow ends back on the
+   * settings page, while a native flow ends on the app deep link so the in-app
+   * browser closes itself instead of stranding the user on a web page.
+   */
+  oauthReturnTarget?: OAuthReturnTarget;
   /** Bumped when COROS registration shape changes; stale values force re-registration */
   corosOAuthRegistrationVersion?: number;
 };
@@ -91,25 +98,87 @@ export type SettingsView = {
   dataMcpConnections: DataMcpConnection[];
 };
 
+/**
+ * Model identity is derived from the provider rather than typed in, so bumping
+ * a `defaultModel` here rolls every existing account onto the newer model
+ * without a data migration. `custom` is the sole escape hatch for relays and
+ * self-hosted gateways, and is the only provider whose model name and base URL
+ * come from the user.
+ */
 export const modelProviders: Array<{
   value: ModelProvider;
   label: string;
   defaultModel: string;
   defaultBaseUrl: string;
+  /**
+   * Where a working key comes from. Surfaced verbatim on a 401, because every
+   * provider here has at least one neighbouring product whose keys look
+   * identical but are issued by a separate account system.
+   */
+  credentialSource: string;
 }> = [
-  { value: "openai", label: "OpenAI", defaultModel: "gpt-4o-mini", defaultBaseUrl: "https://api.openai.com/v1" },
-  { value: "deepseek", label: "DeepSeek", defaultModel: "deepseek-v4-flash", defaultBaseUrl: "https://api.deepseek.com" },
-  { value: "minimax", label: "MiniMax", defaultModel: "MiniMax-Text-01", defaultBaseUrl: "https://api.minimax.chat/v1" },
-  { value: "kimi", label: "Kimi / Moonshot", defaultModel: "kimi-k2.6", defaultBaseUrl: "https://api.moonshot.ai/v1" },
-  { value: "glm", label: "GLM / Zhipu", defaultModel: "glm-5.1", defaultBaseUrl: "https://open.bigmodel.cn/api/paas/v4" },
+  {
+    value: "openai",
+    label: "OpenAI",
+    defaultModel: "gpt-5.6-terra",
+    defaultBaseUrl: "https://api.openai.com/v1",
+    credentialSource: "Create the key at platform.openai.com."
+  },
+  {
+    value: "deepseek",
+    label: "DeepSeek",
+    defaultModel: "deepseek-v4-flash",
+    defaultBaseUrl: "https://api.deepseek.com",
+    credentialSource: "Create the key at platform.deepseek.com."
+  },
+  {
+    value: "minimax",
+    label: "MiniMax",
+    defaultModel: "MiniMax-M3",
+    defaultBaseUrl: "https://api.minimax.io/v1",
+    credentialSource: "Create the key at platform.minimax.io; keys from the mainland platform (minimaxi.com) are a separate account."
+  },
+  {
+    value: "kimi",
+    label: "Kimi / Moonshot",
+    defaultModel: "kimi-k3",
+    defaultBaseUrl: "https://api.moonshot.ai/v1",
+    credentialSource:
+      "Create the key on the Kimi Open Platform (platform.kimi.ai, or platform.moonshot.cn in mainland China). Kimi Code keys, which start with sk-kim and belong to the coding membership at api.kimi.com, are a separate system and are always rejected here."
+  },
+  {
+    value: "glm",
+    label: "GLM / Zhipu",
+    defaultModel: "glm-5.2",
+    defaultBaseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    credentialSource: "Create the key at open.bigmodel.cn; keys from the international z.ai platform are a separate account."
+  },
   {
     value: "anthropic",
     label: "Anthropic",
-    defaultModel: "claude-3-5-haiku-latest",
-    defaultBaseUrl: "https://api.anthropic.com/v1"
+    defaultModel: "claude-opus-5",
+    defaultBaseUrl: "https://api.anthropic.com/v1",
+    credentialSource: "Create the key at console.anthropic.com; a Claude.ai subscription does not include API access."
   },
-  { value: "custom", label: "Custom", defaultModel: "custom-model", defaultBaseUrl: "" }
+  { value: "custom", label: "Custom", defaultModel: "", defaultBaseUrl: "", credentialSource: "" }
 ];
+
+export function getProviderCredentialSource(provider: ModelProvider): string {
+  return modelProviders.find((item) => item.value === provider)?.credentialSource ?? "";
+}
+
+/** Only `custom` lets the user pick the model name and base URL themselves. */
+export function providerNeedsManualModel(provider: ModelProvider): boolean {
+  return provider === "custom";
+}
+
+export function resolveProviderModelDefaults(provider: ModelProvider): {
+  modelName: string;
+  modelBaseUrl: string;
+} {
+  const entry = modelProviders.find((item) => item.value === provider);
+  return { modelName: entry?.defaultModel ?? "", modelBaseUrl: entry?.defaultBaseUrl ?? "" };
+}
 
 export const corosMcpUrlByRegion: Record<CorosMcpRegion, string> = {
   china: "https://mcpcn.coros.com/mcp",
@@ -171,8 +240,7 @@ export const defaultDataMcpConnections: DataMcpConnection[] = [
 
 export const defaultSettingsView: SettingsView = {
   modelProvider: "openai",
-  modelName: "gpt-4o-mini",
-  modelBaseUrl: "https://api.openai.com/v1",
+  ...resolveProviderModelDefaults("openai"),
   hasApiKey: false,
   apiKeyHint: null,
   dataMcpConnections: defaultDataMcpConnections

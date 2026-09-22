@@ -8,16 +8,7 @@ import * as planQuery from "@/src/services/planQueryService";
 
 export const getBodyProfile = cache(planQuery.getBodyProfile);
 
-export const getCalendarSnapshot = cache(async (userId: string, weekStart: Date, weekEnd: Date) =>
-  prisma.calendarSnapshot.findFirst({
-    where: {
-      userId,
-      rangeStart: { lte: weekStart },
-      rangeEnd: { gte: weekEnd }
-    },
-    orderBy: { capturedAt: "desc" }
-  })
-);
+export const getCalendarSnapshot = cache(planQuery.findCalendarSnapshotForWeek);
 
 export const getActivePlan = cache(planQuery.getActivePlan);
 export const getActivePlanSummary = cache(planQuery.getActivePlanSummary);

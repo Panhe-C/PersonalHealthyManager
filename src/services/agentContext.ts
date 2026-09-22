@@ -1,8 +1,7 @@
 import type { AgentIntent } from "@/src/services/agent";
-import type { MealMenu } from "@/src/domain/models";
 import { prisma } from "@/src/db/client";
 import { syncCorosFromSettings } from "@/src/services/syncService";
-import { getMealMenusForDate } from "@/src/services/mealMenuService";
+import { loadMealMenusForDate, type MealMenuResult } from "@/src/services/mealMenuService";
 import {
   formatMemoryLines,
   loadActiveMemoriesForContext
@@ -17,13 +16,37 @@ export type AgentContext = {
   freshSync: {
     attempted: boolean;
     succeeded: boolean;
+    authRequired?: boolean;
     error?: string;
   };
   sections: Array<{ title: string; content: string }>;
 };
 
 export function shouldRefreshCoros(message: string) {
-  return /最新|同步|拉取|刚刚|现在的数据|latest|sync|refresh|pull latest/i.test(message);
+  const explicitFreshRequest = /最新|同步|拉取|刚刚|现在的数据|latest|sync|refresh|pull latest/i.test(message);
+  const explicitCorosLookup =
+    /coros|高驰|mcp/i.test(message) &&
+    /查|看|读取|获取|取|数据|睡眠|恢复|运动|健康|read|get|fetch|query/i.test(message);
+  const recentHealthDataLookup =
+    /看|查|分析|告诉|数据|多少|情况|show|check|analy[sz]e|data/i.test(message) &&
+    /昨晚|昨天|今天|今早|最近|本周|last night|yesterday|today|recent|this week/i.test(message) &&
+    /睡眠|深睡|浅睡|rem|清醒|恢复|hrv|静息心率|压力|运动|训练|sleep|recovery|activity|training/i.test(message);
+
+  return explicitFreshRequest || explicitCorosLookup || recentHealthDataLookup;
+}
+
+function corosSyncFailure(error: unknown): AgentContext["freshSync"] {
+  const message = error instanceof Error ? error.message : "COROS sync failed.";
+  if (/HTTP (?:401|403)\b|auth(?:entication|orization).*(?:required|expired|invalid)/i.test(message)) {
+    const status = message.match(/HTTP (401|403)\b/i)?.[1] ?? "authentication error";
+    return {
+      attempted: true,
+      succeeded: false,
+      authRequired: true,
+      error: `COROS authorization expired (${status === "authentication error" ? status : `HTTP ${status}`}). Reconnect COROS in Settings.`
+    };
+  }
+  return { attempted: true, succeeded: false, error: message };
 }
 
 function formatDate(value: Date | null | undefined) {
@@ -56,6 +79,25 @@ function formatActivityLine(item: {
   const distance = item.distanceKm == null ? "" : `${Number(item.distanceKm.toFixed(2))} km, `;
   const heartRate = item.averageHeartRateBpm == null ? "HR unknown" : `HR ${item.averageHeartRateBpm}`;
   return `${formatDate(item.startedAt)}: ${item.sportType}, ${item.durationMinutes} min, ${distance}${heartRate}, intensity ${item.intensity}.`;
+}
+
+function formatSleepLine(item: {
+  date: Date;
+  durationMinutes: number;
+  qualityScore: number | null;
+  deepSleepMinutes: number | null;
+  lightSleepMinutes: number | null;
+  remSleepMinutes: number | null;
+  awakeMinutes: number | null;
+}) {
+  const stages = [
+    item.deepSleepMinutes == null ? "" : `deep ${item.deepSleepMinutes} min`,
+    item.lightSleepMinutes == null ? "" : `light ${item.lightSleepMinutes} min`,
+    item.remSleepMinutes == null ? "" : `REM ${item.remSleepMinutes} min`,
+    item.awakeMinutes == null ? "" : `awake ${item.awakeMinutes} min`
+  ].filter(Boolean);
+  const stageSummary = stages.length > 0 ? `, ${stages.join(", ")}` : "";
+  return `${formatDate(item.date)}: ${item.durationMinutes} min, score ${item.qualityScore ?? "unknown"}${stageSummary}.`;
 }
 
 async function loadCommonContext(userId: string, intent: AgentIntent) {
@@ -113,7 +155,7 @@ async function loadRecoveryContext(userId: string) {
   return [
     section(
       "Recent sleep",
-      sleep.map((item) => `${formatDate(item.date)}: ${item.durationMinutes} min, score ${item.qualityScore ?? "unknown"}.`)
+      sleep.map(formatSleepLine)
     ),
     section(
       "Recent recovery",
@@ -170,16 +212,18 @@ async function loadPlanContext(userId: string) {
 }
 
 async function loadMenuContext(userId: string) {
-  const [plan, todaysMenus] = await Promise.all([
+  const [plan, todaysMenu] = await Promise.all([
     prisma.plan.findFirst({
       where: { userId, status: { not: "superseded" } },
       orderBy: { weekStart: "desc" },
       select: { nutritionTargetsJson: true, menuRecommendationsJson: true, summary: true }
     }),
-    getMealMenusForDate(userId, new Date()).catch(() => [] as MealMenu[])
+    loadMealMenusForDate(userId, new Date()).catch(
+      () => ({ status: "failed", menus: [], error: "unavailable" }) as MealMenuResult
+    )
   ]);
 
-  const menuLines = todaysMenus.flatMap((menu) =>
+  const menuLines = todaysMenu.menus.flatMap((menu) =>
     menu.items.map((item) => `${menu.meal}: ${item.name} (${item.calories} kcal, protein ${item.proteinGrams}g, tags ${item.tags.join("/") || "none"})`)
   );
 
@@ -189,10 +233,10 @@ async function loadMenuContext(userId: string) {
         ? `Plan summary: ${plan.summary}\nNutrition targets: ${plan.nutritionTargetsJson}\nMenu recommendations: ${plan.menuRecommendationsJson}`
         : "No nutrition plan generated."
     ]),
-    section(
-      "Today's menu",
-      todaysMenus.length > 0 ? menuLines : ["No live menu available for today; falling back to cached recommendations."]
-    )
+    // The menu section is omitted entirely when there is nothing to show, so the
+    // model advises against the nutrition targets instead of inventing dishes to
+    // fill an empty heading.
+    ...(menuLines.length > 0 ? [section("Today's menu", menuLines)] : [])
   ];
 }
 
@@ -205,11 +249,7 @@ export async function buildAgentContext(
   const freshSync = shouldRefreshCoros(message)
     ? await syncCorosFromSettings(userId)
         .then(() => ({ attempted: true, succeeded: true }))
-        .catch((error) => ({
-          attempted: true,
-          succeeded: false,
-          error: error instanceof Error ? error.message : "COROS sync failed."
-        }))
+        .catch(corosSyncFailure)
     : { attempted: false, succeeded: false };
 
   const [common, summarySections, specific] = await Promise.all([

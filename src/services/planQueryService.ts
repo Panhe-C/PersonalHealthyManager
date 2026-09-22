@@ -1,4 +1,6 @@
+import type { MealMenu } from "@/src/domain/models";
 import { prisma } from "@/src/db/client";
+import { loadMealMenusForDate, type MealMenuResult } from "@/src/services/mealMenuService";
 
 // Read-side queries extracted from app/(dashboard)/plan/_data.ts so the v1 API
 // endpoints and the RSC pages can share one implementation. The RSC _data.ts
@@ -52,6 +54,23 @@ export async function getRecentActivities(userId: string, take = 10) {
   });
 }
 
+/**
+ * The snapshot only has to overlap the target week, not contain it. The Feishu
+ * sync captures from 06:00 on the day it runs, so a snapshot never starts
+ * before the week's Monday midnight and a containment check would reject every
+ * real snapshot from Monday morning onwards.
+ */
+export async function findCalendarSnapshotForWeek(userId: string, weekStart: Date, weekEnd: Date) {
+  return prisma.calendarSnapshot.findFirst({
+    where: {
+      userId,
+      rangeStart: { lte: weekEnd },
+      rangeEnd: { gte: weekStart }
+    },
+    orderBy: { capturedAt: "desc" }
+  });
+}
+
 export async function getPlanForWeek(userId: string, weekStart: Date) {
   return prisma.plan.findFirst({
     where: { userId, weekStart },
@@ -71,6 +90,14 @@ export interface TodayOverview {
   latestRecovery: Awaited<ReturnType<typeof getLatestRecovery>>;
   latestSleep: Awaited<ReturnType<typeof getLatestSleep>>;
   todayTasks: NonNullable<Awaited<ReturnType<typeof getActivePlan>>>["trainingTasks"];
+  /**
+   * Today's meal menus, empty unless a meal menu connection is configured and
+   * reachable. Clients hide the menu section on an empty list rather than
+   * substituting anything.
+   */
+  mealMenus: MealMenu[];
+  /** Lets a client tell "no connection" apart from "the connection is broken". */
+  mealMenuStatus: MealMenuResult["status"];
   activePlanId: string | null;
 }
 
@@ -92,6 +119,7 @@ export async function getTodayOverview(userId: string, timezone: string): Promis
   const todayTasks = plan
     ? plan.trainingTasks.filter((task) => sameDayInTimezone(task.date, today, timezone))
     : [];
+  const mealMenu = await loadMealMenusForDate(userId, today);
 
   return {
     date: today.toISOString(),
@@ -99,6 +127,8 @@ export async function getTodayOverview(userId: string, timezone: string): Promis
     latestRecovery,
     latestSleep,
     todayTasks,
+    mealMenus: mealMenu.menus,
+    mealMenuStatus: mealMenu.status,
     activePlanId: plan?.id ?? null
   };
 }

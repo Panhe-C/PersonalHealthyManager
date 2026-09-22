@@ -2,6 +2,7 @@ import React from "react";
 import { CalendarCheck2, CheckCircle2, Clock3, HeartPulse, Moon } from "lucide-react";
 import { CalendarDraftList } from "@/components/CalendarDraftList";
 import { GeneratePlanButton } from "@/components/GeneratePlanButton";
+import { HealthDisclaimer } from "@/components/HealthDisclaimer";
 import { MetricCard } from "@/components/MetricCard";
 import { NutritionPanel } from "@/components/NutritionPanel";
 import { SyncDemoDataButton } from "@/components/SyncDemoDataButton";
@@ -212,6 +213,7 @@ export async function PlanContent({ userId, today, weekStart }: { userId: string
           }))}
         />
       </div>
+      <HealthDisclaimer />
     </section>
   );
 }

@@ -1,29 +1,70 @@
 import { Pressable, StyleSheet, type PressableProps } from "react-native";
+import { opacity, radius, spacing, useTheme } from "../theme/tokens";
 import { Text } from "./Text";
-import { radius, spacing, useTheme } from "../theme/tokens";
 
-export function Button({ title, onPress, variant = "primary", disabled, ...props }: PressableProps & { title: string; variant?: "primary" | "ghost" }) {
+type Variant = "filled" | "tinted" | "plain" | "destructive";
+
+type ButtonProps = PressableProps & {
+  label?: string;
+  title?: string;
+  variant?: Variant;
+};
+
+export function Button({
+  label,
+  title,
+  variant = "filled",
+  disabled,
+  style,
+  ...props
+}: ButtonProps) {
   const { tokens } = useTheme();
-  const isPrimary = variant === "primary";
+  const backgroundColor =
+    variant === "filled"
+      ? tokens.controlFill
+      : variant === "destructive"
+        ? tokens.destructiveFill
+        : variant === "tinted"
+          ? tokens.fill
+          : "transparent";
+  const color =
+    variant === "filled"
+      ? tokens.controlLabel
+      : variant === "destructive"
+        ? tokens.destructiveLabel
+        : tokens.tint;
+  const buttonLabel = label ?? title ?? "";
+
   return (
     <Pressable
-      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: Boolean(disabled) }}
       disabled={disabled}
-      style={({ pressed }) => [
+      style={(state) => [
         styles.base,
-        { backgroundColor: isPrimary ? tokens.sage : "transparent", borderColor: isPrimary ? tokens.sage : tokens.line, opacity: pressed ? 0.78 : 1 },
-        disabled && styles.disabled
+        {
+          backgroundColor,
+          opacity: disabled ? opacity.disabled : state.pressed ? opacity.pressed : 1
+        },
+        typeof style === "function" ? style(state) : style
       ]}
       {...props}
     >
-      <Text size="md" weight="medium" style={{ color: isPrimary ? "#fff" : tokens.ink, textAlign: "center" }}>
-        {title}
+      <Text size="headline" style={{ color }}>
+        {buttonLabel}
       </Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  base: { minHeight: 48, justifyContent: "center", paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: radius.md, borderWidth: 1 },
-  disabled: { opacity: 0.5 }
+  base: {
+    alignItems: "center",
+    borderRadius: radius.pill,
+    justifyContent: "center",
+    marginHorizontal: spacing.lg,
+    minHeight: 50,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm
+  }
 });

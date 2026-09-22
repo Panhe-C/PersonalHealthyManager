@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { Activity, CalendarCheck2, HeartPulse, LogIn, Moon } from "lucide-react";
+import { RegistrationEntry } from "../_components/RegistrationEntry";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("demo@example.com");
-  const [password, setPassword] = useState("healthy-body-demo");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -22,13 +24,13 @@ export default function LoginPage() {
       });
 
       if (!response.ok) {
-        setError("Invalid email or password");
+        setError("邮箱或密码不正确");
         return;
       }
 
-      window.location.href = "/plan";
+      window.location.href = "/";
     } catch {
-      setError("Invalid email or password");
+      setError("邮箱或密码不正确");
     } finally {
       setIsSubmitting(false);
     }
@@ -39,30 +41,30 @@ export default function LoginPage() {
       <div className="login-layout">
         <section className="login-preview" aria-label="Product preview">
           <div className="preview-header">
-            <span className="eyebrow">Today&apos;s coaching view</span>
-            <h2>Plan around recovery, schedule, and meals.</h2>
+            <span className="eyebrow">今日教练视图</span>
+            <h2>围绕恢复、日程与饮食做计划。</h2>
             <p className="page-subtitle">
-              The demo account opens with sample COROS, calendar, and training data so you can review the weekly planning flow.
+              登录后使用你自己的恢复、日历、训练与饮食数据。
             </p>
           </div>
           <div className="preview-grid">
             <article className="preview-card preview-card-primary">
               <HeartPulse aria-hidden="true" size={18} />
-              <span>Recovery</span>
+              <span>恢复</span>
               <strong>82%</strong>
-              <p>Suitable for a moderate session.</p>
+              <p>适合一次中等强度训练。</p>
             </article>
             <article className="preview-card">
               <Moon aria-hidden="true" size={18} />
-              <span>Sleep</span>
+              <span>睡眠</span>
               <strong>7.6h</strong>
-              <p>Latest synced duration.</p>
+              <p>最近一次同步时长。</p>
             </article>
             <article className="preview-card preview-card-wide">
               <CalendarCheck2 aria-hidden="true" size={18} />
-              <span>Next training window</span>
-              <strong>Tue 18:00</strong>
-              <p>Draft events stay pending until you confirm them.</p>
+              <span>下一个训练窗口</span>
+              <strong>周二 18:00</strong>
+              <p>草稿事件需你确认后才会写入日历。</p>
             </article>
           </div>
         </section>
@@ -73,14 +75,14 @@ export default function LoginPage() {
               <Activity aria-hidden="true" size={18} />
             </span>
             <div>
-              <span className="eyebrow">Personal recovery journal</span>
-              <h1>Healthy Body Manager</h1>
-              <p className="page-subtitle">Sign in to continue</p>
+              <span className="eyebrow">个人恢复日记</span>
+              <h1>健康身体管家</h1>
+              <p className="page-subtitle">登录以继续</p>
             </div>
           </div>
 
           <label className="field">
-            Email
+            邮箱
             <input
               autoComplete="email"
               name="email"
@@ -92,7 +94,7 @@ export default function LoginPage() {
           </label>
 
           <label className="field">
-            Password
+            密码
             <input
               autoComplete="current-password"
               name="password"
@@ -111,8 +113,14 @@ export default function LoginPage() {
 
           <button className="button login-submit" type="submit" disabled={isSubmitting}>
             <LogIn aria-hidden="true" size={18} />
-            {isSubmitting ? "Signing in..." : "Sign in"}
+            {isSubmitting ? "登录中…" : "登录"}
           </button>
+
+          <p className="auth-alt">
+            <Link href="/forgot-password">忘记密码？</Link>
+          </p>
+
+          <RegistrationEntry />
         </form>
       </div>
     </main>
